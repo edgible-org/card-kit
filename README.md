@@ -230,7 +230,7 @@ There are two kinds of tool, and the difference decides how each one runs.
 
 A tool that works on files in a repo runs through `run`, in the image from [Dockerfile](Dockerfile). It may use any package; add the package to the Dockerfile. Docker is the only thing an author installs.
 
-A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env` and `test-card` are these; `run` refuses them.
+A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env`, `test-card`, `test-cards` and `backup-card` are these; `run` refuses them.
 
 ### run
 
@@ -386,6 +386,25 @@ python3 ../card-kit/test-cards.py --status ../status --merge results/*
 ```
 
 The labels come from the card's `places:`. Every job needs `self-hosted` and `edgible-test`, the label of a machine that tests cards. test-card runs every place on one machine, so their memory is added up. More than 1 GB needs the next `mem-<n>g` label up (2, 4, 8, 16, 32 or 64), and a machine carries the label of every tier it meets: `mem-2g,mem-4g,mem-8g` on a 9 GB one. A card whose `arch` leaves out `amd64` or `arm64` needs the other (`ARM64` or `X64`, GitHub's own labels), `gpu: required` needs `gpu-nvidia`, and a card that publishes a `tcp` or `udp` app needs `tcp`: a machine whose Edgible agent forwards those to `127.0.0.1`, where every card binds them. The Linux agent does not yet, so only macOS machines carry it. `--machines` is a JSON list of the label lists of the machines online; a card none of them can run is left out with "no machine online", rather than waiting for one. The plan has no `edgible` to ask, so it compares with `--cli`, or the newest version in the status.
+
+### backup-card
+
+Backs up a running card's data on the machine that runs it, the way its [`data:`](#data) says. Like `test-card`, it runs with `python3`, and `run` refuses it. Give it the directory the card runs from.
+
+```bash
+python3 ../card-kit/backup-card.py ~/linkding --dry-run
+python3 ../card-kit/backup-card.py ~/linkding
+```
+
+1. **Dumps:** each irreplaceable volume with a `dump` runs its command in its service while the app stays up, and keeps what the command writes as `<volume>.dump`.
+2. **Fingerprint:** it runs `data.fingerprint` after the dumps and before any stop, so the fingerprint describes the data the copies hold.
+3. **Copies:** for each irreplaceable volume without a dump, it stops the running services that mount it, copies the volume to `<volume>.tgz`, and starts them again with `--wait`. This is the outage, and it records how long it lasted. Other services keep running.
+4. **Skipped:** rebuildable and cache volumes are listed, not copied. A volume another place runs on another machine is listed as not here: back it up there.
+5. **The card:** it copies the card's files with `card.env` (mode 600), because the copies need its passwords.
+
+It writes everything to `<card dir>-backups/<YYYYmmdd-HHMM>/`, or to `--to`, with `backup.json`: the card, when and where the backup was taken, the Edgible version, the card's files hash, the fingerprint, the outage, and each volume's class, method, file, size and sha256. The directory is named `.partial` until the backup is whole. `--dry-run` says what it would copy and how, which services would stop, and whether the disk has room, and changes nothing. A card with volumes and no `data:` is refused; a card with no volumes is backed up as its files and `card.env`.
+
+A copy on the same machine does not survive the loss of that machine: copy the directory somewhere else too.
 
 ## Agent skill
 
