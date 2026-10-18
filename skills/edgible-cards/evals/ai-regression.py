@@ -35,11 +35,12 @@ NO_SKILL = HERE / "agents" / "no-skill"  # a plugin root with an empty skills/ f
 OLLAMA = "http://127.0.0.1:11434"
 READ_ONLY = ["Skill", "Read", "Glob", "Grep"]
 DISALLOWED = [*ev.NO_SHELL, "Task"]
-HARNESSES = {"claude-code": "claude", "opencode": "opencode", "codex": "codex"}
+# Each harness and the command it needs on PATH (Antigravity's ships inside coder-eval[antigravity]).
+HARNESSES = {"claude-code": "claude", "opencode": "opencode", "codex": "codex", "antigravity": "coder-eval"}
 # A usage or rate limit is not an answer, on any harness, and is never scored.
 # Hosted models through OpenCode: the provider prefix and the key it needs. Keys come from the
 # environment or from KEYS_FILE (NAME=value lines, kept out of any repo), and are never printed.
-PROVIDER_KEYS = {"deepseek": "DEEPSEEK_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+PROVIDER_KEYS = {"deepseek": "DEEPSEEK_API_KEY", "openrouter": "OPENROUTER_API_KEY", "gemini": "GEMINI_API_KEY"}
 KEYS_FILE = Path.home() / ".config" / "ai-regression.env"
 LIMIT = re.compile(r"You've hit your [a-z ]*limit|usage limit|rate limit|quota", re.I)
 
@@ -99,7 +100,8 @@ def why_not(agent: dict, mem: float, pulled: set[str], keys: dict) -> str:
     binary = HARNESSES[agent["harness"]]
     if not shutil.which(binary):
         return f"no {binary} on PATH"
-    key = PROVIDER_KEYS.get(agent["model"].split("/")[0]) if agent["harness"] == "opencode" else None
+    key = (PROVIDER_KEYS["gemini"] if agent["harness"] == "antigravity" else
+           PROVIDER_KEYS.get(agent["model"].split("/")[0]) if agent["harness"] == "opencode" else None)
     if key and key not in keys:
         return f"no {key} in the environment or {KEYS_FILE.name}"
     if agent.get("memory_gb", 0) > mem + 0.5:
@@ -125,6 +127,11 @@ def write_experiment(agent: dict, lift: bool, folder: Path) -> Path:
     if agent["harness"] == "claude-code":
         base = {"type": "claude-code", "model": agent["model"], "permission_mode": "default",
                 "setting_sources": [], "allowed_tools": READ_ONLY, "disallowed_tools": DISALLOWED}
+    elif agent["harness"] == "antigravity":
+        # Gemini through Google's Antigravity harness, which enforces the tool lists (Bash is
+        # its run_command) and approves the rest; Skill has no builtin, so it reads the files.
+        base = {"type": "antigravity", "model": agent["model"],
+                "allowed_tools": [t for t in READ_ONLY if t != "Skill"], "disallowed_tools": DISALLOWED}
     elif agent["harness"] == "codex":
         # Codex opens a skill by reading its files through its shell; plan is its read-only
         # sandbox.

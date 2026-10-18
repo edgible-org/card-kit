@@ -64,3 +64,14 @@
   harness: opencode
   model: deepseek/deepseek-flash
   timeout: 900
+
+# Gemini through Google's Antigravity harness, on a Gemini API key (GEMINI_API_KEY, free tier).
+- id: gemini-pro
+  harness: antigravity
+  model: gemini-3.1-pro-preview
+  timeout: 900
+
+- id: gemini-flash
+  harness: antigravity
+  model: gemini-3.8-flash
+  timeout: 900
