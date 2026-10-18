@@ -37,6 +37,10 @@ READ_ONLY = ["Skill", "Read", "Glob", "Grep"]
 DISALLOWED = [*ev.NO_SHELL, "Task"]
 HARNESSES = {"claude-code": "claude", "opencode": "opencode", "codex": "codex"}
 # A usage or rate limit is not an answer, on any harness, and is never scored.
+# Hosted models through OpenCode: the provider prefix and the key it needs. Keys come from the
+# environment or from KEYS_FILE (NAME=value lines, kept out of any repo), and are never printed.
+PROVIDER_KEYS = {"deepseek": "DEEPSEEK_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+KEYS_FILE = Path.home() / ".config" / "ai-regression.env"
 LIMIT = re.compile(r"You've hit your [a-z ]*limit|usage limit|rate limit|quota", re.I)
 
 
@@ -80,11 +84,24 @@ def ollama_models() -> set[str]:
         return set()
 
 
-def why_not(agent: dict, mem: float, pulled: set[str]) -> str:
+def provider_keys() -> dict:
+    keys = {}
+    if KEYS_FILE.exists():
+        for line in KEYS_FILE.read_text().splitlines():
+            name, _, value = line.strip().removeprefix("export ").partition("=")
+            if name in PROVIDER_KEYS.values() and value:
+                keys[name] = value.strip().strip("'\"")
+    return {**keys, **{k: os.environ[k] for k in PROVIDER_KEYS.values() if os.environ.get(k)}}
+
+
+def why_not(agent: dict, mem: float, pulled: set[str], keys: dict) -> str:
     """Why this machine can't run the agent, or '' when it can."""
     binary = HARNESSES[agent["harness"]]
     if not shutil.which(binary):
         return f"no {binary} on PATH"
+    key = PROVIDER_KEYS.get(agent["model"].split("/")[0]) if agent["harness"] == "opencode" else None
+    if key and key not in keys:
+        return f"no {key} in the environment or {KEYS_FILE.name}"
     if agent.get("memory_gb", 0) > mem + 0.5:
         return f"needs {agent['memory_gb']} GB of memory, this machine has {mem:.0f}"
     if agent["model"].startswith("ollama/") and agent["model"].removeprefix("ollama/") not in pulled:
@@ -150,23 +167,31 @@ def final_text(task: dict) -> str:
     return ""
 
 
+def cost(task: dict) -> float:
+    return round((task.get("total_token_usage") or {}).get("total_cost_usd") or 0, 4)
+
+
 def judged(task_json: Path, scenario: dict, judge_model: str) -> dict:
     """One answer, judged; kept beside its task.json so a rerun of the report judges nothing twice."""
     saved = task_json.with_name("judged.json")
-    if saved.exists():
-        return json.loads(saved.read_text())
     task = json.loads(task_json.read_text())
+    if saved.exists():
+        return {"cost_usd": cost(task), **json.loads(saved.read_text())}
     reply = final_text(task)
     crit = next((c for c in task.get("success_criteria_results", []) if c.get("criterion_type") == "skill_triggered"), {})
     row = {"prompt": scenario["id"], "arm": task_json.parts[-4], "run": task_json.parent.name,
            "status": task["final_status"], "seconds": round(task.get("duration_seconds") or 0),
+           # At the provider's list price: what a subscription run would cost on an API key.
+           "cost_usd": cost(task),
            "loaded": crit.get("observed_label") == "yes", "loaded_as_it_should": crit.get("score") == 1.0,
            "answer": reply}
     # A provider's refusal (a bad model, a limit) can land in the answer's place: not an answer.
     refused = [e["message"] for t in task.get("iterations") or [] for e in t.get("provider_errors") or []
                if not e.get("will_retry")]
-    if refused or not reply or LIMIT.search(reply[:300]):
-        row["error"] = (refused[0] if refused else reply.strip()) or task.get("error_message") or "no answer"
+    # A crashed run can carry its error text where the answer goes: never judge it.
+    crashed = task["final_status"] == "ERROR" or any(t.get("crashed") for t in task.get("iterations") or [])
+    if refused or crashed or not reply or LIMIT.search(reply[:300]):
+        row["error"] = (refused[0] if refused else task.get("error_message") or reply.strip()) or "no answer"
     else:
         verdict = ev.judge(scenario, reply, timeout=600, model=judge_model)
         if "error" in verdict:
@@ -202,7 +227,8 @@ def summarise(rows: list[dict], scenarios: list[dict], agents: list[dict]) -> li
                     "expect_met": sum(r["expect_met"] for r in ok), "expect_total": sum(expect_total[r["prompt"]] for r in ok),
                     "critical_failures": sum(len(r["critical_failures"]) for r in ok),
                     "loaded_as_it_should": sum(r["loaded_as_it_should"] for r in mine),
-                    "median_seconds": round(statistics.median(r["seconds"] for r in mine))}
+                    "median_seconds": round(statistics.median(r["seconds"] for r in mine)),
+                    "cost_usd": round(sum(r.get("cost_usd", 0) for r in mine), 4)}
             base = sum(base_mean[p] for p in prompts)
             if prompts and base:
                 # One index per run number: run k's answers over the baseline's mean, on the same prompts.
@@ -231,9 +257,10 @@ def report(summary: list[dict], skipped: list[tuple], rows: list[dict], meta: di
              f"{meta['runs']} run{'s' * (meta['runs'] != 1)} each), judged by `{meta['judge_model'] or 'default'}`, "
              f"Coder Eval {meta['coder_eval']}. Index: expect items met, as a percentage of what the baseline "
              f"`{meta['baseline']}` met on the same prompts; the range is over runs. Critical failures are must_not "
-             "breaks, counted beside the index, never in it. Lift is the index with the skill minus without.", "",
-             "| Agent | Arm | Index | Range | Lift | Critical failures | Skill loaded as it should | Items met | Median time | Errors |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "breaks, counted beside the index, never in it. Lift is the index with the skill minus without. Cost is at list price, "
+             "so it shows what a subscription's runs would cost on an API key; local models cost nothing.", "",
+             "| Agent | Arm | Index | Range | Lift | Critical failures | Skill loaded as it should | Items met | Median time | Cost | Errors |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         rng = "–".join(map(str, s["index_range"])) if "index_range" in s else ""
         lift = f"{s['lift']:+d}" if "lift" in s else ""
@@ -241,7 +268,7 @@ def report(summary: list[dict], skipped: list[tuple], rows: list[dict], meta: di
         loads = f"{s['loaded_as_it_should']}/{s['answers']}" if s["arm"] == "skill" else "–"
         lines.append(f"| {s['agent']} | {s['arm']} | {s.get('index', '')} | {rng} | {lift} | {s['critical_failures']} | "
                      f"{loads} | {s['expect_met']}/{s['expect_total']} | "
-                     f"{s['median_seconds']} s | {s['errors']} |")
+                     f"{s['median_seconds']} s | ${s['cost_usd']:.2f} | {s['errors']} |")
     if skipped:
         lines += ["", "Not run on this machine:", ""] + [f"- {a}: {why}" for a, why in skipped]
     failures = [r for r in rows if r.get("critical_failures")]
@@ -279,8 +306,8 @@ def main(argv: list[str]) -> int:
     if unknown := set(args.agents) - {a["id"] for a in agents}:
         sys.exit(f"not in agents.yaml: {', '.join(sorted(unknown))}")
     agents = [a for a in agents if a.get("baseline") or not args.agents or a["id"] in args.agents]
-    mem, pulled = memory_gb(), ollama_models()
-    skipped = [(a["id"], why) for a in agents if (why := why_not(a, mem, pulled))]
+    mem, pulled, keys = memory_gb(), ollama_models(), provider_keys()
+    skipped = [(a["id"], why) for a in agents if (why := why_not(a, mem, pulled, keys))]
     runnable = [a for a in agents if a["id"] not in dict(skipped)]
 
     out = args.out.resolve()
@@ -294,7 +321,7 @@ def main(argv: list[str]) -> int:
     if args.plan or not scenarios:
         return 0
 
-    env = {**os.environ, "TELEMETRY_ENABLED": "false", **opencode_env(runnable)}
+    env = {**os.environ, **keys, "TELEMETRY_ENABLED": "false", **opencode_env(runnable)}
     env.pop("CLAUDECODE", None)
     by_id = {s["id"]: s for s in scenarios}
     rows, stopped, limited = [], False, []

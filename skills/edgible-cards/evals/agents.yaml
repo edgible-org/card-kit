@@ -53,3 +53,14 @@
   # model when none is named, which ChatGPT refuses.
   model: gpt-6-luna
   timeout: 900
+
+# Hosted open-weight models, on a DeepSeek API key (DEEPSEEK_API_KEY): pay as you go.
+- id: deepseek-v4-pro
+  harness: opencode
+  model: deepseek/deepseek-v4-pro
+  timeout: 900
+
+- id: deepseek-flash
+  harness: opencode
+  model: deepseek/deepseek-flash
+  timeout: 900
