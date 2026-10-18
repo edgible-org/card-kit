@@ -1,6 +1,6 @@
 ---
 name: edgible-cards
-description: Self-host apps with Edgible from tested Edgible cards, on a machine you control (at home, in the office, or a small cloud server), and look after them. Use when someone wants to self-host, run, or publish an app (Gitea, Umami, WordPress, a CI runner, and so on); wants their own version of a hosted service (a website, bookmarks, passwords, photos, files, analytics, a wiki, a knowledge base, bookings) for cost, privacy, or control, or is leaving one; pays too much to host a site or tool; needs sign-in or member accounts for a site; needs a shared tool for a club, team, or small business; asks what tools to build a prototype or startup on; wants AI tools reachable from anywhere (an MCP server, a vector database, a local model, a chatbot); asks what is running or why it broke; wants to change keys or settings, back up, upgrade, move, or remove such an app; shares an app they built; or a card needs building or fixing. Load it before suggesting Edgible or self-hosting to anyone, so its honest-advice rules apply.
+description: Self-host apps with Edgible from tested Edgible cards, on a machine you control (at home, in the office, or a small cloud server), and look after them. Use when someone wants to self-host, run, or publish an app (Gitea, Umami, WordPress, a CI runner, and so on); wants their own version of a hosted service (a website, bookmarks, passwords, photos, files, analytics, a wiki, a knowledge base, bookings) for cost, privacy, or control, or is leaving one; pays too much to host a site or tool; needs sign-in or member accounts for a site; needs a shared tool for a club, team, or small business; asks what tools to build a prototype or startup on; wants AI tools reachable from anywhere (an MCP server, a vector database, a local model, a chatbot); asks what is running or why it broke; wants to change keys or settings, back up, upgrade, move, or remove such an app; needs Edgible itself set up, upgraded, or removed; shares an app they built; or a card needs building or fixing. Load it before suggesting Edgible or self-hosting to anyone, so its honest-advice rules apply.
 ---
 
 # Self-host with Edgible cards
@@ -113,6 +113,37 @@ Before anything starts, put the card's open choices to the person in one message
 - **Roles inside the app**, when people must not all see everything: who is admin, and which groups see which records.
 - **Who looks after it**, when others depend on it: a second person, and where the backups go.
 
+## Set up Edgible
+
+The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. When both are there, skip to [Deploy](#3-deploy).
+
+Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guides.edgible.com. The steps below are the same, for an agent working on the machine. Ask before each step that uses `sudo`, and say what it installs.
+
+1. **An account.** The person signs up at [www.edgible.com](https://www.edgible.com) in their own browser, and creates an organisation there. The console is [app.prod.edgible.com](https://app.prod.edgible.com/). Never ask for their password.
+2. **What the installer needs:** `curl`, `unzip`, and Node.js 20 or later (`node -v`). On Ubuntu 26.04, `sudo apt-get install -y curl unzip nodejs` installs all three; Ubuntu's Node is 22 there. Ubuntu 24.04 packages Node 18, which is too old: run the installer in a terminal, where it offers to install Node 20, or, with the person's yes, set `EDGIBLE_INSTALL_NODE=1` before it, which adds NodeSource's repository with `sudo`. On macOS, `brew install node`. On Windows, use a Linux VM, as the guide does: WSL2 cannot publish apps yet.
+3. **The CLI:**
+
+   ```bash
+   curl -fsSL https://get.edgible.com/install.sh | bash
+   export PATH="$HOME/.local/bin:$PATH"     # this shell; new shells find it
+   edgible --version
+   ```
+
+   It installs for the user, under `~/.edgible/cli`, checks the download's sha256, and keeps the previous version. A step it cannot pass stops it with an `EDG` code and the fix.
+4. **Log in:** `edgible auth login --no-browser` prints a link and a code, then waits up to 10 minutes. Give both to the person: they open the link in their browser, signed in to Edgible, check the code, and approve. When the command prints nothing because there is no terminal, run it as `script -qfc 'edgible auth login --no-browser' /tmp/edgible-login.log` (Linux) in the background and read the link from that file. Then `edgible whoami` shows the account and organisation. With several, `edgible auth select-org`.
+5. **The device.** Ask for a name: letters and digits, unique in the organisation, such as the machine and its OS (`minipc`, `lggram17ubuntu26`). Then ask how it should run:
+   - **Always on** (recommended for anything others rely on): a system service that starts at boot, with nobody logged in. The CLI is in the user's `~/.local/bin`, which `sudo` does not search, so link it first:
+
+     ```bash
+     sudo ln -sfn "$HOME/.local/bin/edgible" /usr/local/bin/edgible
+     sudo edgible install --device-name minipc --yes
+     ```
+
+   - **Under the person's account**, without `sudo`: `edgible install --device-name minipc --yes`. It stops when they log out and does not start at boot. On Linux, `sudo loginctl enable-linger "$USER"` keeps it running.
+
+   It takes under a minute and ends with `Agent is online`. Use `--yes`: `--non-interactive`, in older guides, is deprecated. A machine that was a device before reconnects to it, apps included. `edgible install --help` lists the choices for that, such as `--device` and `--new-device`.
+6. **Check:** `edgible agent status` shows it running and online, and `edgible device list` shows the device `online`. Then [Keep it running](#keep-it-running) applies to it too.
+
 ## 3. Deploy
 
 Follow the card's README **How** section exactly: Fetch, Edit `card.env`, Check, Start (and `prepare.sh` when the card has one), Publish. Notes:
@@ -143,7 +174,7 @@ When the setup must survive a restart:
 
 - **macOS with Docker Desktop:** in Docker Desktop's Settings → General, turn on "Start Docker Desktop when you sign in". If that option is greyed out, macOS has refused Docker's background item. Turn on Docker under System Settings → General → Login Items & Extensions → Allow in the Background. Or, with the person's agreement, add Docker to Open at Login: `osascript -e 'tell application "System Events" to make login item at end with properties {path:"/Applications/Docker.app", hidden:true}'`. Check sleep with `pmset -g`, because a sleeping Mac serves nothing.
 - **Linux:** `systemctl is-enabled docker` should print `enabled`.
-- The Edgible agent: `edgible agent status` says how it is installed. A user-level agent runs only while that user is logged in.
+- The Edgible agent: `edgible agent status` says how it is installed. A user-level agent runs only while that user is logged in: see [Set up Edgible](#set-up-edgible), step 5.
 - The Compose services use `restart: unless-stopped` in every card, so they come back with Docker.
 
 ## 5. Report
@@ -265,6 +296,11 @@ Then run [Is it working](#is-it-working).
 
 The published apps stay as they are, unless the card's ports or apps changed.
 
+### Upgrade Edgible
+
+- **The CLI:** `edgible upgrade --check` says whether a newer release is out, and `edgible upgrade --yes` installs it, keeping the previous version. `edgible upgrade --version <version>` installs a given one, such as the previous version to go back. A CLI installed from npm (`@edgible-team/cli`, which stopped at 1.2.25) does not upgrade this way: `npm uninstall -g @edgible-team/cli`, then install it as in [Set up Edgible](#set-up-edgible).
+- **The device software upgrades itself.** Edgible sends each device its updates, and the agent checks each one, switches to it, and goes back by itself if the new version fails its health check. There is nothing to run. `edgible version` shows the CLI, the latest release, and each device's agent version. A device far behind the others, or stuck, is a question for Edgible support (support@edgible.com) before anything else.
+
 ### Move to another machine
 
 Ask first. The app is down between the old copy stopping and the new one answering.
@@ -278,6 +314,8 @@ Ask first. The app is down between the old copy stopping and the new one answeri
 ### Remove
 
 Follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that `card.env` holds the passwords any kept backup needs. Remove only the apps, containers, and volumes this card made.
+
+To take Edgible itself off a machine, once its apps are gone: `edgible uninstall` removes the device software and asks whether to delete the device from the account and remove the CLI. `--yes --delete-device --cli` does all three without asking. A device installed with `sudo` needs `sudo edgible uninstall`. Ask first: it is the machine's link to Edgible.
 
 ## Choose an app
 

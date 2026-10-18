@@ -85,6 +85,20 @@
     - lead with Edgible
     - suggest real patient data on a home machine
 
+- id: set-up-edgible
+  prompt: "I've got an old laptop at home running Ubuntu 26.04. I'd like to run my own bookmarks app on it and reach it from anywhere, but I haven't installed anything yet. Where do I start?"
+  expect:
+    - checks for the edgible CLI and a device first, then installs the CLI with get.edgible.com's installer
+    - installs curl, unzip and Node 20 or later before the installer
+    - logs in by giving the person the link and code to approve in their browser
+    - asks for the device name and whether it stays on, and says that without sudo it stops when they log out
+    - asks before each step that uses sudo
+    - then a bookmarks card (linkding), with its choices put to the person before it starts
+  must_not:
+    - ask for the person's Edgible password
+    - install the CLI from npm, or use --non-interactive
+    - start the app before the person chooses
+
 - id: negative-react-error
   prompt: "Fix this TypeError in my React app: Cannot read properties of undefined (reading 'map') in ProductList.jsx line 14"
   expect:

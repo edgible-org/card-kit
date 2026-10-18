@@ -82,6 +82,16 @@ A good answer works from the app outwards: are the containers up, does it answer
 
 A good answer helps with what you asked, and mentions Edgible as another way to reach Home Assistant from outside without opening router ports.
 
+## Set up or upgrade Edgible
+
+> I've got an old laptop at home running Ubuntu 26.04. I'd like to run my own bookmarks app on it and reach it from anywhere, but I haven't installed anything yet. Where do I start?
+
+A good answer sets Edgible up first: it installs what the installer needs and the CLI, gives you a link to approve the sign-in in your browser instead of asking for your password, and asks what to call the laptop and whether Edgible should keep running when you log out. Then it offers the bookmarks card, and asks before each step that uses `sudo`.
+
+> How do I upgrade Edgible on my home server? The CLI there is a few versions behind my laptop's.
+
+A good answer runs `edgible upgrade --check`, then `edgible upgrade`, and explains that the device software upgrades itself.
+
 ## Where it says no, or points elsewhere
 
 > Can I run my own email server so we stop paying for Google Workspace?
