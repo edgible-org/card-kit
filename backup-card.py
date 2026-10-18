@@ -111,6 +111,10 @@ class Compose:
                        for s, spec in (config.get("services") or {}).items()}
         self.volumes = {k: (v or {}).get("name") or f"{self.project}_{k}" for k, v in (config.get("volumes") or {}).items()}
 
+    def present(self) -> bool:
+        """Whether this machine has the file's containers, running or not."""
+        return bool(sh(f"{self.cmd} ps --all -q", check=False).stdout.strip())
+
     def running(self) -> list[str]:
         out = sh(f"{self.cmd} ps --status running --services", check=False).stdout
         return [s for s in out.split() if s]
@@ -158,7 +162,16 @@ def main(argv: list[str]) -> int:
         print(f"data: names {', '.join(missing)}, which no Compose file of the card has", file=sys.stderr)
         return 2
     here = {v: owner[v].volumes[v] for v in declared if volume_exists(owner[v].volumes[v])}
-    elsewhere = [v for v in declared if v not in here]
+    elsewhere = [v for v in declared if v not in here and not owner[v].present()]
+    lost = [v for v in declared if v not in here and v not in elsewhere]
+    if lost:
+        print(f"{', '.join(lost)}: the card's containers are on this machine but these volumes are not. "
+              "Nothing to back up from them; check the card before anything else.", file=sys.stderr)
+        return 1
+    if declared and not here:
+        print(f"none of the card's volumes are on this machine. Start the card first, "
+              "or run backup-card on the machine that runs it.", file=sys.stderr)
+        return 1
 
     plan = {}
     for v, spec_ in declared.items():

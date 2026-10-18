@@ -230,7 +230,7 @@ There are two kinds of tool, and the difference decides how each one runs.
 
 A tool that works on files in a repo runs through `run`, in the image from [Dockerfile](Dockerfile). It may use any package; add the package to the Dockerfile. Docker is the only thing an author installs.
 
-A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env`, `test-card`, `test-cards` and `backup-card` are these; `run` refuses them.
+A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env`, `test-card`, `test-cards`, `backup-card`, `restore-card` and `verify-card` are these; `run` refuses them.
 
 ### run
 
@@ -402,9 +402,36 @@ python3 ../card-kit/backup-card.py ~/linkding
 4. **Skipped:** rebuildable and cache volumes are listed, not copied. A volume another place runs on another machine is listed as not here: back it up there.
 5. **The card:** it copies the card's files with `card.env` (mode 600), because the copies need its passwords.
 
-It writes everything to `<card dir>-backups/<YYYYmmdd-HHMM>/`, or to `--to`, with `backup.json`: the card, when and where the backup was taken, the Edgible version, the card's files hash, the fingerprint, the outage, and each volume's class, method, file, size and sha256. The directory is named `.partial` until the backup is whole. `--dry-run` says what it would copy and how, which services would stop, and whether the disk has room, and changes nothing. A card with volumes and no `data:` is refused; a card with no volumes is backed up as its files and `card.env`.
+It writes everything to `<card dir>-backups/<YYYYmmdd-HHMM>/`, or to `--to`, with `backup.json`: the card, when and where the backup was taken, the Edgible version, the card's files hash, the fingerprint, the outage, and each volume's class, method, file, size and sha256. The directory is named `.partial` until the backup is whole. `--dry-run` says what it would copy and how, which services would stop, and whether the disk has room, and changes nothing. A card with volumes and no `data:` is refused, and so is one whose volumes are not on the machine; a card with no volumes is backed up as its files and `card.env`.
 
 A copy on the same machine does not survive the loss of that machine: copy the directory somewhere else too.
+
+### restore-card
+
+Restores a backup that `backup-card` wrote, over the card or as a copy beside it, and then runs `verify-card` against it. It runs with `python3` on the machine that will run the card.
+
+```bash
+python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding-copy --as linkding-copy
+python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding
+```
+
+1. **Check:** every file against its sha256 in `backup.json`. A file that differs stops it.
+2. **A copy, with `--as NAME`:** the card goes into a new directory with its own Compose project, and container names when the card sets them, named after `NAME`. Each `*_PORT` in `card.env` that is taken moves to the next free port. The running card is never touched. This is how a move restores under a temporary name before the switch. A `*_URL` in `card.env` keeps its value: change it if the copy will be published.
+3. **In place, without `--as`:** it asks first (`--yes` skips the question, and a run with no terminal needs it), backs the card up with `backup-card` (`--no-backup` skips that, when the data is already lost), stops the card, and removes the volumes it restores. The card's `card.env` before the restore is kept as `card.env.before-restore-<stamp>`.
+4. **Volumes:** it creates them, loads each `.tgz`, starts each dump's service alone and feeds the dump to its `restore` command, and leaves rebuildable and cache volumes empty for the app to rebuild.
+5. **Start and verify:** `up --wait`, then `verify-card --against` the backup. Its exit is restore-card's.
+
+`--dry-run` checks the files and says what it would do, and changes nothing.
+
+### verify-card
+
+Checks that a card runs on the machine and, with `--against` a backup, that it holds the same data.
+
+```bash
+python3 ../card-kit/verify-card.py ~/linkding-copy --against ~/linkding-backups/20261018-1001
+```
+
+**Running:** every service of each Compose file on the machine is running, and healthy when it has a healthcheck. **Answering:** every TCP port it publishes accepts a connection. **Fingerprint:** it runs `data.fingerprint`. With `--against`, the line must equal the one in `backup.json`, the proof that the data came back whole; when they differ it prints both. It exits 1 when a check fails.
 
 ## Agent skill
 
