@@ -112,7 +112,7 @@ Before anything starts, put the card's open choices to the person in one message
 - **Whether it must stay up** after a restart. If so, check the machine first: see [Keep it running](#keep-it-running).
 - **Roles inside the app**, when people must not all see everything: who is admin, and which groups see which records.
 - **Who looks after it**, when others depend on it: a second person, and where the backups go.
-- **The machine itself, when it is not an Edgible device yet** (find out first, with the check in [Set up Edgible](#set-up-edgible)): what to call the device, and whether it stays on, as a service that starts at boot (`sudo`), or under the person's account, stopping when they log out. Recommend always on for anything others rely on. These are the person's to choose: never pick them for them.
+- **The machine itself, when it is not an Edgible device yet** (find out first, with the check in [Set up Edgible](#set-up-edgible)): what to call the device, and whether it stays on, as a service that starts at boot (`sudo`), or under the person's account, stopping when they log out. Make it one question with your suggestion, so it is one of your two or three questions, not two more: "I'd call it `pi5` and run it always on, so it keeps working when you log out. OK, or another name?" Recommend always on for anything others rely on. The answer is theirs: never use a name or mode they have not agreed to.
 
 ## Set up Edgible
 
