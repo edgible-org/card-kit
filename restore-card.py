@@ -14,6 +14,8 @@ In order:
   --as      a copy beside the original: its own Compose project (and container names) named
             after NAME, and a free host port for each *_PORT that is taken, so the running card
             is never touched. This is the "restore under a temporary name" step of a move.
+  new       without --as, into a directory that is empty or not there yet: the card under
+            its own name, as on the machine a move goes to; a taken *_PORT still moves
   in place  without --as, over the card that is there: it asks first (--yes skips that),
             backs the card up with backup-card (--no-backup skips that, when its data is
             already lost), stops it, and removes the volumes it restores
@@ -58,6 +60,8 @@ sh = backup_card.sh
 
 def renamed(value: str, old: str, new: str) -> str:
     """A project or container name for the copy: the card's own prefix swapped for NAME."""
+    if new == old:
+        return value
     return new + value[len(old):] if value == old or value.startswith(old + "-") or value.startswith(old + "_") \
         else f"{new}-{value}"
 
@@ -142,6 +146,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"restore of {manifest['card']}, taken {manifest['taken']} on {manifest['host']}: files check out")
 
+    fresh = not args.name and (not target.exists() or not any(target.iterdir()))
     if args.name:
         if not re.match(r"^[a-z0-9][a-z0-9_-]*$", args.name):
             print("--as takes a lower-case name, such as linkding-copy", file=sys.stderr)
@@ -150,6 +155,8 @@ def main(argv: list[str]) -> int:
             print(f"{target} is not empty: a copy goes in a new directory", file=sys.stderr)
             return 2
         mode = f"as a copy named {args.name} in {target}; the running card is not touched"
+    elif fresh:
+        mode = f"as {manifest['card']} in the new directory {target}, as on a new machine"
     else:
         if not (target / "card.yml").is_file():
             print(f"{target} has no card.yml: give the card's directory, or a new one with --as", file=sys.stderr)
@@ -166,7 +173,7 @@ def main(argv: list[str]) -> int:
             print(f"  {v}: starts empty ({entry['class']}); the app rebuilds it")
         else:
             print(f"  {v}: not in this backup: restore it on the machine that runs it")
-    if not args.name:
+    if not args.name and not fresh:
         print("  first: " + ("no backup of the card (--no-backup)" if args.no_backup else "backup-card of the card as it is"))
     print("  then: start, and verify-card against the backup" +
           (f" (fingerprint {json.dumps(manifest['fingerprint'])})" if manifest.get("fingerprint") else ""))
@@ -174,7 +181,7 @@ def main(argv: list[str]) -> int:
         print("dry run: nothing changed")
         return 0
 
-    if not args.name and not args.yes:
+    if not args.name and not fresh and not args.yes:
         if not sys.stdin.isatty():
             print("restoring over the card replaces its data: run it again with --yes", file=sys.stderr)
             return 2
@@ -183,9 +190,17 @@ def main(argv: list[str]) -> int:
             return 1
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    if args.name:
+    if args.name or fresh:
         shutil.copytree(backup / "card", target, symlinks=True, dirs_exist_ok=True)
-        for line in make_copy(target, args.name, manifest["card"]):
+        if fresh:
+            taken = [n for f in sorted(target.glob("*compose*.yml"))
+                     for n in backup_card.Compose(target, f).volumes.values() if backup_card.volume_exists(n)]
+            if taken:
+                shutil.rmtree(target)
+                print(f"this machine already has {', '.join(taken)}: a card of the same name runs here. "
+                      "Restore over its directory, or as a copy with --as.", file=sys.stderr)
+                return 2
+        for line in make_copy(target, args.name or manifest["card"], manifest["card"]):
             print(f"copy: {line}")
     else:
         if not args.no_backup:
@@ -233,7 +248,7 @@ def main(argv: list[str]) -> int:
         print("started")
     except Exception as exc:
         print(f"restore failed: {exc}", file=sys.stderr)
-        if not args.name and not args.no_backup:
+        if not args.name and not fresh and not args.no_backup:
             print(f"the card as it was is in {target.parent / f'{target.name}-backups' / f'before-restore-{stamp}'}",
                   file=sys.stderr)
         return 1
