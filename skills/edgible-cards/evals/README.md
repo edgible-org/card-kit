@@ -9,6 +9,7 @@ The prompts the skill is measured against, and how to measure it. [EXAMPLES.md](
 | [run-evals.py](run-evals.py) | Answers each held-out prompt in a fresh read-only session with the skill, has a second session judge the answer against its `expect`, `must_not`, and the skill's principles, and writes a report. |
 | [eval-summary.py](eval-summary.py) | Combines the last week of nightly runs into one report, from each prompt's latest result. |
 | [trigger-probe.py](trigger-probe.py) | Runs each trigger prompt in fresh, read-only `claude -p` sessions with the skill installed, and reports whether and at which step it loaded. |
+| [ai-regression.py](ai-regression.py) and [agents.yaml](agents.yaml) | Run the held-out prompts on several agents (harness and model), with and without the skill, and index each against the baseline. |
 
 ## Measure triggering
 
@@ -39,6 +40,33 @@ A prompt passes when the skill loaded as it should, every `expect` item holds, a
 If the subscription's usage limit is reached, the run stops, reports the prompts it did not run, and exits 2. Nothing is scored from a limit message.
 
 A session must be able to read the skill's folder by both of its paths (the skills symlink and where it points), or it answers without the needs map: `run-evals.py` passes both with `--add-dir`. Headless sessions refuse anything not allowed.
+
+## Compare agents
+
+`ai-regression.py` measures the skill on the agents in [agents.yaml](agents.yaml), not only Claude. [Coder Eval](https://coder-eval.com) runs the answers (`uv tool install coder-eval`). Each prompt is answered with the skill and without it, and `run-evals.py`'s judge scores every answer.
+
+```bash
+python3 skills/edgible-cards/evals/ai-regression.py --out results/agents-$(date +%F)              # every agent this machine can run, 3 runs
+python3 skills/edgible-cards/evals/ai-regression.py --out results/try --agents qwen2.5-7b --only pocket-shutdown --runs 1
+python3 skills/edgible-cards/evals/ai-regression.py --out results/try --plan                       # say what would run, and why the rest won't
+```
+
+The report gives each agent's results against the baseline (the agent marked `baseline: true`) on the same prompts:
+
+- **Index:** the expect items its answers met, as a percentage of what the baseline met, with the range over runs.
+- **Lift:** the index with the skill minus the index without it.
+- **Critical failures:** `must_not` breaks, counted beside the index, never in it.
+- **Skill loads:** how often the skill loaded as it should.
+- **Median time** per answer.
+
+`results.json` holds the same results without the answers. Each answer and its verdict are kept beside its run (`runs/<agent>/<arm>/<prompt>/<run>/`), so a rerun only judges answers that have no verdict yet.
+
+Each entry in `agents.yaml` says what the agent needs: `memory_gb`, and an `ollama/` model pulled into Ollama on 127.0.0.1:11434. A machine without them skips that agent and says why. So adding a bigger device to the fleet adds its agents to the report, with no change here.
+
+What each harness needs:
+
+- **Claude Code:** the `claude` CLI, signed in. It runs with only Skill, Read, Glob and Grep, and none of the machine's own settings or skills.
+- **OpenCode:** npm's `opencode-ai` 1.19.x. Coder Eval passes `--dir` and `--pure`, which Homebrew's `opencode` 2.x no longer has. Coder Eval can't limit OpenCode's tools, so the script's OpenCode config turns off its shell, edit and fetch tools. It also turns off OpenCode's own loading of `~/.claude/skills`, so the arm without the skill really is without it.
 
 ## Rules
 
