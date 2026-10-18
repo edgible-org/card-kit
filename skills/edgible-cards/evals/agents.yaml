@@ -75,3 +75,21 @@
   harness: antigravity
   model: gemini-3.8-flash
   timeout: 900
+
+# Hosted open models through OpenRouter, on one key (OPENROUTER_API_KEY): pay as you go.
+- id: kimi
+  harness: opencode
+  model: openrouter/moonshotai/kimi-k3
+  timeout: 900
+
+- id: glm
+  harness: opencode
+  model: openrouter/z-ai/glm-5.3
+  timeout: 900
+
+- id: qwen-hosted
+  harness: opencode
+  # The size that is too slow on a 32 GB Mac; beside a local qwen3.x later, it shows what
+  # local hardware costs in answer quality.
+  model: openrouter/qwen/qwen3.8-27b
+  timeout: 900

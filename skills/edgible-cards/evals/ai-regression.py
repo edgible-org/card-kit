@@ -156,9 +156,13 @@ def write_experiment(agent: dict, lift: bool, folder: Path) -> Path:
 def opencode_env(agents: list[dict]) -> dict:
     models = {a["model"].removeprefix("ollama/"): {"name": a["model"]} for a in agents
               if a["model"].startswith("ollama/")}
+    # OpenCode's own model list lags OpenRouter's, so name each OpenRouter model it is to use.
+    routed = {a["model"].removeprefix("openrouter/"): {"name": a["model"]} for a in agents
+              if a["model"].startswith("openrouter/")}
     config = {"$schema": "https://opencode.ai/config.json",
               "provider": {"ollama": {"npm": "@ai-sdk/openai-compatible", "name": "Ollama",
-                                      "options": {"baseURL": f"{OLLAMA}/v1"}, "models": models}},
+                                      "options": {"baseURL": f"{OLLAMA}/v1"}, "models": models},
+                           **({"openrouter": {"models": routed}} if routed else {})},
               "permission": {"bash": "deny", "edit": "deny", "webfetch": "deny"},
               "tools": {t: False for t in ("bash", "write", "edit", "patch", "webfetch", "todowrite")}}
     # Without these, OpenCode loads ~/.claude/skills itself, and the no-skill arm has the skill.
