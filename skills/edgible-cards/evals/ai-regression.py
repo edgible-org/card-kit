@@ -45,6 +45,9 @@ HEADROOM = 1.5
 # Each prepaid provider's spend per job, unless --max-spend says otherwise: enough for a night's
 # rotation, so a full run is a deliberate choice.
 DEFAULT_SPEND = 0.50
+# What one answer may cost, at list price, before it counts as too expensive: a person asking for
+# help would not pay more. Reported beside the index, like critical failures, never in it.
+ANSWER_CEILING = 0.25
 TERMINATED = {"TIMEOUT": "over the time limit", "MAX_TURNS_EXHAUSTED": f"over {MAX_STEPS} steps",
               "TOKEN_BUDGET_EXCEEDED": "over the token budget", "COST_BUDGET_EXCEEDED": "over the cost budget"}
 # Each harness and the command it needs on PATH (Antigravity's ships inside coder-eval[antigravity]).
@@ -320,6 +323,7 @@ def summarise(rows: list[dict], scenarios: list[dict], agents: list[dict]) -> li
                     "expect_met": sum(r["expect_met"] for r in ok), "expect_total": sum(expect_total[r["prompt"]] for r in ok),
                     "critical_failures": sum(len(r["critical_failures"]) for r in ok),
                     "terminated": sum("terminated" in r for r in mine),
+                    "too_expensive": sum(r.get("cost_usd", 0) > ANSWER_CEILING for r in mine),
                     "loaded_as_it_should": sum(r["loaded_as_it_should"] for r in mine),
                     "median_seconds": round(statistics.median(r["seconds"] for r in mine)),
                     "cost_usd": round(sum(r.get("cost_usd", 0) for r in mine), 4)}
@@ -342,6 +346,9 @@ def summarise(rows: list[dict], scenarios: list[dict], agents: list[dict]) -> li
             bare = next((o for o in out if o["agent"] == line["agent"] and o["arm"] == "no-skill"), None)
             if bare and bare.get("index") is not None and line.get("index") is not None:
                 line["lift"] = line["index"] - bare["index"]
+            # What the skill adds to an answer's cost: with it ÷ without it.
+            if bare and bare["cost_usd"] > 0 and line["cost_usd"] > 0:
+                line["cost_overhead"] = round((line["cost_usd"] / line["answers"]) / (bare["cost_usd"] / bare["answers"]), 1)
     return out
 
 
@@ -353,18 +360,20 @@ def report(summary: list[dict], skipped: list[tuple], rows: list[dict], meta: di
              f"`{meta['baseline']}` met on the same prompts; the range is over runs. Critical failures are must_not "
              "breaks, counted beside the index, never in it. Lift is the index with the skill minus without. Terminated answers were stopped by "
              f"a limit (time, {MAX_STEPS} steps) and score 0; without the skill, the time limit is "
-             f"{LIFT_TIME:g}× the time the answer with it took, at least {MIN_SECONDS} s. Cost is at list price, "
+             f"{LIFT_TIME:g}× the time the answer with it took, at least {MIN_SECONDS} s. An answer over $" f"{ANSWER_CEILING:.2f} is too expensive: a person "
+             "would not pay that for one reply. Skill cost × is the cost of an answer with the skill over one without. Cost is at list price, "
              "so it shows what a subscription's runs would cost on an API key; local models cost nothing.", "",
-             "| Agent | Arm | Index | Range | Lift | Critical failures | Terminated | Skill loaded as it should | Items met | Median time | Cost | Errors |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             f"| Agent | Arm | Index | Range | Lift | Critical failures | Terminated | Over ${ANSWER_CEILING:.2f} | Skill loaded as it should | Items met | Median time | Cost per answer | Skill cost × | Errors |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         rng = "–".join(map(str, s["index_range"])) if "index_range" in s else ""
         lift = f"{s['lift']:+d}" if "lift" in s else ""
         # The arm without the skill has nothing to load, so it has no load rate.
         loads = f"{s['loaded_as_it_should']}/{s['answers']}" if s["arm"] == "skill" else "–"
-        lines.append(f"| {s['agent']} | {s['arm']} | {s.get('index', '')} | {rng} | {lift} | {s['critical_failures']} | {s['terminated']} | "
+        lines.append(f"| {s['agent']} | {s['arm']} | {s.get('index', '')} | {rng} | {lift} | {s['critical_failures']} | {s['terminated']} | {s['too_expensive']} | "
                      f"{loads} | {s['expect_met']}/{s['expect_total']} | "
-                     f"{s['median_seconds']} s | ${s['cost_usd']:.2f} | {s['errors']} |")
+                     f"{s['median_seconds']} s | ${s['cost_usd'] / s['answers']:.2f} | "
+                     f"{str(s['cost_overhead']) + '×' if 'cost_overhead' in s else ''} | {s['errors']} |")
     if skipped:
         lines += ["", "Not run on this machine:", ""] + [f"- {a}: {why}" for a, why in skipped]
     failures = [r for r in rows if r.get("critical_failures")]
