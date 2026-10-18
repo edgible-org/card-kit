@@ -249,7 +249,28 @@ Fix the cause, then run [Is it working](#is-it-working). If the card itself is w
 
 ### Back up and restore
 
-A copy is whole only while the containers are stopped, so a backup is a short outage. Keep `card.env` with the copies: the databases in them expect its passwords.
+**When the card's `card.yml` has a `data:` section**, use card-kit's tools on the machine that runs the card. They know which volumes matter, dump databases while the app keeps running, stop only what they must, and prove a restore with the card's fingerprint:
+
+```bash
+for t in backup-card restore-card verify-card test-card; do   # restore and verify need all four
+  curl -fsSLo "$t.py" "https://raw.githubusercontent.com/edgible-org/card-kit/main/$t.py"
+done
+python3 backup-card.py "$dir" --dry-run     # what it copies, what stops, and for how long
+python3 backup-card.py "$dir"               # writes $dir-backups/<stamp>/, with backup.json
+```
+
+Tell the person what the dry run says will stop before the real run. The backup holds the card's files and `card.env`, so keep it private.
+
+**Restore** replaces the current data. Ask first. `restore-card` checks every file of the backup, backs the card up as it is, restores, and runs `verify-card`, which passes only when the data's fingerprint matches the backup's:
+
+```bash
+python3 restore-card.py "$dir-backups/<stamp>" "$dir" --dry-run
+python3 restore-card.py "$dir-backups/<stamp>" "$dir" --yes
+```
+
+`--as <name>` restores a copy beside the running card instead, under its own name and a free port, to look at an old backup without touching the card. `--no-backup` skips the backup first, when the data is already lost.
+
+**When the card has no `data:` section** yet, copy every volume by hand. A copy is whole only while the containers are stopped, so a backup is a short outage. Keep `card.env` with the copies: the databases in them expect its passwords.
 
 ```bash
 backups=$dir-backups; stamp=$(date +%Y%m%d-%H%M); mkdir -p "$backups"
@@ -263,7 +284,7 @@ $C start
 
 A copy on the same machine does not survive the loss of that machine. Suggest the person also copies `$backups` somewhere else.
 
-**Restore** replaces the current data. Ask first, and make a fresh backup first unless the data is already lost. Use the `card.env` that was saved with the copy:
+To restore one of these by hand, ask first, and make a fresh backup first unless the data is already lost. Use the `card.env` that was saved with the copy:
 
 ```bash
 $C stop
@@ -303,13 +324,13 @@ The published apps stay as they are, unless the card's ports or apps changed.
 
 ### Move to another machine
 
-Ask first. The app is down between the old copy stopping and the new one answering.
+Ask first. A move is a copy, then a switch, then retiring the old copy, and the old copy keeps serving until the switch. The app is down only from deleting it on the old machine to answering on the new one, about a minute or two.
 
-1. The new machine is a serving device that `edgible device list` shows online, with Docker.
-2. [Back up](#back-up-and-restore) on the old machine. Copy `$dir` with its `card.env` and the backups to the new machine.
-3. On the new machine, `$C create` makes the volumes without starting anything. Restore each copy into its volume, run `$C up -d --wait`, and check it on `127.0.0.1`.
-4. Switch the hostnames: `edgible app delete <app> --yes`, then publish again as in the README, with the new device's id. The generated hostname stays the same.
-5. Run [Is it working](#is-it-working). Then, on the old machine, `$C down`, and keep its volumes until the person is satisfied.
+1. **The new machine** is a serving device that `edgible device list` shows online, with Docker, and room for the card: compare the card's `places:` with what the machine has free. A machine that runs something else that matters needs the margin, not just the total.
+2. **Copy.** With a `data:` section: run `backup-card` on the old machine, copy its backup directory to the new one (`rsync -a`, which keeps `card.env` private), fetch the tools there as in [Back up and restore](#back-up-and-restore), and run `restore-card <backup> <new dir>`. Into a new directory it restores the card under its own name, and ends with `verify-card`: the copy must pass before the switch. Without a `data:` section: [back up](#back-up-and-restore) by hand, copy `$dir` with its `card.env` and the backups, run `$C create` on the new machine, restore each volume, `$C up -d --wait`, and check it on `127.0.0.1`.
+3. **Changes after the copy.** Anything written on the old machine after the backup is not in it. For an app people change all day, take a second backup just before the switch and restore it over the copy (`restore-card <second backup> <new dir> --yes --no-backup`): it is quick, because little has changed.
+4. **Switch the hostnames:** `edgible app delete <app> --yes`, then publish again as in the README, with the new device's id. The generated hostname stays the same.
+5. Run [Is it working](#is-it-working) through the hostname. Then, on the old machine, `$C down`, and keep its volumes and the backup until the person is satisfied.
 
 ### Remove
 
