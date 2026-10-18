@@ -17,7 +17,7 @@ Check this first, because it decides how you act on anything below.
 
 - **With a shell on the person's machine** (Claude Code, or another agent in a terminal there): run the commands in this skill as written.
 - **With Edgible MCP tools** (tools from an Edgible MCP server, such as `find`, `describe`, and `whats_running`): use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](#1-find), and `whats_running` for [What is running](#what-is-running) and the Edgible layers of [Is it working](#is-it-working). They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
-- **With no shell on the person's machine** (Claude's desktop or web app, where a skill runs in a sandbox): do not run `edgible`, `docker`, `test-card`, or `check-env` in the sandbox. They would not reach the person's machine or Edgible account, and a sandbox result is not theirs. Use the MCP tools where they cover the step. For the rest, give the person each command to run on their machine, one step at a time, and ask them to paste what it prints. The needs map and the rest of this skill still apply: read them from this folder.
+- **With no shell on the person's machine** (Claude's desktop or web app, where a skill runs in a sandbox): do not run `edgible`, `docker`, `test-card`, or `check-env` in the sandbox. They would not reach the person's machine or Edgible account, and a sandbox result is not theirs. Use the MCP tools where they cover the step. For the rest, give the person each command to run on their machine, one step at a time, and ask them to paste what it prints. One step per message, never the whole setup in one answer: what a step prints decides the next one, because an install already there skips steps and an error changes them. The choices in [Decide](#2-decide-with-the-person) come before the first command. Before a command with `sudo`, say what it changes and that it asks for their password. The needs map and the rest of this skill still apply: read them from this folder.
 
 Say which of these you are working in when it changes what the person has to do.
 
@@ -112,10 +112,11 @@ Before anything starts, put the card's open choices to the person in one message
 - **Whether it must stay up** after a restart. If so, check the machine first: see [Keep it running](#keep-it-running).
 - **Roles inside the app**, when people must not all see everything: who is admin, and which groups see which records.
 - **Who looks after it**, when others depend on it: a second person, and where the backups go.
+- **The machine itself, when it is not an Edgible device yet** (find out first, with the check in [Set up Edgible](#set-up-edgible)): what to call the device, and whether it stays on, as a service that starts at boot (`sudo`), or under the person's account, stopping when they log out. Recommend always on for anything others rely on. These are the person's to choose: never pick them for them.
 
 ## Set up Edgible
 
-The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. When both are there, skip to [Deploy](#3-deploy).
+The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. Run this check before anything else, even when the person says the machine is new; with no shell, it is the first thing to ask them to run. When both are there, skip to [Deploy](#3-deploy).
 
 Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guides.edgible.com. The steps below are the same, for an agent working on the machine. Ask before each step that uses `sudo`, and say what it installs.
 
