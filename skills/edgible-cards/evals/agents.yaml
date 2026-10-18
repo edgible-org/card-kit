@@ -1,0 +1,95 @@
+# The agents the AI regression measures the skill on. ai-regression.py reads this file.
+#
+# Each agent is a harness and a model. The baseline is the agent the others are indexed against.
+# An agent runs only on a machine that has what it needs: memory_gb (the machine's memory),
+# and for an ollama/ model, that model pulled into Ollama. Elsewhere it is skipped and the
+# report says why, so a bigger device in the fleet picks up the agents a smaller one skips.
+# timeout is seconds per answer.
+
+- id: claude-opus
+  harness: claude-code
+  model: claude-opus-5-5
+  baseline: true
+  timeout: 900
+
+- id: claude-sonnet
+  harness: claude-code
+  model: claude-sonnet-5-5
+  timeout: 900
+
+- id: claude-haiku
+  harness: claude-code
+  model: claude-haiku-5-5
+  timeout: 900
+
+- id: gpt-oss-20b
+  harness: opencode
+  model: ollama/gpt-oss:20b
+  memory_gb: 24
+  timeout: 900
+
+- id: qwen3.5-27b
+  harness: opencode
+  model: ollama/qwen3.5:27b
+  # Loads the skill, but took 34 minutes an answer on a 32 GB Mac (2026-10-18).
+  memory_gb: 64
+  timeout: 2700
+
+- id: llama3.1-8b
+  harness: opencode
+  model: ollama/llama3.1:8b
+  memory_gb: 16
+  timeout: 900
+
+- id: qwen2.5-7b
+  harness: opencode
+  model: ollama/qwen2.5:7b
+  memory_gb: 16
+  timeout: 900
+
+- id: codex
+  harness: codex
+  # The model Codex picks for a free ChatGPT account (2026-10-18). Coder Eval fills in a Claude
+  # model when none is named, which ChatGPT refuses.
+  model: gpt-6-luna
+  timeout: 900
+
+# Hosted open-weight models, on a DeepSeek API key (DEEPSEEK_API_KEY): pay as you go.
+- id: deepseek-v4-pro
+  harness: opencode
+  model: deepseek/deepseek-v4-pro
+  timeout: 900
+
+- id: deepseek-flash
+  harness: opencode
+  model: deepseek/deepseek-flash
+  timeout: 900
+
+# Gemini through Google's Antigravity harness, on a Gemini API key (GEMINI_API_KEY, free tier).
+- id: gemini-pro
+  harness: antigravity
+  model: gemini-3.1-pro-preview
+  timeout: 900
+
+- id: gemini-flash
+  harness: antigravity
+  model: gemini-3.8-flash
+  timeout: 900
+
+# Hosted open models through OpenRouter, on one key (OPENROUTER_API_KEY): pay as you go.
+- id: kimi
+  harness: opencode
+  model: openrouter/moonshotai/kimi-k3
+  timeout: 900
+
+- id: glm
+  harness: opencode
+  model: openrouter/z-ai/glm-5.3
+  timeout: 900
+
+- id: qwen-hosted
+  harness: opencode
+  # The size that is too slow on a 32 GB Mac; beside a local qwen3.x later, it shows what
+  # local hardware costs in answer quality.
+  model: openrouter/qwen/qwen3.8-27b
+  timeout: 900
