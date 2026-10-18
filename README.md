@@ -417,9 +417,10 @@ python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding
 
 1. **Check:** every file against its sha256 in `backup.json`. A file that differs stops it.
 2. **A copy, with `--as NAME`:** the card goes into a new directory with its own Compose project, and container names when the card sets them, named after `NAME`. Each `*_PORT` in `card.env` that is taken moves to the next free port. The running card is never touched. This is how a move restores under a temporary name before the switch. A `*_URL` in `card.env` keeps its value: change it if the copy will be published.
-3. **In place, without `--as`:** it asks first (`--yes` skips the question, and a run with no terminal needs it), backs the card up with `backup-card` (`--no-backup` skips that, when the data is already lost), stops the card, and removes the volumes it restores. The card's `card.env` before the restore is kept as `card.env.before-restore-<stamp>`.
-4. **Volumes:** it creates them, loads each `.tgz`, starts each dump's service alone and feeds the dump to its `restore` command, and leaves rebuildable and cache volumes empty for the app to rebuild.
-5. **Start and verify:** `up --wait`, then `verify-card --against` the backup. Its exit is restore-card's.
+3. **New, without `--as`, into a directory that is empty or not there yet:** the card under its own name, as on the machine a move goes to. It refuses when the machine already has the card's volumes. A taken `*_PORT` still moves.
+4. **In place, without `--as`:** it asks first (`--yes` skips the question, and a run with no terminal needs it), backs the card up with `backup-card` (`--no-backup` skips that, when the data is already lost), stops the card, and removes the volumes it restores. The card's `card.env` before the restore is kept as `card.env.before-restore-<stamp>`.
+5. **Volumes:** it creates them, loads each `.tgz`, starts each dump's service alone and feeds the dump to its `restore` command, and leaves rebuildable and cache volumes empty for the app to rebuild.
+6. **Start and verify:** `up --wait`, then `verify-card --against` the backup. Its exit is restore-card's.
 
 `--dry-run` checks the files and says what it would do, and changes nothing.
 
