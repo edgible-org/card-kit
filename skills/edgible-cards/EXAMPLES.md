@@ -56,7 +56,15 @@ A good answer leads with practice-management systems built for clinics, because 
 
 > I've built an MCP server that lets Claude query our company's inventory database. It runs on my laptop. How can the rest of the team use it from Claude when they're not in the office?
 
-A good answer moves it to a machine that stays on, next to the database, and publishes it with an API key per person, so one can be revoked. It asks which Claude the team uses, because Claude Code can send a key and Claude's apps expect the server's own sign-in. It suggests read-only tools first. If the server only speaks stdio, it adds a small bridge that serves it over HTTP.
+A good answer moves it to a machine that stays on, next to the database, and publishes it with an API key per person, so one can be revoked. It asks which Claude the team uses, because Claude Code can send a key, while Claude's apps need OAuth: for them, the server stays unpublished behind mcp-signin, and each person signs in with their Edgible account. It suggests read-only tools first. If the server only speaks stdio, it adds a small bridge that serves it over HTTP.
+
+> I've got an MCP server for my notes running on my home server. How can I use it from Claude on my phone?
+
+A good answer explains that the phone uses connectors added on Claude's web or desktop app, which Claude's servers call, so the server needs a public address and its own sign-in. It puts mcp-signin in front, signing in with Edgible, and keeps the notes server itself unpublished. It gives the connector address ending in `/mcp`, with the OAuth fields left empty, and asks who else should get in.
+
+> Does Edgible have an MCP server? I mostly use the Claude desktop app.
+
+A good answer says yes: `edgible mcp`, in the Edgible CLI, read-only to start, with write tools once you trust it. It gives the entry for the desktop app's config file, with the full path to `edgible`, since the app does not read the shell's `PATH`, and says the CLI must be installed and logged in first. It mentions that Claude's web and phone apps need a remote connector instead.
 
 > We're prototyping a RAG chatbot for our product docs. Is it worth running our own vector database instead of paying for Pinecone?
 
