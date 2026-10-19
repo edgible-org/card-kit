@@ -29,7 +29,7 @@ import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { edgibleProvider } from './oauth.mjs';
 
-const version = '0.1.0';
+const version = '0.1.1';
 const env = (k, d) => (process.env[k] ?? d ?? '').trim();
 const need = (k) => env(k) || (() => { throw new Error(`mcp-signin needs ${k}`); })();
 const trim = (u) => u.replace(/\/$/, '');
@@ -79,6 +79,9 @@ const app = express();
 // 127.0.0.1 only, so that server is the one proxy in front: trust exactly one hop.
 app.set('trust proxy', 1);
 app.get('/healthz', (req, res) => res.send('ok\n'));
+// Someone who opens the address in a browser learns what it is for.
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+app.get('/', (req, res) => res.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(name)}</title><body style="font:16px system-ui;max-width:32em;margin:3em auto;padding:0 1em;line-height:1.5"><h1>${esc(name)}</h1><p>An MCP server, for AI assistants. To use it, add <code>${esc(publicUrl)}/mcp</code> to your assistant as a connector, such as in Claude: Settings, Connectors, Add custom connector. You sign in with Edgible when you connect.</p>`));
 const resource = new URL(`${publicUrl}/mcp`);
 app.use(mcpAuthRouter({ provider, issuerUrl: new URL(publicUrl), resourceServerUrl: resource, scopesSupported: ['mcp'], resourceName: name }));
 app.all('/mcp', requireBearerAuth({ verifier: provider, resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resource) }),
