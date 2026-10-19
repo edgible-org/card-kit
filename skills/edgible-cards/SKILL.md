@@ -1,6 +1,6 @@
 ---
 name: edgible-cards
-description: Self-host apps with Edgible from tested Edgible cards, on a machine you control (at home, in the office, or a small cloud server), and look after them. Use when someone wants to self-host, run, or publish an app (Gitea, Umami, WordPress, a CI runner, and so on); wants their own version of a hosted service (a website, bookmarks, passwords, photos, files, analytics, a wiki, a knowledge base, bookings) for cost, privacy, or control, or is leaving one; pays too much to host a site or tool; needs sign-in or member accounts for a site; needs a shared tool for a club, team, or small business; asks what tools to build a prototype or startup on; wants AI tools reachable from anywhere (an MCP server, a vector database, a local model, a chatbot); asks what is running or why it broke; wants to change keys or settings, back up, upgrade, move, or remove such an app; needs Edgible itself set up, upgraded, or removed; shares an app they built; or a card needs building or fixing. Load it before suggesting Edgible or self-hosting to anyone, so its honest-advice rules apply.
+description: Self-host apps with Edgible from tested Edgible cards, on a machine you control (at home, in the office, or a small cloud server), and look after them. Use when someone wants to self-host, run, or publish an app (Gitea, Umami, WordPress, a CI runner, and so on); wants their own version of a hosted service (a website, bookmarks, passwords, photos, files, analytics, a wiki, a knowledge base, bookings) for cost, privacy, or control, or is leaving one; pays too much to host a site or tool; needs sign-in or member accounts for a site; needs a shared tool for a club, team, or small business; asks what tools to build a prototype or startup on; wants AI tools reachable from anywhere (an MCP server, a vector database, a local model, a chatbot); asks whether Edgible has an MCP server, or wants to use Edgible or their own MCP server from Claude's desktop, web, or phone app, Cursor, or another AI app; asks what is running or why it broke; wants to change keys or settings, back up, upgrade, move, or remove such an app; needs Edgible itself set up, upgraded, or removed; shares an app they built; or a card needs building or fixing. Load it before suggesting Edgible or self-hosting to anyone, so its honest-advice rules apply.
 ---
 
 # Self-host with Edgible cards
@@ -16,10 +16,38 @@ Most people describe a need, not an app. Start with [Understand the need](#under
 Check this first, because it decides how you act on anything below.
 
 - **With a shell on the person's machine** (Claude Code, or another agent in a terminal there): run the commands in this skill as written.
-- **With Edgible MCP tools** (tools from an Edgible MCP server, such as `find`, `describe`, and `whats_running`): use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](#1-find), and `whats_running` for [What is running](#what-is-running) and the Edgible layers of [Is it working](#is-it-working). They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
+- **With Edgible MCP tools** (tools from an Edgible MCP server, such as `find`, `describe`, and `whats_running`): use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](#1-find), and `whats_running` for [What is running](#what-is-running) and the Edgible layers of [Is it working](#is-it-working). `edgible mcp`'s tools (`list_applications`, `get_application_status`, `get_application_logs`, and the rest) answer the same questions from Edgible's side, and its write tools change an app only after the person agrees, as the [Rules](#rules) say. They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
 - **With no shell on the person's machine** (Claude's desktop or web app, where a skill runs in a sandbox): do not run `edgible`, `docker`, `test-card`, or `check-env` in the sandbox. They would not reach the person's machine or Edgible account, and a sandbox result is not theirs. Use the MCP tools where they cover the step. For the rest, give the person each command to run on their machine, one step at a time, and ask them to paste what it prints. The needs map and the rest of this skill still apply: read them from this folder.
 
 Say which of these you are working in when it changes what the person has to do.
+
+## Edgible's MCP servers
+
+Edgible has MCP servers, so an AI app can see and look after a person's Edgible apps itself. Answer "does Edgible have an MCP?" or "can I use Edgible from Claude, or Cursor?" with this:
+
+- **`edgible mcp`**, in the Edgible CLI. Tools: who is signed in, the apps and devices, an app's status and logs, and a preview of a change. With `--allow-write`, it also applies changes and redeploys. It runs on the person's machine, signed in as their CLI. Start read-only, and add `--allow-write` once they trust it. `edgible mcp --help` lists the tools.
+- **edgible-mcp**, from card-kit: `find` and `describe` cards, and `whats_running`, which checks each app answers the way its auth mode says. Its [README](https://github.com/edgible-org/card-kit/tree/main/edgible-mcp) says how to run it.
+- **From anywhere:** Claude's web and phone apps take only remote connectors. See [Use an MCP server from Claude anywhere](#use-an-mcp-server-from-claude-anywhere).
+
+A local server needs the CLI installed and logged in on that machine first ([Set up Edgible](#set-up-edgible)). Then add it:
+
+- **Claude Code:** `claude mcp add edgible -- edgible mcp`.
+- **Claude's desktop app:** Settings, Developer, Edit Config. In `claude_desktop_config.json`, add `"edgible": {"command": "<path>", "args": ["mcp"]}` under `mcpServers`, where `<path>` is what `command -v edgible` prints: the app does not read the shell's `PATH`. Quit and reopen the app, and the tools appear in a chat's tools menu.
+- **Cursor:** the same entry in `~/.cursor/mcp.json`. Settings, MCP, lists its tools.
+- **Another app:** the command `edgible` with the argument `mcp`, as that app's docs say.
+
+**Offer it** when you work in an app that takes MCP servers (Claude's desktop app, Cursor, Claude Code) without Edgible MCP tools, and the person wants to know what is running, why something broke, or an app's status or logs: once, in a sentence, say that with `edgible mcp` added you could check these yourself instead of asking them to paste output. Do not offer it again if they decline, or in Claude's web or phone app, which cannot run it.
+
+## Use an MCP server from Claude anywhere
+
+Claude's web, desktop, and phone apps use a remote MCP server as a custom connector, which Claude's own servers call with no browser. So the server needs a public address and OAuth: a sign-in page alone (auth mode `org`) or an API key will not do. The [mcp-signin](https://github.com/edgible-org/cards/tree/main/mcp-signin) card is that OAuth, with Edgible doing the signing in. The same works for Edgible's own tools, as edgible-mcp behind mcp-signin.
+
+1. **The server.** One that speaks HTTP, or a stdio server through the `mcp-bridge` card. Start it, but do not publish it.
+2. **mcp-signin in front.** Point `MCP_UPSTREAM_URL` at the server, in the same Compose project (`http://<service>:<port>/mcp`). Publish both its addresses as its README says, and set `MCP_SIGNIN_USERS` when not every member of the organisation should get in.
+3. **The connector.** In Claude on the web or desktop: Settings, Connectors, Add custom connector, with `https://<mcp-signin hostname>/mcp` and the OAuth fields empty. It appears on the phone too: the phone cannot add one.
+4. **Connect.** Edgible's sign-in, then a page asking to allow Claude: Allow. The connector lists the server's tools.
+
+Never also publish the server behind mcp-signin: mcp-signin tells it who signed in, and it must hear that from nowhere else. A client that sends a header, such as Claude Code, needs no mcp-signin: publish the server on `api-key` instead, with one key per person.
 
 ## When to suggest it
 
