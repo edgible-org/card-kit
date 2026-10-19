@@ -39,7 +39,7 @@ jobs:
         id: v
         run: |
           version=$(jq -r .version ${{ matrix.name }}/package.json)
-          grep -qE "version ?[:=] '$version'" ${{ matrix.name }}/server.mjs \
+          grep -qiE "version ?[:=] '$version'" ${{ matrix.name }}/server.mjs \
             || { echo "::error::server.mjs does not say version $version, as package.json does"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if docker manifest inspect "$IMAGE:$version" >/dev/null 2>&1; then
