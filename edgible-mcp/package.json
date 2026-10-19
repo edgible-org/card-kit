@@ -1,12 +1,12 @@
 {
   "name": "edgible-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Read-only stdio MCP server for Edgible cards and running apps",
+  "description": "MCP server for Edgible cards and running apps: read-only by default, write tools with --allow-write, over stdio or HTTP",
   "type": "module",
-  "main": "server.mjs",
+  "main": "edgible-mcp.mjs",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node edgible-mcp.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -15,7 +15,7 @@
   },
   "license": "MIT",
   "bin": {
-    "edgible-mcp": "server.mjs"
+    "edgible-mcp": "edgible-mcp.mjs"
   },
   "engines": {
     "node": ">=20"
