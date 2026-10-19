@@ -297,19 +297,19 @@
 
 - category: AI tools for assistants (MCP servers)
   source: edgible
-  jobs: [let Claude or ChatGPT use my files or database, use my MCP server when I'm away from my desk, share an MCP server with my team, give my AI assistant access to our internal tools, host the MCP server I built]
+  jobs: [let Claude or ChatGPT use my files or database, use my MCP server when I'm away from my desk, use my MCP server from Claude on my phone, share an MCP server with my team, give my AI assistant access to our internal tools, host the MCP server I built, manage Edgible from Claude or Cursor]
   replaces: [hosted MCP platforms, Zapier MCP, keeping the server on one laptop]
   drivers: [privacy, control, local]
   fit: {rating: good, why: "an MCP server is a small web service next to the data it reaches, which is what Edgible publishes; what decides it is how the person's assistant signs in"}
   exposure:
-    default: "api-key, which clients that can send a header use (Claude Code and most developer tools: Authorization: Bearer); Claude's desktop and web connectors expect the server's own OAuth instead, so check the client's current docs before choosing"
-    sensitive: api-key, with read-only tools unless writes are needed, and one key per person so a key can be revoked; never none without the server's own sign-in
+    default: "for Claude's web, desktop and phone apps (custom connectors, which need OAuth): the server unpublished, behind the mcp-signin card, which signs people in with Edgible (mcp-signin on none, mcp-signin-login on org); for clients that send a header (Claude Code and most developer tools: Authorization: Bearer): api-key, one key per person"
+    sensitive: mcp-signin with MCP_SIGNIN_USERS listing who may sign in, or api-key with one key per person so a key can be revoked; read-only tools unless writes are needed; never the server itself on none
   permissions: "every tool the server offers is something the assistant can do with the person's data; offer read-only tools first, and ask before tools that change or delete things"
   builders: "the quickest way to let early users try an MCP server: publish it from the developer's machine or a small cloud server, without building hosting"
   machine: "next to the data or tools it reaches; always on if others use it. Most packaged servers speak stdio, so publishing one needs a bridge container that serves it over Streamable HTTP; a server that already speaks HTTP needs none"
-  cards: [mcp-bridge]
+  cards: [mcp-signin, mcp-bridge, edgible-mcp]
   find: "the official MCP Registry (https://registry.modelcontextprotocol.io/v0/servers?search=<word>): servers listed with packages run on your own machine and are the ones to publish, servers with only remotes are already hosted; also GitHub repositories tagged mcp-server"
-  ask: ["which assistant will connect to it: Claude Code, Claude's apps, or something else?", "should it only read, or also change things?"]
+  ask: ["which assistant will connect to it: Claude Code, Claude's apps (desktop, web, phone), or something else?", "should it only read, or also change things?", "who besides you should get in?"]
 
 - category: Vector databases and AI search
   source: edgible

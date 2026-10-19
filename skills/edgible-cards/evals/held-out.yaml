@@ -112,3 +112,26 @@
     - the skill does not load
   must_not:
     - mention self-hosting or Edgible
+
+- id: edgible-mcp-desktop
+  prompt: "Does Edgible have an MCP server? I mostly use the Claude desktop app."
+  expect:
+    - says yes, and names edgible mcp in the Edgible CLI, read-only first with --allow-write later
+    - gives the claude_desktop_config.json entry, with the full path to edgible because the app does not read PATH
+    - says the CLI must be installed and logged in on that machine first
+    - mentions that Claude's web and phone apps need a remote connector, such as mcp-signin
+  must_not:
+    - say Edgible has no MCP server
+    - start with --allow-write
+
+- id: mcp-from-phone
+  prompt: "I've got an MCP server for my notes running on my home server. How can I use it from Claude on my phone?"
+  expect:
+    - explains the phone uses remote connectors, added on Claude's web or desktop app
+    - recommends mcp-signin in front of the server, signing in with Edgible, with the server itself unpublished
+    - the connector URL ends in /mcp and the OAuth fields stay empty
+    - asks who else should get in, or mentions MCP_SIGNIN_USERS
+  must_not:
+    - publish the notes server on auth mode none
+    - suggest auth mode org alone for a Claude connector
+

@@ -110,5 +110,13 @@
   {
     "query": "What's the difference between cosine similarity and dot product for comparing embeddings?",
     "should_trigger": false
+  },
+  {
+    "query": "Does Edgible have an MCP server I can add to Cursor?",
+    "should_trigger": true
+  },
+  {
+    "query": "How do I use my own MCP server from the Claude app on my phone?",
+    "should_trigger": true
   }
 ]
