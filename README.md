@@ -456,7 +456,7 @@ The skill links here for the format rather than copying it. A change to the form
 
 ## MCP server
 
-[edgible-mcp](edgible-mcp/README.md) gives an MCP client three read-only tools: `find` searches the cards and the needs map for a need, `describe` shows one card, and `whats_running` lists the apps of your Edgible organization and checks that each hostname answers the way its auth mode says. Run it locally over stdio, or reach it from anywhere with the `edgible-mcp` card, which runs its image `ghcr.io/edgible-org/edgible-mcp`.
+[edgible-mcp](edgible-mcp/README.md) gives an MCP client read-only tools: `find` searches the cards and the needs map for a need, `describe` shows one card, and `whats_running` lists the apps of your Edgible organization and checks that each hostname answers the way its auth mode says. With `--allow-write` it also deploys, moves and removes app cards on any device of the organization, asking first and recording each change. Run it locally over stdio, or over HTTP behind the `mcp-signin` card for Claude's web, desktop and phone apps; its image is `ghcr.io/edgible-org/edgible-mcp`.
 
 [mcp-signin](mcp-signin/README.md) puts Sign in with Edgible in front of any MCP server, so Claude on the web and phone can use a server on your own machine as a connector, and only members of your Edgible organisation (or the people you list) get in. Its image is `ghcr.io/edgible-org/mcp-signin`.
 

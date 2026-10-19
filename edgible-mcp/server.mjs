@@ -4,6 +4,8 @@
 // MCP client, or publish it with the mcp-bridge app card, whose hostname uses
 // Edgible's api-key auth. stdout is the protocol, so every log goes to stderr.
 
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { execFile, spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -380,10 +382,12 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-function buildServer() {
-  const server = new McpServer({ name: 'edgible', version: '0.4.0' }, {
-    instructions: 'Read-only tools for Edgible. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.',
-  });
+export const VERSION = '0.5.0';
+
+export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
+
+// The read-only tools, on any MCP server: this one, or the combined edgible server.
+export function registerReadTools(server) {
   const text = (fn) => async (args) => {
     try { return { content: [{ type: 'text', text: await fn(args) }] }; } catch (err) {
       return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
@@ -416,6 +420,13 @@ function buildServer() {
   return server;
 }
 
-const server = buildServer();
-await server.connect(new StdioServerTransport());
-console.error('edgible-mcp: serving over stdio');
+function buildServer() {
+  return registerReadTools(new McpServer({ name: 'edgible', version: VERSION }, { instructions: READ_INSTRUCTIONS }));
+}
+
+// Started directly (or through its bin link), it serves the read-only tools; imported, it only lends them.
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const server = buildServer();
+  await server.connect(new StdioServerTransport());
+  console.error('edgible-mcp: serving over stdio');
+}
