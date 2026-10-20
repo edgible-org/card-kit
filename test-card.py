@@ -52,6 +52,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import platform
 import re
 import shlex
@@ -71,6 +72,10 @@ CHECK_ENV = HERE / "check-env.py"
 ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "arm", "arm": "arm"}
 MEM_UNIT = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "kB": 1e3, "MB": 1e6, "GB": 1e9}
 
+
+# The domain of the hostnames Edgible generates for new apps (<app>.<org label>.<domain>).
+# It moved from edgible.com to edgible.app in October 2026; EDGIBLE_APP_DOMAIN overrides it.
+APP_DOMAIN = os.environ.get("EDGIBLE_APP_DOMAIN", "edgible.app")
 
 def sh(cmd: str, check: bool = True, timeout: int = 1800) -> subprocess.CompletedProcess:
     p = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
@@ -551,7 +556,7 @@ def main(argv: list[str]) -> int:
             notes.append(f"{app_name} is taken in the test org, so it was published as {name}.")
             url_key = app_name.upper().replace("-", "_") + "_URL"
             if url_key in env_values(env_file) and not env_values(env_file)[url_key]:
-                set_env(env_file, url_key, f"https://{name}.{label}.edgible.com")
+                set_env(env_file, url_key, f"https://{name}.{label}.{APP_DOMAIN}")
 
         sampler.thread.start()
         t = time.time()
