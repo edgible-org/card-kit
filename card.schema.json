@@ -76,6 +76,16 @@
         }
       }
     },
+    "secrets": {
+      "type": "object",
+      "description": "Optional. Every secret the card uses, by the variable that holds it: what kind it is, how it is made, and what happens to it on a move. Internal and human secrets are made on the device by the card-secrets service at first start, never written in card.env or the Compose file; shared and external ones come from card.env or the person's chosen provider.",
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/secret"
+      }
+    },
     "places": {
       "type": "object",
       "description": "Optional. For each place: the minimum recommended machine, and for a place no app uses, the Compose files it runs. Keys are place names.",
@@ -320,6 +330,163 @@
       "type": "string",
       "pattern": "^[0-9]+(\\.[0-9]+)? (MB|GB|TB)$",
       "description": "Such as 512 MB or 2 GB."
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "internal",
+            "shared",
+            "human",
+            "external"
+          ],
+          "description": "internal: only the app's own services need it; shared: apps of the card on different machines; human: a person needs it once, to sign in or call an API; external: someone else issued it and the person brings it."
+        },
+        "use": {
+          "enum": [
+            "password",
+            "signing",
+            "encryption",
+            "token"
+          ],
+          "description": "For internal secrets: what it protects, which sets what happens on a move."
+        },
+        "make": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The shell command that prints a new value, such as openssl rand -hex 16. Not for external secrets."
+        },
+        "on-move": {
+          "enum": [
+            "new",
+            "new-then-update",
+            "carry"
+          ],
+          "description": "Optional. What a move or restore does with it. Defaults by kind and use: new for signing and token, new-then-update for password, carry for everything else."
+        },
+        "update": {
+          "$ref": "#/$defs/command",
+          "description": "For new-then-update: the command that applies a new value to the data, run in service, such as an ALTER USER for a database password."
+        },
+        "for": {
+          "type": "string",
+          "description": "For human secrets: what the person uses it for, shown with it once."
+        },
+        "from": {
+          "type": "string",
+          "description": "For external secrets: where the person gets one, such as a URL."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "For external secrets: false when the card runs without it. Default true."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "internal"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "use",
+              "make"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "human",
+                  "shared"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "make"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "external"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "make"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "on-move": {
+                "const": "new-then-update"
+              }
+            },
+            "required": [
+              "on-move"
+            ]
+          },
+          "then": {
+            "required": [
+              "update"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "use": {
+                "const": "password"
+              }
+            },
+            "required": [
+              "use"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "update"
+                ]
+              },
+              {
+                "properties": {
+                  "on-move": {
+                    "enum": [
+                      "new",
+                      "carry"
+                    ]
+                  }
+                },
+                "required": [
+                  "on-move"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     }
   }
 }
