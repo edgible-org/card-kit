@@ -105,6 +105,37 @@ Every named volume in the card's Compose files has an entry, with a class: `irre
 
 A card with an irreplaceable volume has a **fingerprint**: one command, run with `sh -c` in `service`, that prints one line of JSON describing the data, such as `{"bookmarks": 412, "latest": "2026-10-14"}`. It holds counts (integers) and ISO dates only, never content, because it appears in test results and reports; one to eight lower_case keys, in the app's own words. It is read-only, takes seconds even on a large install, prints zeros on an empty one, and prints the same line for the same data on any machine. After a restore, the fingerprint must match the one taken with the backup. A pattern card inherits `data:` from its app cards and declares only what it adds.
 
+## Secrets
+
+A card says what its secrets are in a `secrets:` section, beside `data:`: every password, key and token it uses, by the variable that holds it, what kind it is, and what happens to it on a move. The design is in [Card secrets declarations](https://claude.ai/code/artifact/b0f5f681-db89-4081-8b40-31899831352c).
+
+```yaml
+secrets:
+  UMAMI_DB_PASSWORD:
+    kind: internal            # internal | shared | human | external
+    use: password             # internal: password | signing | encryption | token
+    make: openssl rand -hex 16
+    update:                   # applies a new value to the data on a move
+      service: umami-db
+      command: psql -U umami -c "ALTER USER umami PASSWORD '$UMAMI_DB_PASSWORD'"
+  UMAMI_TWO_FACTOR_KEY:
+    kind: internal
+    use: encryption           # carried on a move: the data is locked with it
+    make: openssl rand -hex 32
+  UMAMI_ADMIN_PASSWORD:
+    kind: human
+    make: openssl rand -hex 16
+    for: the admin's first sign-in
+```
+
+- **internal** (only the app's services need it), **human** (a person needs it once) and **shared** (apps of the card on different machines) are made **on the device**, at first start, by the card's `<card>-secrets` service: the image `ghcr.io/edgible-org/card-secrets`, with one line `NAME=command` per secret in its `CARD_SECRETS`, the same commands as `make`. It writes each into the card's secrets volume, one file per secret under `/run/card-secrets`, and never changes one that exists. They are never `card.env` lines or `${NAME}` in a Compose file.
+- An app reads them through its own `*_FILE` setting where it has one, such as `POSTGRES_PASSWORD_FILE: /run/card-secrets/UMAMI_DB_PASSWORD`, or starts through the loader the service also writes: `entrypoint: ["sh", "/run/card-secrets/.load"]` with the image's own start command in `command:`. Mount the volume read-only into each service that needs it.
+- **external** secrets, which someone else issued (a model key), are `card.env` lines the person fills, with `from:` saying where to get one.
+- `on-move` defaults by use: `new` for signing and token, `new-then-update` for password (then `update` is required), `carry` for encryption and the other kinds.
+- A person sees a human secret with `docker compose … run --rm <card>-secrets show <NAME>`, on the machine.
+
+`check-cards` checks that each declared internal, human or shared secret is made by the card-secrets service with its `make`, that none is a `card.env` line or a `${NAME}`, that each external one is a `card.env` line, and that each `update` runs in one of the card's services. A card without `secrets:` keeps `# Generate with:` lines in `card.env`, and `check-cards` prints a note until it moves over.
+
 ## Places with no app
 
 Some services publish nothing: they only connect out. A CI runner asks a forge for jobs, a backup job sends copies away, a worker takes tasks from a queue. When one of them runs beside a published app, it is just another service in that app's Compose file, and it goes wherever that file goes. When it should run on a machine of its own, give it a place with no app, and say which Compose files it runs:
