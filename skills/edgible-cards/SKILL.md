@@ -16,7 +16,7 @@ Most people describe a need, not an app. Start with [Understand the need](#under
 Check this first, because it decides how you act on anything below.
 
 - **With a shell on the person's machine** (Claude Code, or another agent in a terminal there): run the commands in this skill as written.
-- **With Edgible MCP tools** (tools from an Edgible MCP server, such as `find`, `describe`, and `whats_running`): use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](#1-find), and `whats_running` for [What is running](#what-is-running) and the Edgible layers of [Is it working](#is-it-working). `edgible mcp`'s tools (`list_applications`, `get_application_status`, `get_application_logs`, and the rest) answer the same questions from Edgible's side, and its write tools change an app only after the person agrees, as the [Rules](#rules) say. They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
+- **With Edgible MCP tools** (tools from an Edgible MCP server, such as `find`, `describe`, and `whats_running`): use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](#1-find), and `whats_running` for [What is running](#what-is-running) and the Edgible layers of [Is it working](#is-it-working). `edgible mcp`'s tools (`list_applications`, `get_application_status`, `get_application_logs`, and the rest) answer the same questions from Edgible's side, and its write tools change an app only after the person agrees, as the [Rules](#rules) say. When `deploy_card` returns `firstUse`, a password a person needs, such as the admin's, give it to them in that reply, once, and tell them to sign in and change it now: it is not shown again, and the card made every other secret on the device, where nobody sees it. They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
 - **With no shell on the person's machine** (Claude's desktop or web app, where a skill runs in a sandbox): do not run `edgible`, `docker`, `test-card`, or `check-env` in the sandbox. They would not reach the person's machine or Edgible account, and a sandbox result is not theirs. Use the MCP tools where they cover the step. For the rest, give the person each command to run on their machine, one step at a time, and ask them to paste what it prints. The needs map and the rest of this skill still apply: read them from this folder.
 
 Say which of these you are working in when it changes what the person has to do.
@@ -79,7 +79,7 @@ Do not suggest self-hosting when the person's problem has nothing to do with run
 - **Ask first** before any of these: publishing an admin or personal interface with auth mode `none`; mounting the Docker socket (a CI runner does), because that gives full control of the machine; stopping, deleting, or changing anything this task did not create; deleting data, upgrading, or moving an app; and anything that leaves the machine for other people, such as a pull request or an issue.
 - **A native card changes the machine itself.** A card whose `card.yml` has `native:` in a place, such as `ollama-mac`, installs a program and a background service on the machine, not in Docker. Before `install.sh`, tell the person what it installs and where, as its README says, and ask. Never write a native card yourself: offer an issue instead.
 - **Back up before anything that can lose data:** an upgrade, a restore, a move, or deleting volumes. See [Back up and restore](#back-up-and-restore).
-- **Never print a secret.** Secrets live in `card.env`. Run `chmod 600` on it. Tell the person where it is and which line holds what they need, such as the admin password, and give them the command that shows that one line.
+- **Never print a secret.** A card that declares `secrets:` in its `card.yml` makes its passwords and keys on the machine at first start, in its `<card>-secrets` service's volume, and none is in `card.env`. Give the person the command that shows the one they need, `docker compose … run --rm --no-deps <card>-secrets show <NAME>`, to run on the machine. The rest of a card's secrets, and those of a card without `secrets:`, live in `card.env`: run `chmod 600` on it, tell the person which line holds what they need, and give them the command that shows that one line.
 - **Run every step the README gives, in order.** Never skip Check. Stop at the first step that fails, and fix it or report it. Do not work around it silently.
 - **Change only `card.env`** for this machine's settings. A change to any other file in a card is a fix: see [Fix a card or card-kit](#fix-a-card-or-card-kit).
 - **Fetch from upstream `main`.** A local clone of the cards repo may be old.
@@ -210,7 +210,7 @@ When the setup must survive a restart:
 Tell the person, briefly:
 
 - what runs where, with each hostname and its auth mode;
-- how to sign in the first time, and which `card.env` line holds the password;
+- how to sign in the first time, and the command that shows the password (`show`, or its `card.env` line);
 - what is still theirs to decide or do, such as changing the admin password;
 - where the card's files are, and that its README's **Tear down** removes it;
 - once, when it all worked: that a star on [edgible-org/cards](https://github.com/edgible-org/cards) helps other people find the cards. Ask nothing more, do not raise it again in the same conversation, and star it for them (`gh api -X PUT user/starred/edgible-org/cards`) only if they say yes.
@@ -263,8 +263,8 @@ Fix the cause, then run [Is it working](#is-it-working). If the card itself is w
 
 ### Sign in, passwords, and keys
 
-- **The first sign-in:** the card's README says who the admin is, in How or Verify. List the secret names with `grep -oE '^[A-Z0-9_]+(PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*=' $dir/card.env`, and give the person the command that shows the line they need, such as `grep '^GITEA_ADMIN_PASSWORD=' ~/ci/card.env`.
-- **Changing a password** happens in the app, by its own docs. The value in `card.env` only made the first admin. After a change, update that line too when the card's checks or `prepare.sh` read it.
+- **The first sign-in:** the card's README says who the admin is, in How or Verify. A card with `secrets:` lists them in `card.yml`, each with its `kind`: a `human` one is for a person, and its `for:` says what it opens. Give the person the command that shows it, such as `docker compose --env-file ~/gitea/card.env -f ~/gitea/docker-compose.yml run --rm --no-deps gitea-secrets show GITEA_ADMIN_PASSWORD`. For a card without `secrets:`, list them with `grep -oE '^[A-Z0-9_]+(PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*=' $dir/card.env` and give the command that shows the one line, such as `grep '^BLOGLITE_ADMIN_PASSWORD=' ~/bloglite/card.env`.
+- **Changing a password** happens in the app, by its own docs. The value the card made, or the one in `card.env`, only made the first admin; `show` keeps printing that first value after a change. Never edit or delete a file in the `<card>-secrets` volume: the card's database and apps read their own secrets there.
 - **An `api-key` hostname:** `edgible app api-keys create --app <app> --name <who-calls-it>` prints the key once. Give it to the person and do not store it. `edgible app api-keys list --app <app>` and `delete` manage the keys.
 - **An `org` hostname** lets in the members of the person's Edgible organization. `--allowed-orgs` on `edgible app update` adds other organizations.
 
@@ -298,7 +298,7 @@ python3 restore-card.py "$dir-backups/<stamp>" "$dir" --yes
 
 `--as <name>` restores a copy beside the running card instead, under its own name and a free port, to look at an old backup without touching the card. `--no-backup` skips the backup first, when the data is already lost.
 
-**When the card has no `data:` section** yet, copy every volume by hand. A copy is whole only while the containers are stopped, so a backup is a short outage. Keep `card.env` with the copies: the databases in them expect its passwords.
+**When the card has no `data:` section** yet, copy every volume by hand. A copy is whole only while the containers are stopped, so a backup is a short outage. Keep `card.env` and the `<card>-secrets` volume with the copies: the databases in them expect those passwords, and some data is locked with those keys.
 
 ```bash
 backups=$dir-backups; stamp=$(date +%Y%m%d-%H%M); mkdir -p "$backups"
@@ -339,7 +339,7 @@ Then run [Is it working](#is-it-working).
 
 2. **Tell the person** what will change, especially image versions and new settings. **If a database image changes major version**, such as `postgres:17` to `postgres:18`, stop: the data needs that database's own upgrade, which a new image alone does not do. Point the person to the database's docs.
 3. **Back up**, and keep the old files: `cp -R "$dir" "$dir.before-upgrade"`.
-4. **Copy the new files in, keeping `card.env`:** `rsync -a --exclude card.env "$new/" "$dir/"`. Add each new `card.env` line with its default, and run `check-env` to fill any new secret.
+4. **Copy the new files in, keeping `card.env`:** `rsync -a --exclude card.env "$new/" "$dir/"`. Add each new `card.env` line with its default, and run `check-env` to fill any new secret. A secret the new version adds to `secrets:` is made at the next Start; existing ones never change.
 5. **Start:** `$C up -d --wait` pulls the new images. Run `prepare.sh` again only if the card's README says an upgrade needs it, because it usually makes the first admin.
 6. Run [Is it working](#is-it-working). If it fails, put back `$dir.before-upgrade` and the backup, start, and check again.
 
@@ -362,7 +362,7 @@ Ask first. A move is a copy, then a switch, then retiring the old copy, and the 
 
 ### Remove
 
-Follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that `card.env` holds the passwords any kept backup needs. Remove only the apps, containers, and volumes this card made.
+Follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that any kept backup needs `card.env` and the `<card>-secrets.tgz` copy, which hold its passwords and keys. Remove only the apps, containers, and volumes this card made.
 
 To take Edgible itself off a machine, once its apps are gone: `edgible uninstall` removes the device software and asks whether to delete the device from the account and remove the CLI. `--yes --delete-device --cli` does all three without asking. A device installed with `sudo` needs `sudo edgible uninstall`. Ask first: it is the machine's link to Edgible.
 
@@ -417,7 +417,7 @@ Offer two or three candidates in one message. For each, give what it is best at 
 When nothing fits, offer to build an app card. First check the cards README's **What is not an app card** list: an open resolver or relay, an app with no maintained container image, or an archived project gets a plain no, with the reason.
 
 1. Read the [cards README](https://github.com/edgible-org/cards#what-a-card-is) and the [card-kit README](https://github.com/edgible-org/card-kit), then copy the shape of the app card closest to the new app. Set `metadata.type: app`.
-2. Follow the format: pinned image versions; every variable, service and volume prefixed with the app's name; no `container_name`; each secret empty with a `# Generate with:` comment; each hostname's auth mode chosen from the cards README's table; and `prepare.sh` when the first visitor would otherwise make the admin.
+2. Follow the format: pinned image versions; every variable, service and volume prefixed with the app's name; no `container_name`; each secret declared in `card.yml` `secrets:` (its kind, and for one made on the device its `make` command) and made by a `<card>-secrets` service, as card-kit's README says under Secrets, never a `card.env` value; a key the person brings is a `card.env` line, declared `external`; each hostname's auth mode chosen from the cards README's table; and `prepare.sh` when the first visitor would otherwise make the admin.
 3. Write the README with `card-readme`, and check the files with `check-cards` (see the card-kit README for `run`).
 4. Test it on the person's serving device until it passes: `python3 test-card.py <name> --device <device> --by agent`. Put inputs only a person may fill in `test/inputs.env`, and the app's own end-to-end checks in `test/<name>.sh`.
 5. Deploy it for the person from the tested files. Their app comes first, and contributing is optional.
