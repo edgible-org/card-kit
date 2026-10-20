@@ -795,7 +795,7 @@ def main(argv: list[str]) -> int:
         config, error = compose_config(compose, env_file, prefix=args.project_prefix)
         # Compose stops at the first empty value, so list every required one here.
         # Only when Compose fails: a required value inside a default that is not used,
-        # such as ${URL:-https://app.${ORG_LABEL:?}.edgible.com} with URL set, is not needed.
+        # such as ${URL:-https://app.${ORG_LABEL:?}.${EDGIBLE_DOMAIN:-edgible.app}} with URL set, is not needed.
         required = dict.fromkeys(REQUIRED_VAR.findall(compose.read_text()))
         empty = [var for var in required if not env.get(var)] if config is None else []
         asked.update(empty)
