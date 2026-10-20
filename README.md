@@ -136,6 +136,8 @@ secrets:
 
 `check-cards` checks that each declared internal, human or shared secret is made by the card-secrets service with its `make`, that none is a `card.env` line or a `${NAME}`, that each external one is a `card.env` line, and that each `update` runs in one of the card's services. A card without `secrets:` keeps `# Generate with:` lines in `card.env`, and `check-cards` prints a note until it moves over.
 
+`test-card` reads the secrets a card made with `show` once it starts, hides their values in what it prints, and exports them to the card's checks as it does `card.env`, so a check can sign in with the admin's password.
+
 ## Places with no app
 
 Some services publish nothing: they only connect out. A CI runner asks a forge for jobs, a backup job sends copies away, a worker takes tasks from a queue. When one of them runs beside a published app, it is just another service in that app's Compose file, and it goes wherever that file goes. When it should run on a machine of its own, give it a place with no app, and say which Compose files it runs:
