@@ -36,6 +36,13 @@ A card with Compose volumes says what they hold in data: (a note until every car
 - each dump and the fingerprint run in a service of its Compose files.
 A pattern card inherits data: from its app cards, so it gets no note.
 
+A card says what its secrets are in secrets: (a note until every card has it):
+- each internal, human or shared secret is made on the device: it is a line NAME=command in
+  the CARD_SECRETS of the card's card-secrets service, with the same command as its make;
+- no such secret is a card.env line or a ${NAME} in a Compose file, where its value would show;
+- each external secret is a card.env line, which the person fills;
+- each update runs in a service of its Compose files.
+
 --before-test leaves out the test.yml rule, for a card about to be tested for the
 first time; test-card writes test.yml.
 
@@ -258,6 +265,48 @@ def data_problems(card: dict, composes: dict[str, str]) -> tuple[list[str], list
     return errors, []
 
 
+def secrets_problems(card: dict, composes: dict[str, str], env: dict[str, str], env_text: str) -> tuple[list[str], list[str]]:
+    """What is wrong with secrets:, and a note when a card still has generated card.env lines."""
+    generated = re.findall(r"#[^\n]*Generate with:[^\n]*\n(?:#[^\n]*\n)*([A-Z][A-Z0-9_]*)=", env_text)
+    secrets = card.get("secrets")
+    if not secrets:
+        if generated and card["metadata"].get("type") != "pattern":
+            return [], [f"no secrets: section yet for its generated values ({', '.join(sorted(generated))})"]
+        return [], []
+    errors = []
+    made, services, used = {}, set(), set()
+    for text in composes.values():
+        compose = yaml.safe_load(text) or {}
+        services |= set(compose.get("services") or {})
+        used |= set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)", text))
+        for svc in (compose.get("services") or {}).values():
+            env_block = (svc or {}).get("environment") or {}
+            lines = env_block.get("CARD_SECRETS") if isinstance(env_block, dict) else None
+            for line in (lines or "").splitlines():
+                if "=" in line and not line.lstrip().startswith("#"):
+                    name, cmd = line.split("=", 1)
+                    made[name.strip()] = cmd.strip()
+    for name, s in secrets.items():
+        kind = s.get("kind")
+        if kind in ("internal", "human", "shared"):
+            if name not in made:
+                errors.append(f"secrets.{name} is {kind} but no card-secrets service makes it (CARD_SECRETS)")
+            elif s.get("make") and made[name] != s["make"].strip():
+                errors.append(f"secrets.{name}: CARD_SECRETS makes it with a different command from its make")
+            if name in env:
+                errors.append(f"secrets.{name} is {kind}, so it must not be a card.env line, where its value would show")
+            if name in used:
+                errors.append(f"secrets.{name} is {kind}, so the Compose files must read it from /run/card-secrets, not ${{{name}}}")
+        if kind == "external" and name not in env:
+            errors.append(f"secrets.{name} is external, so it needs a card.env line for the person to fill")
+        update = s.get("update")
+        if update and update.get("service") not in services:
+            errors.append(f"secrets.{name}.update runs in service {update.get('service')}, which is not in the Compose files")
+    for name in sorted(set(made) - set(secrets)):
+        errors.append(f"CARD_SECRETS makes {name}, which secrets: does not declare")
+    return errors, []
+
+
 RISKY = [
     (re.compile(r"/var/run/docker\.sock"), "mounts the Docker socket", ("docker socket",)),
     (re.compile(r"^\s*privileged:\s*true", re.M), "runs privileged", ("privileged",)),
@@ -379,6 +428,14 @@ def main(argv: list[str]) -> int:
                 card, {f.name: f.read_text() for f in sorted(path.parent.glob("*compose*.yml"))})
             errors += data_errors
             for note in data_notes:
+                print(f"note {path}: {note}")
+            env_path = path.parent / "card.env"
+            env_text = env_path.read_text() if env_path.exists() else ""
+            secret_errors, secret_notes = secrets_problems(
+                card, {f.name: f.read_text() for f in sorted(path.parent.glob("*compose*.yml"))},
+                read_env(env_path) if env_path.exists() else {}, env_text)
+            errors += secret_errors
+            for note in secret_notes:
                 print(f"note {path}: {note}")
             if before_test:
                 errors = [e for e in errors if e != NO_TEST]
