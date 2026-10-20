@@ -32,6 +32,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import importlib.util
+import math
+
 import markdown
 import yaml
 
@@ -64,6 +67,66 @@ DRIVER_WORDS = {
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai"}
 RESERVED = {"about", "ai", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+
+
+def _load(tool: str):
+    spec = importlib.util.spec_from_file_location(tool.replace("-", "_"), KIT / f"{tool}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+CARD_FIT = _load("card-fit")
+FIT_DOC = "https://github.com/edgible-org/card-kit/blob/main/card-fit.py"
+
+
+def fit_ring(f: dict, size: int) -> str:
+    """The self-hosting fit as a ring of one segment per check: solid when it passed, faint when it
+    did not, dotted while its fact is not known yet. Drawn inline, in the text's colour."""
+    checks = f["checks"]
+    n, w = len(checks), size / 7
+    r = size / 2 - w / 2 - 0.5
+    c = 2 * math.pi * r
+    gap = c * 0.05 if n > 1 else 0
+    seg = c / n - gap
+    style = {True: 'opacity="1"', False: 'opacity=".22"', None: f'opacity=".5" stroke-dasharray="{w / 2:.2f} {w / 2:.2f}"'}
+    parts = "".join(f'<path d="{arc(size / 2, r, i * (seg + gap) + gap / 2, seg, c)}" fill="none" stroke="currentColor" '
+                    f'stroke-width="{w:.2f}" {style[ch["ok"]]}/>' for i, ch in enumerate(checks))
+    return (f'<svg class="ring" width="{size}" height="{size}" viewBox="0 0 {size} {size}" aria-hidden="true">'
+            f"{parts}</svg>")
+
+
+def arc(center: float, r: float, start: float, length: float, c: float) -> str:
+    """An SVG path along a circle from start to start+length, both measured along the circle."""
+    a0, a1 = 2 * math.pi * start / c - math.pi / 2, 2 * math.pi * (start + length) / c - math.pi / 2
+    x0, y0 = center + r * math.cos(a0), center + r * math.sin(a0)
+    x1, y1 = center + r * math.cos(a1), center + r * math.sin(a1)
+    return f"M{x0:.2f} {y0:.2f}A{r:.2f} {r:.2f} 0 {int(length > c / 2)} 1 {x1:.2f} {y1:.2f}"
+
+
+def fit_pill(f: dict | None) -> str:
+    """The tile's fit pill: the ring and passed of known; its title lists what did not pass."""
+    if not f or not f["checks"]:
+        return ""
+    missing = [f'{c["label"]}: no, {c["evidence"]}' for c in f["checks"] if c["ok"] is False]
+    waiting = f'{f["waiting"]} not checked yet' if f["waiting"] else ""
+    title = "Self-hosting fit, from facts about the app. " + ("; ".join(missing + ([waiting] if waiting else []))
+                                                            or "Every check passed.")
+    return (f'<span class="pill fit" title="{esc(title)}">{fit_ring(f, 14)}fit {f["passed"]}/{f["known"]}</span>')
+
+
+def fit_section(f: dict | None) -> str:
+    """The card page's Self-hosting fit: the ring, and each check with the fact that decides it."""
+    if not f or not f["checks"]:
+        return ""
+    mark = {True: "✓", False: "✗", None: "…"}
+    rows = "".join(f'<li class="fit-{"yes" if c["ok"] else "no" if c["ok"] is False else "wait"}">'
+                   f'<span class="mark">{mark[c["ok"]]}</span><strong>{esc(c["label"])}</strong> '
+                   f'<span>{esc(c["evidence"])}</span></li>' for c in f["checks"])
+    waiting = f', and {f["waiting"]} not checked yet' if f["waiting"] else ""
+    return (f'<h2>Self-hosting fit</h2><div class="fit-box">{fit_ring(f, 48)}<p><strong>{f["passed"]} of {f["known"]}</strong>'
+            f' checks passed{waiting}. Each is a fact about the app, not an opinion: '
+            f'<a href="{FIT_DOC}">how they are decided</a>.</p></div><ul class="fit-list">{rows}</ul>')
 
 
 def esc(s: object) -> str:
@@ -106,6 +169,7 @@ def load_cards(root: Path) -> dict[str, dict]:
             "type": card.get("metadata", {}).get("type", "app"),
             "description": card.get("metadata", {}).get("description", ""),
             "readme": readme.read_text() if readme.exists() else "",
+            "fit": CARD_FIT.fit(d),
         }
     return cards
 
@@ -243,7 +307,7 @@ class Site:
     def card_tile(self, c: dict, up: str) -> str:
         return (f'<li class="tile"{self.filter_data(c)}><a class="tile-head" href="{up}{esc(c["name"])}/">{self.icon(c, up, 40)}'
                 f'<strong>{esc(c["name"])}</strong></a>'
-                f'<span>{esc(c["description"])}</span>{status_pill(self.status.get(c["name"]))}</li>')
+                f'<span>{esc(c["description"])}</span><span class="pills">{status_pill(self.status.get(c["name"]))}{fit_pill(c["fit"])}</span></li>')
 
     def index(self) -> None:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
@@ -391,13 +455,14 @@ class Site:
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
 <h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
 <p class="lead">{esc(c["description"])}</p>
-<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
 <h2>Machine</h2>
 <p>A place is one serving device. Minimum recommended for each:</p>
 <div class="scroll"><table><thead><tr><th>Place</th><th>Memory</th><th>Disk</th><th>Architecture</th><th>GPU</th></tr></thead><tbody>{places}</tbody></table></div>
+{fit_section(c["fit"])}
 {needs_html}
 <article class="readme">
 {self.readme_html(c)}
@@ -654,7 +719,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .tiles{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .tile{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;transition:border-color .15s,box-shadow .15s}
 .tile:hover{border-color:var(--navy-mid);box-shadow:0 2px 10px rgba(0,0,51,.08)}
-.tile a{text-decoration:none;color:var(--ink)}.tile span:not(.pill):not(.icon){color:var(--muted);font-size:.95rem}
+.tile a{text-decoration:none;color:var(--ink)}.tile span:not(.pill):not(.icon):not(.pills){color:var(--muted);font-size:.95rem}
 .tile-head{display:flex;align-items:center;gap:12px;font-size:1.1rem}
 .icon{flex:none;border-radius:10px;object-fit:contain;display:inline-block}
 /* A logo sits on a white tile, like an app icon, so a black logo still reads in dark mode. */
@@ -664,6 +729,10 @@ img.icon{background:#fff;padding:5px;border:1px solid var(--edge)}
 .pill{display:inline-block;border-radius:999px;padding:1px 10px;font-size:.8rem;font-weight:600;white-space:nowrap}
 .pill.pass{background:var(--pass-bg);color:var(--pass)}.pill.fail{background:var(--fail-bg);color:var(--fail)}
 .pill.untested,.pill.neutral{background:var(--none-bg);color:var(--none)}
+.pill.fit{background:var(--none-bg);color:var(--ink)}.pills{display:flex;flex-wrap:wrap;gap:6px}.meta .pill.fit{margin-left:6px}.ring{vertical-align:-2px;margin-right:5px}
+.fit-box{display:flex;align-items:center;gap:14px;color:var(--ink)}.fit-box p{margin:0}
+.fit-list{list-style:none;padding:0;margin:10px 0 0}.fit-list li{padding:4px 0}.fit-list .mark{display:inline-block;width:1.4em;font-weight:700}
+.fit-list span:not(.mark){color:var(--muted)}.fit-no .mark,.fit-wait .mark{color:var(--muted)}
 .fit{display:inline-block;border-radius:6px;padding:1px 8px;font-weight:600;margin-right:6px}
 .fit.good{background:var(--pass-bg);color:var(--pass)}.fit.conditional{background:var(--none-bg);color:var(--ink)}
 .fit.poor,.fit.refused{background:var(--fail-bg);color:var(--fail)}

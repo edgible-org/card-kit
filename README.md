@@ -138,6 +138,20 @@ secrets:
 
 `test-card` reads the secrets a card made with `show` once it starts, hides their values in what it prints, and exports them to the card's checks as it does `card.env`, so a check can sign in with the admin's password.
 
+## Self-hosting fit
+
+How well an app card's app suits self-hosting, as a count of checks it passes: `fit 4/5` on the card's tile on the cards site, with each check and the fact that decides it on its page. Each check is a yes or no about the app itself, never an opinion, and never a card's own unfinished work. [card-fit.py](card-fit.py) decides them; it writes nothing into a card.
+
+| Check | Passes when | Read from |
+| --- | --- | --- |
+| Secrets kept out of card.env | no password or key it makes is a `card.env` line: the card makes them on the device ([Secrets](#secrets)) | card files |
+| Reads secrets from files | its app reads them from files itself, not only from the environment through the card's loader | card files |
+| Has a health check | the image has one, or the card's Compose file adds one | image, card files |
+| Starts as a non-root user | the image's user is not root | image |
+| Builds for arm64 and amd64 | the image has builds for both | image |
+
+A check that does not apply is left out, such as the secrets checks for an app with none. The image facts are what `test-card` measured on the images it ran, in `test.yml` under `image_facts:`; `test-card <card> --image-facts` adds them without a full test. Until a card has them, those checks wait, and the site says so rather than guessing. A failed check is a fact to fix upstream, such as asking an app to read a `*_FILE` setting, not a mark against the app.
+
 ## Places with no app
 
 Some services publish nothing: they only connect out. A CI runner asks a forge for jobs, a backup job sends copies away, a worker takes tasks from a queue. When one of them runs beside a published app, it is just another service in that app's Compose file, and it goes wherever that file goes. When it should run on a machine of its own, give it a place with no app, and say which Compose files it runs:
