@@ -57,6 +57,33 @@
       },
       "description": "Each image as it ran, ideally with its digest."
     },
+    "image_facts": {
+      "type": "object",
+      "description": "What each app image (card.yml from:) is, for the self-hosting fit (card-fit.py): the user it starts as, the CPUs it has builds for, and whether it has a health check of its own. test-card records it; test-card --image-facts adds it without a test.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "user",
+          "archs",
+          "healthcheck"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "archs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "healthcheck": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
     "steps": {
       "type": "object",
       "additionalProperties": false,
