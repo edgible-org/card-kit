@@ -157,7 +157,7 @@ The rules are stricter than for a Compose card, because the card changes the mac
 | The Compose file that runs an app | The one that reads `${<APP>_PORT`. |
 | The serving device | `DEVICE` for a card with one place. `<PLACE>_DEVICE` for each place of a card with more. |
 | The Compose project | A top-level `name:` in each Compose file. Pick one that says which card it is, because two Compose files with the same `name:` on one machine replace each other's containers. |
-| The URL an app gives out | Built from `ORG_LABEL`: `https://<app>.${ORG_LABEL}.edgible.com` is the hostname Publish generates, so nothing changes after Publish. For your own domain, an `<APP>_URL` override wins over it, such as `${ACCOUNTS_URL:-https://accounts.${ORG_LABEL:?set ORG_LABEL in card.env}.edgible.com}`. |
+| The URL an app gives out | Built from `ORG_LABEL` and `EDGIBLE_DOMAIN`: `https://<app>.${ORG_LABEL}.${EDGIBLE_DOMAIN:-edgible.app}` is the hostname Publish generates, so nothing changes after Publish. `EDGIBLE_DOMAIN` is a line in `card.env`, `edgible.app` for apps published since October 2026; an app published earlier keeps its `edgible.com` hostname, so its `card.env` says `edgible.com`. For your own domain, an `<APP>_URL` override wins over both, such as `${ACCOUNTS_URL:-https://accounts.${ORG_LABEL:?set ORG_LABEL in card.env}.${EDGIBLE_DOMAIN:-edgible.app}}`. |
 | A secret | Empty in git, with a `# Generate with: <command>` comment above it. `check-env` fills it with that command. |
 | A value the card cannot run without | `${VAR:?set VAR in card.env}` in the Compose file. |
 

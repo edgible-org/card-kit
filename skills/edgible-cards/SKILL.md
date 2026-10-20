@@ -135,7 +135,7 @@ Before anything starts, put the card's open choices to the person in one message
 
 - **Which device runs each place.** `edgible device list` prints the names. One machine can hold every place of a small, trusted setup. Say what the card's README says about keeping places apart. Each place in the card's `card.yml` has a minimum (`places:`: memory, disk, CPU type, GPU), which the README's What section says in words. Match it to a device that has that much to spare, not just in total: a laptop already running other apps may not. When none fits, say so now, and offer another device, a larger cloud server, or stopping something, before anything starts.
 - **Each hostname's auth mode**, and what it means: `none` is the open internet, protected only by the app's own login. When the data is sensitive, offer the needs map's `exposure.sensitive` choices, including not publishing at all, even when the card uses `none`.
-- **Their own domain**, for an app people reach from outside. Set it at the first Publish with `--hostnames`, because the CLI cannot add one later without unpublishing the app. It must be a domain they control, not a name under `edgible.com`, which Edgible reserves for the hostnames it generates.
+- **Their own domain**, for an app people reach from outside. Set it at the first Publish with `--hostnames`, because the CLI cannot add one later without unpublishing the app. It must be a domain they control, not a name under `edgible.app` or `edgible.com`, which Edgible reserves for the hostnames it generates.
 - **Anything the README marks as a trade-off**, such as a runner with the Docker socket.
 - **Whether it must stay up** after a restart. If so, check the machine first: see [Keep it running](#keep-it-running).
 - **Roles inside the app**, when people must not all see everything: who is admin, and which groups see which records.
@@ -176,13 +176,13 @@ Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guide
 
 Follow the card's README **How** section exactly: Fetch, Edit `card.env`, Check, Start (and `prepare.sh` when the card has one), Publish. Notes:
 
-- Find `ORG_LABEL` in a hostname `edgible app list` prints: it is the part after the app name, such as `example` in `umami.example.edgible.com`.
+- Find `ORG_LABEL` in a hostname `edgible app list` prints: it is the part after the app name, such as `example` in `umami.example.edgible.app`. `EDGIBLE_DOMAIN` in `card.env` is the rest: `edgible.app` for apps published since October 2026. An app published before then keeps its `edgible.com` hostname: when you re-start, upgrade or move such an app, set `EDGIBLE_DOMAIN=edgible.com` in its `card.env`, or its links and sign-in break.
 - Check: run `check-env` until it says `no conflicts`. Its fixes can come in more than one pass. Secrets come first, and a moved port can come next once the Compose file resolves. Paste the lines it prints, and read any line that starts with `#` before running it. Run it on the machine that will run the card, because its Sizing section measures that machine. A sizing conflict (an image with no build for this CPU, a GPU it lacks, more memory than Docker has, or not enough disk) means the card cannot run there: do not work around it. Take it back to the person with the remedy it prints. A sizing warning (it fits, but not alongside what is already running) is theirs to decide: tell them before Start.
 - Publish: if `edgible app create existing --help` lists `--tag`, add `--tag card=<name>` to every app the card publishes, so the deployment can be counted and found later.
 - **Do not look up a hostname before Publish has created it.** Resolvers remember "does not exist" for up to 15 minutes. After Publish, ask Edgible's own nameservers:
 
   ```bash
-  host=umami.example.edgible.com
+  host=umami.example.edgible.app
   ns=$(dig +short NS "${host#*.*.}" | head -1)   # the zone's nameserver
   ip=$(dig +short "@$ns" "$host" A | tail -1)
   curl -sS -o /dev/null -w '%{http_code}\n' --resolve "$host:443:$ip" "https://$host"
@@ -243,7 +243,7 @@ To prove an app works, show evidence from each layer:
 
 1. **Containers:** `$C ps` shows each service running, and healthy when it has a healthcheck.
 2. **Hostnames:** each hostname answers the way its auth mode says, checked through Edgible's nameservers as in [Deploy](#3-deploy).
-3. **The card's own checks:** the scripts its README's Verify runs, in `etc/`, and those in `test/`. Run them with `card.env` exported and `HOSTNAME_<APP>` set to each hostname: `set -a; . $dir/card.env; set +a; export HOSTNAME_UMAMI=umami.example.edgible.com`.
+3. **The card's own checks:** the scripts its README's Verify runs, in `etc/`, and those in `test/`. Run them with `card.env` exported and `HOSTNAME_<APP>` set to each hostname: `set -a; . $dir/card.env; set +a; export HOSTNAME_UMAMI=umami.example.edgible.app`.
 4. **The goal:** what the person uses it for, end to end, such as signing in, a `git push`, a workflow run, or an event that shows up on a dashboard.
 5. **The data path:** `edgible app doctor <app>` checks the deployment, certificates, and the path from the gateway to the workload.
 
