@@ -404,7 +404,9 @@ def main(argv: list[str]) -> int:
     test_validator = Draft202012Validator(
         json.loads(TEST_SCHEMA_PATH.read_text()), format_checker=Draft202012Validator.FORMAT_CHECKER
     )
-    # --fresh: a card whose files changed since its test.yml fails. Without it, that is a note.
+    # --fresh: a card whose files changed since its test.yml fails, unless that test passed: a
+    # change to a passing card, such as a setting or its secrets, is a note, and the nightly
+    # regression retests a changed card on the fleet. Without --fresh, it is always a note.
     fresh = "--fresh" in argv
     # --untrusted: the card has not been reviewed (an agent wrote it), so nothing in it may
     # reach outside the card before it runs anywhere.
@@ -446,7 +448,11 @@ def main(argv: list[str]) -> int:
                 composes = {f.name: f.read_text() for f in sorted(path.parent.glob("*compose*.yml"))}
                 errors += untrusted_errors(path.parent, composes)
             stale = freshness(path.parent)
-            if stale and fresh:
+            test_yml = path.parent / "test.yml"
+            passed = test_yml.is_file() and re.search(r"^result:\s*pass\b", test_yml.read_text(), re.M)
+            if stale and fresh and passed and stale.startswith("the card's files changed"):
+                print(f"note {path}: {stale} (it passed before; the nightly regression retests it)")
+            elif stale and fresh:
                 errors.append(stale)
             elif stale:
                 print(f"note {path}: {stale}")
