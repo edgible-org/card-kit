@@ -161,7 +161,7 @@ function setEnvLines(textIn, changes) {
 
 const isSecretKey = (key, generated) => generated.has(key) || /(PASSWORD|SECRET|TOKEN|KEY|SALT)/.test(key);
 
-async function selfContained({ dir, card }, { app, device, choices, seeds = [] }) {
+async function selfContained({ dir, card }, { app, device, choices, seeds = [], port }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
   if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
   const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
@@ -208,13 +208,19 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [] }
   // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
   const out = resolved;
   if (seeds.length) {
-    // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}.
+    // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
+    // agent can start an app once before it has the secret's value; :? makes that start fail, so
+    // the service never makes its own value in place of the seed.
     const maker = Object.values(out.services || {}).find((s) => s.environment?.CARD_SECRETS);
     if (!maker) return refused(`${card.metadata.name} declares secrets but has no card-secrets service to make them`);
     maker.image = CARD_SECRETS_IMAGE;
-    for (const name of seeds) maker.environment[name] = `\${${name}}`;
+    for (const name of seeds) maker.environment[name] = `\${${name}:?the first-use value from Edgible}`;
   }
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }) };
+  // The host port Edgible forwards to: the one the card's app port is published on.
+  const hostPort = Object.values(out.services || {}).flatMap((s) => s.ports || [])
+    .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).find((m) => m && Number(m[2]) === Number(port));
+  if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]) };
 }
 
 // ---------- Tools ----------
@@ -244,12 +250,12 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
-    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n) });
+    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port });
     if (built.status !== 'ok') return built;
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
     const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
-    const secretArgs = [];
+    const envFrom = [];
     if (firstUse.length) {
       const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-first-use-'));
       try {
@@ -264,17 +270,34 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
       } finally {
         await rm(tmp, { recursive: true, force: true });
       }
-      for (const f of firstUse) secretArgs.push('--secret', `${f.name}=${app}-first-use:${f.name}`);
+      for (const f of firstUse) envFrom.push({ name: f.name, secretRef: { secret: `${app}-first-use`, key: f.name } });
     }
     const home = path.join(STATE, 'apps', app);
     await mkdir(home, { recursive: true });
     const file = path.join(home, 'docker-compose.yml');
     await writeFile(file, `# ${card} card as one self-contained file, deployed by edgible-mcp. Do not edit by hand.\n${built.compose}`);
 
-    const args = ['app', 'create', 'docker-compose', '--non-interactive', '--name', app, '--compose-file', file,
-      '--device-id', target.id, '--auth-modes', auth, '--tag', `card=${card}`, '--tag', 'by=edgible-mcp', '--no-wait', ...secretArgs];
-    if (hostnames.length) args.push('--hostnames', hostnames.join(','));
-    const r = await run('edgible', args, { timeout: 180000 });
+    // A declaration for `edgible stack deploy`, not `edgible app create docker-compose`: the
+    // create command first runs `docker compose up` on the machine the CLI runs on, whichever
+    // device was chosen, and without the app's organisation secrets.
+    const { organization } = await edgibleJson(['whoami', '--json']);
+    const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
+      type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
+      policies: { auth: { modes: auth.split(',') } }, hostname: custom ? { generated: true, custom } : { generated: true },
+    }));
+    const declaration = {
+      apiVersion: 'v3', kind: 'Application',
+      metadata: { name: app, organization: organization.id, description: `The ${card} card, deployed by edgible-mcp`, labels: { card, by: 'edgible-mcp' } },
+      spec: {
+        placement: { strategy: 'serving-device', deviceSelector: { deviceId: target.id }, migrationPolicy: 'manual' },
+        workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: built.port, protocol: 'tcp' }],
+          composeFile: `base64:${Buffer.from(await readFile(file)).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}) }],
+        access,
+      },
+    };
+    const stackFile = path.join(home, 'edgible.yml');
+    await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
+    const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
     if (r.code) {
       if (firstUse.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
       await record({ tool: 'deploy_card', card, app, device: target.name, result: 'failed', detail: cliError(r) });
@@ -319,7 +342,7 @@ async function removeCard({ app, confirm = [] }) {
   const where = live ? appDevices(live) : [mine[app].device];
   if (notAllowed(...where)) return refused(notAllowed(...where));
   if (!confirm.includes('remove')) {
-    return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. Its data on that device goes with it.` }]);
+    return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name.` }]);
   }
   const r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
   if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
