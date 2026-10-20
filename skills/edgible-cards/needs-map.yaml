@@ -344,19 +344,19 @@
 
 - category: AI app builders and agents
   source: edgible
-  jobs: [build an AI agent without code, prototype a RAG app, chain LLM calls into a workflow, run AI agents on my own data, a private GPTs builder for my team]
-  replaces: [OpenAI GPTs and Assistants, Relevance AI, Stack AI, LangChain hosted tools]
+  jobs: [build an AI agent without code, prototype a RAG app, chain LLM calls into a workflow, run AI agents on my own data, a private GPTs builder for my team, my own AI agent that I can message from my phone, an agent that runs tasks on a machine I own, try OpenClaw safely]
+  replaces: [OpenAI GPTs and Assistants, Relevance AI, Stack AI, LangChain hosted tools, hosted agent services, an agent left running on a laptop]
   drivers: [privacy, cost, control]
   fit: {rating: good, why: "the builder is a web app for the team, and what it publishes is an API or webhook"}
   exposure:
-    default: the builder on org; each published flow's API on api-key; webhooks from other services on none
+    default: the builder or an agent's control panel (OpenClaw's Control UI) on org; each published flow's API on api-key; webhooks from other services on none
     sensitive: org and api-key only
-  permissions: "agents act with the credentials they are given: give each one only the keys and tools it needs"
+  permissions: "agents act with the credentials they are given: give each one only the keys and tools it needs. An agent with a shell (OpenClaw) acts on its machine as whoever runs it: give it a machine you are willing to hand it, never your personal laptop, and never publish its control panel on none"
   builders: "a fast way to prototype an AI feature or product and let early users try it through an API"
   machine: modest; the model runs elsewhere unless it is local
-  cards: [n8n, litellm]
+  cards: [openclaw, n8n, litellm]
   find: "GitHub repositories tagged ai-agents, llm-app, or low-code with a Docker image, most starred and recently updated (for example Dify, Flowise, Langflow)"
-  ask: ["what should the agent or app do, and for whom?", "which models: hosted APIs or local?"]
+  ask: ["what should the agent or app do, and for whom?", "which models: hosted APIs or local?", "which machine can the agent have to itself?"]
 
 - category: LLM observability and evaluation
   source: edgible
