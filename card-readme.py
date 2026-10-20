@@ -191,6 +191,8 @@ def main(argv: list[str]) -> int:
             prepare_block += "\n\n" + spec["after-prepare"].strip()
     repo = "cards"
     apps = card["applications"]
+    # A card that declares secrets: makes them on the machine at Start, so Check only moves ports.
+    check_does = "It moves a taken port" if card.get("secrets") else "It fills each empty secret and moves a taken port"
     composes = sorted(p.name for p in d.glob("*compose*.yml"))
     env = f"--env-file {name}/card.env"
     owners: dict[tuple, str] = {}
@@ -325,7 +327,7 @@ curl -fsSLo check-env.py https://raw.githubusercontent.com/edgible-org/card-kit/
 python3 check-env.py {name}
 {FENCE}
 
-It fills each empty secret and moves a taken port, as lines to paste. Run it again until it says `no conflicts`.
+{check_does}, as lines to paste. Run it again until it says `no conflicts`.
 
 ### 4. Start
 
