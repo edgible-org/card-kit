@@ -7,6 +7,8 @@
 # CARD_SECRETS has one line per secret, NAME=command, the command from the card's secrets:
 # make. Each secret becomes the file $DIR/NAME (default /run/card-secrets), one value per file.
 # A secret that exists is never changed: a database set its password at its first start.
+# A secret whose NAME is also set in this container's environment takes that value instead of
+# the command's: a seed, such as the first-use password a remote deploy shows the person once.
 # It also writes $DIR/.load, the wrapper an app's container runs as its entrypoint: it loads
 # every secret into the environment and then runs the app's own command. So a remote deploy
 # needs nothing but the Compose file, and no value is in it.
@@ -22,7 +24,8 @@ generate)
     name=${line%%=*}; cmd=${line#*=}
     case "$name" in *[!A-Z0-9_]*|'') echo "card-secrets: bad name in line: $name" >&2; exit 1 ;; esac
     [ -s "$DIR/$name" ] && continue
-    value=$(sh -c "$cmd")
+    value=$(printenv "$name" || true)
+    [ -n "$value" ] || value=$(sh -c "$cmd")
     [ -n "$value" ] || { echo "card-secrets: the command for $name printed nothing" >&2; exit 1; }
     umask 077
     printf '%s' "$value" > "$DIR/.$name.new" && mv "$DIR/.$name.new" "$DIR/$name"
