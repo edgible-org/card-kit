@@ -391,6 +391,49 @@ def image_archs(image: str) -> set[str]:
             for m in manifests if m.get("platform", {}).get("architecture") not in (None, "unknown")}
 
 
+def image_facts(images: list[str], pull: bool = False) -> dict[str, dict]:
+    """What each app image is, for card-fit's self-hosting fit: the user it starts as, the CPUs it
+    has builds for, and whether it has a health check of its own. Read from the image itself,
+    which --image-facts pulls when it is not on this machine."""
+    out = {}
+    for image in images:
+        if pull and sh(f"docker image inspect {image}", check=False).returncode != 0:
+            sh(f"docker pull -q {image}", check=False, timeout=1800)
+        cfg = json.loads(sh(f"docker image inspect {image} --format '{{{{json .Config}}}}'", check=False).stdout or "null")
+        if not cfg:
+            continue
+        test = (cfg.get("Healthcheck") or {}).get("Test") or []
+        out[image] = {"user": cfg.get("User") or "root", "archs": sorted(image_archs(image)),
+                      "healthcheck": bool(test) and test[0] != "NONE"}
+    return out
+
+
+def facts_yaml(facts: dict[str, dict]) -> list[str]:
+    return ["image_facts:", *[f"  {i}: {{user: {json.dumps(f['user'])}, archs: [{', '.join(json.dumps(x) for x in f['archs'])}], "
+                              f"healthcheck: {str(f['healthcheck']).lower()}}}" for i, f in sorted(facts.items())]]
+
+
+def write_image_facts(src: Path) -> int:
+    """--image-facts: add or refresh test.yml's image_facts: from the app images, with no test run.
+    The images are those card.yml names, so files: and the result stay as they were."""
+    test_yml = src / "test.yml"
+    if not test_yml.is_file():
+        print(f"{test_yml} does not exist: run a full test first", file=sys.stderr)
+        return 2
+    if any(s.get("native") for s in read_places(src / "card.yml").values()):
+        print(f"{src.name} runs natively: no images to read")
+        return 0
+    facts = image_facts(sorted({a["from"] for a in read_apps(src / "card.yml") if a.get("from")}), pull=True)
+    text = re.sub(r"^image_facts:\n(?:  .*\n?)*", "", test_yml.read_text(), flags=re.M)
+    text = re.sub(r"^(images:\n(?:  - .*\n)+)", lambda m: m.group(1) + "\n".join(facts_yaml(facts)) + "\n", text,
+                  count=1, flags=re.M)
+    test_yml.write_text(text)
+    for i, f in sorted(facts.items()):
+        print(f"{i}: starts as {'root' if f['user'] in ('0', '0:0') else f['user']}, builds for {', '.join(f['archs']) or 'none listed'}, "
+              f"{'has' if f['healthcheck'] else 'no'} health check of its own")
+    return 0
+
+
 def suggest(memory: float, disk: float, archs: set[str], gpu: str) -> dict:
     """The minimum recommended: measured memory plus half, at least 256 MB; disk plus 1 GB."""
     mem = max(256e6, memory * 1.5)
@@ -433,13 +476,14 @@ def material(text: str) -> tuple:
     images = sorted(re.findall(r"^  - (\S+)", (re.search(r"^images:\n((?:  - .*\n?)+)", text, re.M)
                                                or [None, ""])[1], re.M))
     files = (re.search(r"^files:\s*(\S+)", text, re.M) or [None, ""])[1]
-    return result, steps.strip(), tuple(images), files
+    facts = (re.search(r"^image_facts:\n((?:  .*\n?)+)", text, re.M) or [None, ""])[1]
+    return result, steps.strip(), tuple(images), files, facts.strip()
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("card", type=Path, help="the card directory")
-    ap.add_argument("--device", required=True, help="the serving device, as `edgible device list` names it")
+    ap.add_argument("--device", help="the serving device, as `edgible device list` names it (required for a test)")
     ap.add_argument("--org-label", default="", help="the org's hostname label; read off an existing app if left out")
     ap.add_argument("--prepare", default="",
                     help="shell to run between Start and Publish in place of the card's prepare.sh, with card.env "
@@ -458,7 +502,13 @@ def main(argv: list[str]) -> int:
                     help="the gpu value in the suggested places:")
     ap.add_argument("--write-places", action="store_true", help="write the suggested places: into card.yml")
     ap.add_argument("--keep", action="store_true", help="leave it running and published after Verify")
+    ap.add_argument("--image-facts", action="store_true",
+                    help="no test: only add the app images' facts (user, CPUs, health check) to test.yml")
     args = ap.parse_args(argv)
+    if args.image_facts:
+        return write_image_facts(args.card.resolve())
+    if not args.device:
+        ap.error("--device is required for a test")
 
     src = args.card.resolve()
     if not (src / "card.yml").is_file():
@@ -769,6 +819,8 @@ def main(argv: list[str]) -> int:
         f"files: {files_hash(src)}",
         f"machine: {platform.system().lower()}/{ARCH.get(platform.machine(), platform.machine())}, {runtime}",
         "images:", *[f"  - {i}" for i in sorted(set(images))],
+        *(facts_yaml(facts) if (facts := ({} if installed else
+                                          image_facts(sorted({a["from"] for a in apps if a.get("from")})))) else []),
         "steps:", f"  check-env: {steps['check-env']}", f"  start: {steps['start']}",
         f"  publish: {steps['publish']}", "  verify:", *[f"    {k}: {v}" for k, v in steps["verify"].items()],
         *(["  checks:", *[f"    {k}: {v}" for k, v in steps["checks"].items()]] if steps.get("checks") else []),
