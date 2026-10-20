@@ -244,7 +244,7 @@ steps:
     workflow-runs: pass      # a workflow ran on it to the end
 ```
 
-`files` is a fingerprint of every file in the card but `README.md`, `images/`, `test.yml`, and hidden files. When it no longer matches, the card changed since its test: `check-cards` says so in a note, and `check-cards --fresh` fails it, as the cards repo does on every pull request, so a card's test always describes its files.
+`files` is a fingerprint of every file in the card but `README.md`, `images/`, `test.yml`, and hidden files. When it no longer matches, the card changed since its test: `check-cards` says so in a note, and `check-cards --fresh`, which the cards repo runs on every pull request, fails it unless its last test passed. A change to a passing card, such as a setting or its secrets, stays a note, and the nightly regression retests the changed card on the fleet.
 
 ### Test inputs
 
