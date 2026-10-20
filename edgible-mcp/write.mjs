@@ -5,13 +5,18 @@
 // app. Moves use `edgible app move`. Every change asks the person first ("needs confirmation"),
 // and every action is written to a record that `activity` reads back.
 //
-// First slice: app cards with one published app and no secrets. Cards with secrets wait for
-// a design that keeps them out of the Compose file (Edgible's organisation secrets).
+// App cards with one published app. Secrets: a card that declares them (card.yml secrets:) makes
+// its internal ones on the device itself, in its <card>-secrets service, so no value is ever in
+// the Compose file. A human one, such as an admin's password, the person needs once: deploy_card
+// makes a first-use password, hands it to that service through an Edgible organisation secret
+// (<app>-first-use), and shows it once in its result, for the person to change at first sign-in.
+// Cards with secrets still in card.env, and cards needing a key the person brings, are refused.
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -23,6 +28,8 @@ const RECORD = path.join(STATE, 'activity.jsonl');
 // Who is calling, for the record: over HTTP, each request runs inside actor.run(name, ...).
 export const actor = new AsyncLocalStorage();
 const REPO = 'edgible-org/cards';
+// The card-secrets image that takes a seed, used when deploy_card hands it a first-use password.
+const CARD_SECRETS_IMAGE = 'ghcr.io/edgible-org/card-secrets:0.1.2';
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const PATH_ENV = [...new Set([
   '/opt/homebrew/bin', '/usr/local/bin', path.join(homedir(), '.local/bin'),
@@ -154,12 +161,7 @@ function setEnvLines(textIn, changes) {
 
 const isSecretKey = (key, generated) => generated.has(key) || /(PASSWORD|SECRET|TOKEN|KEY|SALT)/.test(key);
 
-// Compose interpolates "$" in the file it runs, so every literal "$" is written as "$$".
-const escapeDollars = (v) => (typeof v === 'string' ? v.replaceAll('$', '$$$$')
-  : Array.isArray(v) ? v.map(escapeDollars)
-  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, escapeDollars(x)])) : v);
-
-async function selfContained({ dir, card }, { app, device, choices }) {
+async function selfContained({ dir, card }, { app, device, choices, seeds = [] }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
   if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
   const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
@@ -203,7 +205,16 @@ async function selfContained({ dir, card }, { app, device, choices }) {
   }
   resolved.name = app;
   if (Object.keys(configs).length) resolved.configs = { ...(resolved.configs || {}), ...configs };
-  return { status: 'ok', compose: YAML.stringify(escapeDollars(resolved), { lineWidth: 0 }) };
+  // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
+  const out = resolved;
+  if (seeds.length) {
+    // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}.
+    const maker = Object.values(out.services || {}).find((s) => s.environment?.CARD_SECRETS);
+    if (!maker) return refused(`${card.metadata.name} declares secrets but has no card-secrets service to make them`);
+    maker.image = CARD_SECRETS_IMAGE;
+    for (const name of seeds) maker.environment[name] = `\${${name}}`;
+  }
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }) };
 }
 
 // ---------- Tools ----------
@@ -223,30 +234,60 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
     const published = (meta.applications || []).filter((a) => a.published !== false);
     if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this first version handles cards with one`);
     if ((meta.applications || []).some((a) => a.native)) return refused(`${card} installs on the machine itself (native), which these tools never do`);
+    const declared = Object.entries(meta.secrets || {});
+    const brought = declared.filter(([, s]) => s.kind === 'external' || s.kind === 'shared').map(([n]) => n);
+    if (brought.length) return refused(`${card} needs ${brought.join(', ')}, which this version cannot take yet: a key the person brings, or one shared between machines`);
+    const human = declared.filter(([, s]) => s.kind === 'human');
     const auth = (published[0].authModes || ['org']).join(',');
     const reasons = [];
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
-    const built = await selfContained(fetched, { app, device: target.name, choices });
+    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n) });
     if (built.status !== 'ok') return built;
+    // Each human secret's first-use value, made here and kept by Edgible only until the app's
+    // first start makes it on the device; the person changes it at first sign-in.
+    const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
+    const secretArgs = [];
+    if (firstUse.length) {
+      const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-first-use-'));
+      try {
+        const fromFiles = [];
+        for (const f of firstUse) {
+          const file = path.join(tmp, f.name);
+          await writeFile(file, f.value, { mode: 0o600 });
+          fromFiles.push('--from-file', `${f.name}=${file}`);
+        }
+        const s = await run('edgible', ['secret', 'set', `${app}-first-use`, ...fromFiles], { timeout: 120000 });
+        if (s.code) return { status: 'failed', reason: `could not keep the first-use password with Edgible: ${cliError(s)}` };
+      } finally {
+        await rm(tmp, { recursive: true, force: true });
+      }
+      for (const f of firstUse) secretArgs.push('--secret', `${f.name}=${app}-first-use:${f.name}`);
+    }
     const home = path.join(STATE, 'apps', app);
     await mkdir(home, { recursive: true });
     const file = path.join(home, 'docker-compose.yml');
     await writeFile(file, `# ${card} card as one self-contained file, deployed by edgible-mcp. Do not edit by hand.\n${built.compose}`);
 
     const args = ['app', 'create', 'docker-compose', '--non-interactive', '--name', app, '--compose-file', file,
-      '--device-id', target.id, '--auth-modes', auth, '--tag', `card=${card}`, '--tag', 'by=edgible-mcp', '--no-wait'];
+      '--device-id', target.id, '--auth-modes', auth, '--tag', `card=${card}`, '--tag', 'by=edgible-mcp', '--no-wait', ...secretArgs];
     if (hostnames.length) args.push('--hostnames', hostnames.join(','));
     const r = await run('edgible', args, { timeout: 180000 });
     if (r.code) {
+      if (firstUse.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
       await record({ tool: 'deploy_card', card, app, device: target.name, result: 'failed', detail: cliError(r) });
       return { status: 'failed', reason: cliError(r) };
     }
     const created = (await apps()).find((a) => a.name === app);
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, choices: Object.keys(choices), confirmed: confirm, result: 'created' });
-    return { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), confirmed: confirm, result: 'created' });
+    const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
+    if (firstUse.length) {
+      result.firstUse = firstUse;
+      result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it and change it at once; the card made every other secret on the device, and nobody knows those.';
+    }
+    return result;
   } finally {
     await rm(fetched.dir, { recursive: true, force: true });
   }
@@ -281,6 +322,7 @@ async function removeCard({ app, confirm = [] }) {
     return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. Its data on that device goes with it.` }]);
   }
   const r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
+  if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
   await record({ tool: 'remove_card', app, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
   return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app };
 }
@@ -325,7 +367,7 @@ export function registerWriteTools(server) {
   };
   server.registerTool('deploy_card', {
     title: 'Deploy an Edgible app card on a device',
-    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. This first version handles app cards with one published app and no secrets, and refuses others with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
+    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards with one published app. A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. Cards with secrets in card.env, or needing a key the person brings, are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
       device: z.string().describe('The Edgible device to run it on, by name'),
