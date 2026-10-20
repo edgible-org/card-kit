@@ -23,7 +23,8 @@ follows in the card's README:
   verify      each hostname by its auth mode: none answers, org redirects to the Edgible
               sign-in, api-key answers 401, tcp connects; udp is skipped
   checks      the card's test/<name>.sh, after Verify and after places with no app have
-              started, each retried until it passes or --check-wait runs out
+              started, each retried until it passes or --check-wait runs out; card.env is
+              exported, and so are the secrets the card made on the machine (card.yml secrets:)
   fingerprint data.fingerprint's command from card.yml, after the checks: one JSON line of
               counts and ISO dates, recorded in test.yml as fingerprint:
   teardown    deletes the apps it published and removes the containers and volumes it
@@ -226,6 +227,22 @@ def secrets(env_file: Path) -> list[str]:
         if generated and len(value.strip('"')) >= 6:
             out.append(value.strip('"'))
         generated = False
+    return out
+
+
+def made_secrets(dc, composes: list[Path]) -> dict[str, str]:
+    """The secrets a card's card-secrets service made on this machine (card.yml secrets:), by name.
+    Its Compose service has them in CARD_SECRETS, one NAME=command line each, and `show NAME`
+    prints one. Read from the Compose config, as this file uses only the standard library."""
+    out = {}
+    for f in composes:
+        services = json.loads(sh(dc(f, "config --format json"), check=False).stdout or "{}").get("services") or {}
+        for service, spec in services.items():
+            lines = ((spec or {}).get("environment") or {}).get("CARD_SECRETS") or ""
+            for name in re.findall(r"^\s*([A-Z][A-Z0-9_]*)=", lines, re.M):
+                r = sh(dc(f, f"run --rm --no-deps {service} show {name}"), check=False)
+                if r.returncode == 0 and r.stdout.strip():
+                    out[name] = r.stdout.strip()
     return out
 
 
@@ -494,11 +511,12 @@ def main(argv: list[str]) -> int:
         """What a test prints may be public, such as a CI log: no org label, access id, or secret."""
         s = re.sub(r"(application-access/)[\w-]+", r"\1<id>", s.replace(label, "<org>"))
         s = re.sub(r"device_\d+_\w+", "<device>", s)
-        for secret in secrets(env_file):
+        for secret in secrets(env_file) + list(made.values()):
             s = s.replace(secret, "<secret>")
         return s
     steps: dict = {"check-env": "fail", "start": "skip", "publish": "skip", "verify": {}, "teardown": "skip"}
     notes, published, started_compose, installed = [], [], False, False
+    made: dict[str, str] = {}  # the card's secrets made on this machine, once it started
     fingerprint_spec, fingerprint = (None if native else read_fingerprint(card / "card.yml")), None
     sampler = NativeSampler(card) if native else Sampler(list(projects.values()))
     data: dict[Path, float] = {}
@@ -569,6 +587,11 @@ def main(argv: list[str]) -> int:
             for f in first:
                 sh(dc(f, "up -d --wait --wait-timeout 1200"), timeout=2400)
             print(f"start: {', '.join(f.name for f in first)} up ({int(time.time() - t)}s)")
+            made = made_secrets(dc, first)
+            # The checks get them as card.env's values, such as a password to sign in with.
+            secrets_env = work / "secrets.env"
+            secrets_env.write_text("".join(f"{k}={shlex.quote(v)}\n" for k, v in made.items()))
+            secrets_env.chmod(0o600)
 
         # The card's own prepare.sh, the one its README runs, unless --prepare replaces it.
         prepare_cmd = args.prepare or (f"sh {card / 'prepare.sh'}" if (card / "prepare.sh").is_file() else "")
@@ -641,7 +664,8 @@ def main(argv: list[str]) -> int:
             steps.setdefault("checks", {})[name] = "fail"
             deadline, out = time.time() + args.check_wait, ""
             while time.time() < deadline:
-                r = sh(f"cd {work} && set -a && . {env_file} && set +a && export {hostnames} && {command}",
+                load = f" && . {work / 'secrets.env'}" if made else ""
+                r = sh(f"cd {work} && set -a && . {env_file}{load} && set +a && export {hostnames} && {command}",
                        check=False, timeout=600)
                 out = (r.stdout + r.stderr).strip()[-200:]
                 if r.returncode == 0:
