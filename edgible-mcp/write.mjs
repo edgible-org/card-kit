@@ -422,8 +422,19 @@ const keyLinks = new Map(); // token -> { name, secret, key, by, at }
 const SECRET_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-async function requestKey({ name, secret }) {
+// A key this server itself uses, such as the AI gateway's master key for gateway_key, is kept in
+// its own state (KEYS_DIR, readable by it alone) rather than as an organisation secret.
+const KEYS_DIR = path.join(STATE, 'keys');
+
+async function requestKey({ name, secret, keep = 'edgible' }) {
   if (!/^[A-Z][A-Z0-9_]*$/.test(name || '')) return refused('name is the key\'s variable, such as GEMINI_API_KEY');
+  if (keep === 'server') {
+    if (!PAGES_URL) return { status: 'no link', reason: 'This server has no page for keys (EDGIBLE_MCP_PAGES_URL is not set).' };
+    const token = randomBytes(24).toString('base64url');
+    keyLinks.set(token, { name, keep, by: actor.getStore() || 'assistant', at: Date.now() });
+    return { status: 'link', link: `${PAGES_URL}/key?t=${token}`, expires_in_minutes: KEY_LINK_MINUTES,
+      next: `Give the person this link. They paste ${name} there, and this server keeps it for its own use; you never see it.` };
+  }
   secret = secret || name.toLowerCase().replace(/_api_key$|_key$/, '').replace(/_/g, '-');
   if (!SECRET_NAME.test(secret)) return refused('secret is lower-case letters, digits and dashes, such as gemini');
   if (!PAGES_URL) {
@@ -454,12 +465,20 @@ export async function keyPage(req, res, url, body) {
     return send(410, 'This link has expired', '<p>Ask your assistant for a new one.</p>');
   }
   if (!form) {
-    return send(200, `Store your ${link.name}`, `<p>Paste the key below. It is stored with Edgible as the organisation secret <b>${esc(link.secret)}</b>, and goes from this page to Edgible: your assistant never sees it.</p>
+    const where = link.keep === 'server' ? 'It is kept by this Edgible server, for its own use, where only it can read it'
+      : `It is stored with Edgible as the organisation secret <b>${esc(link.secret)}</b>, and goes from this page to Edgible`;
+    return send(200, `Store your ${link.name}`, `<p>Paste the key below. ${where}: your assistant never sees it.</p>
 <form method="post" action="key"><input type="hidden" name="t" value="${esc(token)}"><input name="value" type="password" autocomplete="off" required style="font:inherit;width:100%;padding:.4em" aria-label="${esc(link.name)}"><p><button style="font:inherit;padding:.5em 1.2em">Store it</button></p></form>`);
   }
   const value = (form.get('value') || '').trim();
   if (!value) return send(400, 'Nothing to store', '<p>Paste the key, then press Store it.</p>');
   keyLinks.delete(token);
+  if (link.keep === 'server') {
+    await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
+    await writeFile(path.join(KEYS_DIR, link.name), value, { mode: 0o600 });
+    await record({ tool: 'store_key', kept: 'by this server', for: link.name, by: `${user} on the key page`, asked: link.by, result: 'stored' });
+    return send(200, 'Stored', `<p>Your ${esc(link.name)} is kept by this server. Go back to your assistant and tell it it is done.</p>`);
+  }
   const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-key-'));
   try {
     const file = path.join(tmp, 'key');
@@ -483,6 +502,42 @@ async function whoami() {
     tools_act_as: { email: me.account || null, organisation: me.organization?.name || null },
     use: 'A card setting that takes Edgible accounts, such as OPENCLAW_USERS, takes you.email: the address the person signs in to Edgible with, which may differ from their other email addresses.',
   };
+}
+
+// gateway_key: a key for one app on the shared AI gateway (the litellm card, its API published as
+// litellm-api), with a budget, stored as an organisation secret <app>-gateway, so deploy_card
+// passes it to the app by reference and nobody sees it. It needs the gateway's address
+// (EDGIBLE_MCP_GATEWAY_URL) and its master key, kept by this server (request_key, keep server).
+const GATEWAY_URL = (process.env.EDGIBLE_MCP_GATEWAY_URL || '').replace(/\/$/, '');
+
+async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
+  if (!NAME.test(app || '')) return refused('app is the name the app will have, such as agent-gw');
+  if (!GATEWAY_URL) return refused('This server knows no shared AI gateway: set EDGIBLE_MCP_GATEWAY_URL to its API address, such as https://litellm-api.<org>.edgible.app');
+  const master = await readFile(path.join(KEYS_DIR, 'LITELLM_MASTER_KEY'), 'utf8').then((s) => s.trim()).catch(() => '');
+  if (!master) return refused('This server does not have the gateway\'s master key yet: call request_key with name LITELLM_MASTER_KEY and keep "server", and give the person the link.');
+  const secret = `${app}-gateway`;
+  const exists = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).some((s) => s.name === secret);
+  if (exists && !confirm.includes('replace')) return needs([{ token: 'replace', reason: `${app} already has a gateway key (${secret}); a new one replaces it, and the app needs redeploying to use it.` }]);
+  let made;
+  try {
+    const res = await fetch(`${GATEWAY_URL}/key/generate`, { method: 'POST', headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ key_alias: app, max_budget: Number(budget), budget_duration: period, metadata: { made_by: 'edgible-mcp gateway_key', by: actor.getStore() || 'assistant' } }) });
+    made = await res.json();
+    if (!res.ok || !made.key) return { status: 'failed', reason: `the gateway did not make a key (${res.status}): ${JSON.stringify(made).slice(0, 200)}` };
+  } catch (err) {
+    return { status: 'failed', reason: `the gateway at ${GATEWAY_URL} did not answer: ${err.message}` };
+  }
+  const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-gateway-key-'));
+  try {
+    await writeFile(path.join(tmp, 'key'), made.key, { mode: 0o600 });
+    const s = await run('edgible', ['secret', 'set', secret, '--from-file', `key=${path.join(tmp, 'key')}`], { timeout: 120000 });
+    await record({ tool: 'gateway_key', app, secret, budget: `${budget} per ${period}`, result: s.code ? 'failed' : 'made' });
+    if (s.code) return { status: 'failed', reason: `the key was made but Edgible did not store it: ${cliError(s)}` };
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  return { status: 'made', app, secret, budget: `$${budget} per ${period}`, gateway: `${GATEWAY_URL}/v1`,
+    next: `Deploy the app with this key by reference, such as keys {"OPENCLAW_MODEL_KEY": "${secret}:key"} and the gateway address ${GATEWAY_URL}/v1 as its model address. Its spend shows in the gateway's admin under ${app}.` };
 }
 
 async function listKeys() {
@@ -562,9 +617,21 @@ export function registerWriteTools(server) {
     inputSchema: {
       name: z.string().describe('The key\'s variable, as the card names it, such as GEMINI_API_KEY'),
       secret: z.string().optional().describe('The organisation secret to store it as, such as gemini; defaults from the name'),
+      keep: z.enum(['edgible', 'server']).optional().describe('edgible (default): an organisation secret for deploys; server: kept by this server for its own use, such as the AI gateway\'s LITELLM_MASTER_KEY for gateway_key'),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(requestKey));
+  server.registerTool('gateway_key', {
+    title: 'A key for an app on the shared AI gateway',
+    description: 'Make a key for one app on the shared AI gateway (the litellm card), with a budget, and store it as the organisation secret <app>-gateway, so deploy_card passes it to the app by reference: nobody sees it. Then deploy the app pointing at the gateway with that key. Each app gets its own key; its spend shows in the gateway\'s admin.',
+    inputSchema: {
+      app: z.string().describe('The app the key is for, as it will be named, such as agent-gw'),
+      budget: z.number().positive().optional().describe('Dollars it may spend per period; default 5'),
+      period: z.string().optional().describe('30d (default), 7d or 1d'),
+      confirm: z.array(z.string()).optional().describe('["replace"], only after the person agreed to replace an existing key'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, wrap(gatewayKey));
   server.registerTool('list_keys', {
     title: 'Keys stored with Edgible',
     description: 'The organisation secrets stored with Edgible, by name and key name, never their values: the keys a person brings, such as a model\'s API key, that deploy_card can pass to a card by reference.',
