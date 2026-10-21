@@ -549,6 +549,39 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
     next: `Deploy the app with this key by reference, such as keys {"OPENCLAW_MODEL_KEY": "${secret}:key"} and the gateway address ${GATEWAY_URL}/v1 as its model address. Its spend shows in the gateway's admin under ${app}.` };
 }
 
+// gateway_spend: what the shared AI gateway spent, by app and by model, with each app's budget and
+// the tokens used. Read-only. It names apps by their key's alias and never returns a key: the
+// gateway's logs record the caller's raw key, so only aliases, models and numbers leave here.
+async function gatewaySpend({ days = 30 }) {
+  if (!GATEWAY_URL) return refused('This server knows no shared AI gateway (EDGIBLE_MCP_GATEWAY_URL).');
+  const master = await readFile(path.join(KEYS_DIR, 'LITELLM_MASTER_KEY'), 'utf8').then((s) => s.trim()).catch(() => '');
+  if (!master) return refused('This server does not have the gateway\'s master key: request_key with name LITELLM_MASTER_KEY and keep "server".');
+  const get = async (p) => {
+    const res = await fetch(`${GATEWAY_URL}${p}`, { headers: { authorization: `Bearer ${master}` } });
+    if (!res.ok) throw new Error(`the gateway answered ${res.status} for ${p.split('?')[0]}`);
+    return res.json();
+  };
+  const round = (n) => Math.round((Number(n) || 0) * 10000) / 10000;
+  const keys = (await get('/key/list?return_full_object=true')).keys || [];
+  const byApp = keys.map((k) => ({ app: k.key_alias || 'unnamed key', spend: round(k.spend), budget: k.max_budget ?? null,
+    period: k.budget_duration || null, resets: k.budget_reset_at || null }));
+  const end = new Date(); const start = new Date(end - days * 86400000);
+  const day = (d) => d.toISOString().slice(0, 10);
+  // Per-day summaries for the period: each day's spend by provider model (names only, no keys).
+  const days_ = await get(`/spend/logs?start_date=${day(start)}&end_date=${day(new Date(end.getTime() + 86400000))}`).catch(() => []);
+  const models = {};
+  for (const d of Array.isArray(days_) ? days_ : []) {
+    for (const [m, s] of Object.entries(d.models || {})) {
+      if (!m) continue;
+      const e = models[m] || (models[m] = { model: m, spend: 0 });
+      e.spend += Number(s) || 0;
+    }
+  }
+  const byModel = Object.values(models).map((e) => ({ ...e, spend: round(e.spend) })).sort((a, b) => b.spend - a.spend);
+  return { period: `last ${days} days`, total: round(byModel.reduce((s, e) => s + e.spend, 0)), by_app: byApp, by_model: byModel,
+    note: 'Spend is the gateway\'s own estimate at list prices. by_app covers each key since it was made (or its budget last reset); by_model covers the period.' };
+}
+
 async function listKeys() {
   const secrets = await edgibleJson(['secret', 'list', '--json']);
   if (!secrets.length) return 'No organisation secrets are stored yet. On a computer with the Edgible CLI: edgible secret set <secret> --from-file key=<file holding the key>.';
@@ -641,6 +674,12 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(gatewayKey));
+  server.registerTool('gateway_spend', {
+    title: 'AI spending, from the shared gateway',
+    description: 'What the shared AI gateway spent: by app (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
+    inputSchema: { days: z.number().int().positive().max(365).optional().describe('How many days back for the by-model figures; default 30') },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(gatewaySpend));
   server.registerTool('list_keys', {
     title: 'Keys stored with Edgible',
     description: 'The organisation secrets stored with Edgible, by name and key name, never their values: the keys a person brings, such as a model\'s API key, that deploy_card can pass to a card by reference.',
