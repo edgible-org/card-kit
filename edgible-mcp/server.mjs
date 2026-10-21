@@ -361,6 +361,33 @@ async function notSignedIn() {
     `(Or, on the machine that runs this server: ${SIGN_IN}.) find and describe work without it.`].join('\n');
 }
 
+// agent_spend: an agent's own spending on its AI gateway, through its own key: the agent's view,
+// scoped to itself. A key can read its own record, never another's, and changes nothing. Set by
+// the edgible-agent pattern: EDGIBLE_MCP_AGENT_GATEWAY_URL, and the key in EDGIBLE_MCP_AGENT_KEY
+// or the file EDGIBLE_MCP_AGENT_KEY_FILE.
+const AGENT_GATEWAY_URL = (process.env.EDGIBLE_MCP_AGENT_GATEWAY_URL || '').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+
+async function agentKey() {
+  if (process.env.EDGIBLE_MCP_AGENT_KEY) return process.env.EDGIBLE_MCP_AGENT_KEY.trim();
+  const file = process.env.EDGIBLE_MCP_AGENT_KEY_FILE;
+  return file ? (await readFile(file, 'utf8').catch(() => '')).trim() : '';
+}
+
+async function agentSpend() {
+  const key = await agentKey();
+  if (!AGENT_GATEWAY_URL || !key) return 'This server is not an agent on an AI gateway, so it has no spending of its own to show.';
+  const res = await fetch(`${AGENT_GATEWAY_URL}/key/info`, { headers: { authorization: `Bearer ${key}` } });
+  if (!res.ok) return `The AI gateway did not answer for this agent's key (${res.status}).`;
+  const i = (await res.json()).info || {};
+  const round = (n) => Math.round((Number(n) || 0) * 10000) / 10000;
+  const spend = round(i.spend); const budget = i.max_budget ?? null;
+  return JSON.stringify({
+    scope: `This agent only (${i.key_alias || 'its own key'}): not other apps, and not your total; the gateway's owner sees everything`,
+    agent: i.key_alias || null, spend, budget, period: i.budget_duration || null,
+    left: budget == null ? null : round(budget - spend), resets: i.budget_reset_at || null,
+  }, null, 2);
+}
+
 async function whatsRunning({ app, device }) {
   const who = await whoami();
   if (!who) return notSignedIn();
@@ -429,7 +456,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.5';
+export const VERSION = '0.7.6';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
@@ -461,6 +488,12 @@ export function registerReadTools(server) {
     inputSchema: {},
     annotations: { ...ro, openWorldHint: true },
   }, text(async () => JSON.stringify(await signIn(), null, 2)));
+  server.registerTool('agent_spend', {
+    title: 'This agent\'s own AI spending',
+    description: 'This agent\'s own spending on its AI gateway, against its own budget, and when the budget resets: scoped to this agent only, never other apps or the total. Through its own key, read-only.',
+    inputSchema: {},
+    annotations: { ...ro, openWorldHint: true },
+  }, text(agentSpend));
   server.registerTool('whats_running', {
     title: 'What is running, and does it work',
     description: 'List the devices and published apps of the Edgible organization this server is signed in to, and check each https hostname answers the way its auth mode says (none: the app; org: a redirect to sign in; api-key: 401). Give an app name for that app alone, with edgible app doctor\'s verdict. Takes up to a minute for many apps.',
