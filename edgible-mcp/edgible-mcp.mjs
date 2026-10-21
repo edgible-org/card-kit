@@ -19,7 +19,7 @@ import { mkdir } from 'node:fs/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { READ_INSTRUCTIONS, VERSION, registerReadTools } from './server.mjs';
+import { READ_INSTRUCTIONS, VERSION, prepareSignIn, registerReadTools } from './server.mjs';
 import { ALLOWED, RECORD, STATE, WRITE_INSTRUCTIONS, actor, keyPage, registerWriteTools } from './write.mjs';
 
 const argv = process.argv.slice(2);
@@ -79,4 +79,5 @@ if (!port) {
       if (!res.headersSent) res.writeHead(400).end('bad request\n');
     }
   }).listen(port, host, () => console.error(`edgible-mcp ${VERSION}: serving MCP over HTTP on ${host}:${port}/mcp, ${tools}`));
+  prepareSignIn().catch(() => {});
 }

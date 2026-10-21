@@ -260,9 +260,10 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
   if (!fetched) return refused(`no card called ${card} in ${REPO}`);
   try {
     const { card: meta } = fetched;
-    if (meta.metadata?.type !== 'app') return refused(`${card} is a pattern card; this first version deploys app cards`);
+    // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.
     const published = (meta.applications || []).filter((a) => a.published !== false);
-    if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this first version handles cards with one`);
+    if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this version handles cards that publish one`);
+    if (Object.keys(meta.places || {}).length > 1) return refused(`${card} runs on ${Object.keys(meta.places).length} machines; this version handles cards on one`);
     if ((meta.applications || []).some((a) => a.native)) return refused(`${card} installs on the machine itself (native), which these tools never do`);
     const declared = Object.entries(meta.secrets || {});
     const shared = declared.filter(([, s]) => s.kind === 'shared').map(([n]) => n);
@@ -512,7 +513,7 @@ export function registerWriteTools(server) {
   };
   server.registerTool('deploy_card', {
     title: 'Deploy an Edgible app card on a device',
-    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards with one published app. A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
+    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
       device: z.string().describe('The Edgible device to run it on, by name'),
