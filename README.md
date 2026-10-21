@@ -131,7 +131,7 @@ secrets:
 - **internal** (only the app's services need it), **human** (a person needs it once) and **shared** (apps of the card on different machines) are made **on the device**, at first start, by the card's `<card>-secrets` service: the image `ghcr.io/edgible-org/card-secrets`, with one line `NAME=command` per secret in its `CARD_SECRETS`, the same commands as `make`. It writes each into the card's secrets volume, one file per secret under `/run/card-secrets`, and never changes one that exists. They are never `card.env` lines or `${NAME}` in a Compose file.
 - An app reads them through its own `*_FILE` setting where it has one, such as `POSTGRES_PASSWORD_FILE: /run/card-secrets/UMAMI_DB_PASSWORD`, or starts through the loader the service also writes: `entrypoint: ["sh", "/run/card-secrets/.load"]` with the image's own start command in `command:`. Mount the volume read-only into each service that needs it.
 - **external** secrets, which someone else issued (a model key), are `card.env` lines the person fills, with `from:` saying where to get one.
-- `on-move` defaults by use: `new` for signing and token, `new-then-update` for password (then `update` is required), `carry` for encryption and the other kinds.
+- `on-move` defaults by use: `new` for signing and token, `new-then-update` for password (then `update` is required), `carry` for encryption and the other kinds. `restore-card --move` applies them; the `update` service must mount the secrets volume.
 - A person sees a human secret with `docker compose … run --rm <card>-secrets show <NAME>`, on the machine.
 
 `check-cards` checks that each declared internal, human or shared secret is made by the card-secrets service with its `make`, that none is a `card.env` line or a `${NAME}`, that each external one is a `card.env` line, and that each `update` runs in one of the card's services. A card without `secrets:` keeps `# Generate with:` lines in `card.env`, and `check-cards` prints a note until it moves over.
@@ -460,6 +460,7 @@ Restores a backup that `backup-card` wrote, over the card or as a copy beside it
 ```bash
 python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding-copy --as linkding-copy
 python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding
+python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding-new --as linkding-new --move
 ```
 
 1. **Check:** every file against its sha256 in `backup.json`. A file that differs stops it.
@@ -467,7 +468,8 @@ python3 ../card-kit/restore-card.py ~/linkding-backups/20261018-1001 ~/linkding
 3. **New, without `--as`, into a directory that is empty or not there yet:** the card under its own name, as on the machine a move goes to. It refuses when the machine already has the card's volumes. A taken `*_PORT` still moves.
 4. **In place, without `--as`:** it asks first (`--yes` skips the question, and a run with no terminal needs it), backs the card up with `backup-card` (`--no-backup` skips that, when the data is already lost), stops the card, and removes the volumes it restores. The card's `card.env` before the restore is kept as `card.env.before-restore-<stamp>`.
 5. **Volumes:** it creates them, loads each `.tgz`, starts each dump's service alone and feeds the dump to its `restore` command, and leaves rebuildable and cache volumes empty for the app to rebuild.
-6. **Start and verify:** `up --wait`, then `verify-card --against` the backup. Its exit is restore-card's.
+6. **Secrets, with `--move`:** on the target of a move (with `--as`, or into a new directory), each secret in `secrets:` follows its `on-move` rule. `carry` keeps it. `new` drops it, so the card's `<card>-secrets` service makes a fresh one at start. `new-then-update` makes a fresh one too, then runs its `update` command in its service, which reads the new value from `/run/card-secrets` there, so the data takes it. A move then rotates every secret the data does not need. Without `--move`, as in a restore after a loss, every secret comes back as it was.
+7. **Start and verify:** `up --wait`, then `verify-card --against` the backup. Its exit is restore-card's. A one-shot service, such as `<card>-secrets`, passes when it ran and exited 0.
 
 `--dry-run` checks the files and says what it would do, and changes nothing.
 
