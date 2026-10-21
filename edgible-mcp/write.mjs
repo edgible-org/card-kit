@@ -298,6 +298,11 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const auth = (published[0].authModes || ['org']).join(',');
     const reasons = [];
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
+    // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
+    // call needs a key it issued, as the card's Share it step does, and this server keeps its
+    // master key, so gateway_key and gateway_spend work with nothing copied by hand.
+    const gateway = card === GATEWAY_CARD;
+    if (gateway) reasons.push({ token: 'gateway-api', reason: `${app}'s API will also be published as ${app}-api, open to the internet (auth mode none) but answering only calls with a key the gateway issued. This server keeps the gateway's master key, so it can make each app's key and report spending; the person never needs to see it.` });
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
@@ -306,6 +311,14 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
     const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
+    // A gateway deployed again under a name it had before reuses its kept master key: its old
+    // secrets volume, which remove_card leaves on the device, still holds that key, and the
+    // card never replaces a secret that exists.
+    if (gateway) {
+      const kept = await readFile(keptMaster(app), 'utf8').then((s) => s.trim()).catch(() => '');
+      const master = firstUse.find((f) => f.name === GATEWAY_MASTER);
+      if (kept && master) master.value = kept;
+    }
     const envFrom = Object.entries(refs).map(([name, secretRef]) => ({ name, secretRef }));
     if (firstUse.length) {
       const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-first-use-'));
@@ -354,11 +367,21 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       await record({ tool: 'deploy_card', card, app, device: target.name, result: 'failed', detail: cliError(r) });
       return { status: 'failed', reason: cliError(r) };
     }
+    let api;
+    if (gateway) {
+      api = await publishGatewayApi({ app, deviceId: target.id, port: built.port, master: firstUse.find((f) => f.name === GATEWAY_MASTER) });
+      if (api.status !== 'ok') return api;
+    }
     const created = (await apps()).find((a) => a.name === app);
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, result: 'created' });
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, result: 'created' });
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
-    if (firstUse.length) {
-      result.firstUse = firstUse;
+    if (api) {
+      result.gateway = `${api.url}/v1`;
+      result.next += ` Its API is ${api.url}/v1. This server keeps the gateway's master key: gateway_key makes each app's key with a budget, and gateway_spend reports spending. Never show or ask for the master key.`;
+    }
+    const shown = firstUse.filter((f) => !(gateway && f.name === GATEWAY_MASTER));
+    if (shown.length) {
+      result.firstUse = shown;
       result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it and change it at once; the card made every other secret on the device, and nobody knows those.';
     }
     return result;
@@ -399,6 +422,7 @@ async function removeCard({ app, confirm = [] }) {
   // A delete can time out waiting for a device that already let the app go; it is gone if Edgible no longer lists it.
   if (r.code && !(await apps()).some((a) => a.name === app)) r = { code: 0, stdout: '', stderr: '' };
   if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
+  if (!r.code && mine[app].gateway) await forgetGateway(app);
   await record({ tool: 'remove_card', app, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
   return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app };
 }
@@ -516,12 +540,53 @@ async function whoami() {
 // gateway_key: a key for one app on the shared AI gateway (the litellm card, its API published as
 // litellm-api), with a budget, stored as an organisation secret <app>-gateway, so deploy_card
 // passes it to the app by reference and nobody sees it. It needs the gateway's address
-// (EDGIBLE_MCP_GATEWAY_URL) and its master key, kept by this server (request_key, keep server).
-const GATEWAY_URL = (process.env.EDGIBLE_MCP_GATEWAY_URL || '').replace(/\/$/, '');
+// (deploy_card records it when it deploys the gateway, or EDGIBLE_MCP_GATEWAY_URL) and its master
+// key, kept by this server (deploy_card keeps it, or request_key with keep server).
+const GATEWAY_CARD = 'litellm';
+const GATEWAY_MASTER = 'LITELLM_MASTER_KEY';
+const GATEWAY_FILE = path.join(STATE, 'gateway.json');
+
+async function gatewayUrl() {
+  const set = (process.env.EDGIBLE_MCP_GATEWAY_URL || '').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+  if (set) return set;
+  return JSON.parse(await readFile(GATEWAY_FILE, 'utf8').catch(() => '{}')).url || '';
+}
+
+// After deploy_card starts the gateway: publish its API on none, then keep its address and master key here.
+async function publishGatewayApi({ app, deviceId, port, master }) {
+  const name = `${app}-api`;
+  const r = await run('edgible', ['app', 'create', 'existing', '--non-interactive', '--name', name, '--port', String(port),
+    '--protocol', 'https', '--auth-modes', 'none', '--device-id', deviceId], { timeout: 180000 });
+  const made = (await apps()).find((a) => a.name === name);
+  if (r.code && !made) return { status: 'failed', reason: `${app} is deploying, but its API could not be published as ${name}: ${cliError(r)}` };
+  const host = (made?.hostnames || [])[0];
+  if (!host) return { status: 'failed', reason: `${name} was published without an address` };
+  const url = `https://${host}`;
+  await mkdir(KEYS_DIR, { recursive: true });
+  if (master) {
+    await writeFile(path.join(KEYS_DIR, GATEWAY_MASTER), master.value, { mode: 0o600 });
+    await writeFile(keptMaster(app), master.value, { mode: 0o600 });
+  }
+  await writeFile(GATEWAY_FILE, JSON.stringify({ app, api: name, url }, null, 2));
+  return { status: 'ok', url };
+}
+
+// Kept after remove_card too, for a redeploy under the same name (see deploy_card).
+const keptMaster = (app) => path.join(KEYS_DIR, `gateway-${app}.${GATEWAY_MASTER}`);
+
+async function forgetGateway(app) {
+  await run('edgible', ['app', 'delete', `${app}-api`, '--yes'], { timeout: 300000 });
+  const kept = JSON.parse(await readFile(GATEWAY_FILE, 'utf8').catch(() => '{}'));
+  if (kept.app === app) {
+    await rm(GATEWAY_FILE, { force: true });
+    await rm(path.join(KEYS_DIR, GATEWAY_MASTER), { force: true });
+  }
+}
 
 async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
   if (!NAME.test(app || '')) return refused('app is the name the app will have, such as agent-gw');
-  if (!GATEWAY_URL) return refused('This server knows no shared AI gateway: set EDGIBLE_MCP_GATEWAY_URL to its API address, such as https://litellm-api.<org>.edgible.app');
+  const GATEWAY_URL = await gatewayUrl();
+  if (!GATEWAY_URL) return refused('This server knows no AI gateway yet: deploy the litellm card with deploy_card, which wires it up, or set EDGIBLE_MCP_GATEWAY_URL to its API address.');
   const master = await readFile(path.join(KEYS_DIR, 'LITELLM_MASTER_KEY'), 'utf8').then((s) => s.trim()).catch(() => '');
   if (!master) return refused('This server does not have the gateway\'s master key yet: call request_key with name LITELLM_MASTER_KEY and keep "server", and give the person the link.');
   const secret = `${app}-gateway`;
@@ -553,7 +618,8 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
 // the tokens used. Read-only. It names apps by their key's alias and never returns a key: the
 // gateway's logs record the caller's raw key, so only aliases, models and numbers leave here.
 async function gatewaySpend({ days = 30 }) {
-  if (!GATEWAY_URL) return refused('This server knows no shared AI gateway (EDGIBLE_MCP_GATEWAY_URL).');
+  const GATEWAY_URL = await gatewayUrl();
+  if (!GATEWAY_URL) return refused('This server knows no AI gateway yet: deploy the litellm card with deploy_card, which wires it up, or set EDGIBLE_MCP_GATEWAY_URL.');
   const master = await readFile(path.join(KEYS_DIR, 'LITELLM_MASTER_KEY'), 'utf8').then((s) => s.trim()).catch(() => '');
   if (!master) return refused('This server does not have the gateway\'s master key: request_key with name LITELLM_MASTER_KEY and keep "server".');
   const get = async (p) => {
