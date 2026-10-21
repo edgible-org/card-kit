@@ -16,9 +16,11 @@ Who may sign in: members of one Edgible organisation, or only listed email addre
 | Port | Edgible auth mode | Serves |
 | --- | --- | --- |
 | 8000 | `none` | `/mcp` (with a token), `/register`, `/token`, `/authorize`, the OAuth metadata, `/healthz` |
-| 8001 | `org` | `/signin`, the page the person sees |
+| 8001 | `org` | `/signin`, the page the person sees; `/pages/...`, pages of the server behind |
 
 Publish 8001 only behind `org`: the page trusts the headers Edgible's sign-in sets.
+
+`/pages/...` passes a request on to `/pages/...` at the MCP server's own address, with `X-MCP-User` set, once Edgible's sign-in and mcp-signin's own organisation check say who the person is. A server behind uses it for pages a person fills in themselves rather than through the assistant, such as edgible-mcp's page for storing a key. Small forms only: 16 KB a request, no streaming.
 
 ## Settings
 

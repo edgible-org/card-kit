@@ -6,7 +6,10 @@
 // Two ports, published as two Edgible apps:
 // - PUBLIC_PORT (auth mode none): /mcp, passed on to MCP_UPSTREAM_URL once the caller's token
 //   checks out, plus the OAuth endpoints and metadata, which the client calls with no browser;
-// - LOGIN_PORT (auth mode org): the sign-in page the client opens in the person's browser.
+// - LOGIN_PORT (auth mode org): the sign-in page the client opens in the person's browser, and
+//   /pages/..., pages the server behind serves for the person, such as a form to store a key
+//   without it passing through the assistant: passed on to <upstream origin>/pages/... once
+//   Edgible and the organisation check say who they are, with X-MCP-User as for /mcp.
 // Each call passed on carries X-MCP-User: the email of the person who signed in. Any
 // X-MCP-User a caller sent is dropped, so the server behind can trust it, as long as nothing
 // else reaches that server.
@@ -29,7 +32,7 @@ import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { edgibleProvider } from './oauth.mjs';
 
-const version = '0.1.1';
+const version = '0.2.0';
 const env = (k, d) => (process.env[k] ?? d ?? '').trim();
 const need = (k) => env(k) || (() => { throw new Error(`mcp-signin needs ${k}`); })();
 const trim = (u) => u.replace(/\/$/, '');
@@ -44,7 +47,7 @@ const publicPort = Number(env('PUBLIC_PORT', '8000'));
 const loginPort = Number(env('LOGIN_PORT', '8001'));
 
 await mkdir(state, { recursive: true });
-const { provider, signinPage, signinAnswer } = await edgibleProvider({
+const { provider, signinPage, signinAnswer, who } = await edgibleProvider({
   state, loginUrl, organizationId, users, name, purpose: env('MCP_SIGNIN_PURPOSE'),
 });
 
@@ -95,5 +98,25 @@ login.set('trust proxy', 1);
 login.get('/healthz', (req, res) => res.send('ok\n'));
 login.get('/signin', signinPage);
 login.post('/signin', express.urlencoded({ extended: false, limit: '4kb' }), signinAnswer);
+// Pages of the server behind, for the person signed in here. Only small forms: no streaming.
+const pagesBase = new URL('/pages/', upstream);
+login.all('/pages/*rest', express.raw({ type: () => true, limit: '16kb' }), async (req, res) => {
+  const w = who(req);
+  if (w.refuse) return res.status(403).send(esc(w.refuse));
+  const headers = { 'x-mcp-user': w.email };
+  for (const h of ['content-type', 'accept']) if (req.get(h)) headers[h] = req.get(h);
+  try {
+    const got = await fetch(new URL(req.originalUrl.replace(/^\/pages\//, ''), pagesBase), {
+      method: req.method, headers, redirect: 'manual',
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+    });
+    res.status(got.status);
+    for (const h of ['content-type', 'content-security-policy', 'cache-control']) if (got.headers.get(h)) res.set(h, got.headers.get(h));
+    res.send(Buffer.from(await got.arrayBuffer()));
+  } catch (err) {
+    console.error(`mcp-signin: ${upstream.host} did not answer a page: ${err.message}`);
+    res.status(502).send('The server behind mcp-signin did not answer.');
+  }
+});
 login.use((req, res) => res.status(404).send('not found\n'));
 login.listen(loginPort, () => console.error(`mcp-signin: sign-in page on port ${loginPort} for ${loginUrl}`));
