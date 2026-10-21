@@ -129,6 +129,65 @@ def fit_section(f: dict | None) -> str:
             f'<a href="{FIT_DOC}">how they are decided</a>.</p></div><ul class="fit-list">{rows}</ul>')
 
 
+CLASS_WORDS = {
+    "irreplaceable": "yours alone: backed up, and checked after a restore or a move",
+    "rebuildable": "rebuilt by the app from the rest, such as a search index",
+    "cache": "safe to lose, such as thumbnails or downloads",
+}
+
+
+def keeps_section(c: dict) -> str:
+    """What it keeps: each volume the card's Compose files make, and what it holds, from data:."""
+    card = c["card"]
+    data = card.get("data") or {}
+    declared = data.get("volumes") or {}
+    volumes = []
+    for f in sorted(c["dir"].glob("*compose*.yml")):
+        volumes += [v for v in ((yaml.safe_load(f.read_text()) or {}).get("volumes") or {}) if v not in volumes]
+    if not volumes:
+        return ""
+    if not declared:
+        return ("<h2>What it keeps</h2><p>Its data is in the volumes "
+                + and_list([f"<code>{esc(v)}</code>" for v in volumes])
+                + ". The card does not say yet which of them hold what only you have, so back them all up.</p>")
+    rows = "".join(f'<tr><td><code>{esc(v)}</code></td><td>{esc(CLASS_WORDS.get((declared.get(v) or {}).get("class"), "not said yet"))}</td></tr>'
+                   for v in volumes)
+    check = ("<p>After a restore or a move, a quick count shows the data arrived, with nothing read but numbers and dates.</p>"
+             if data.get("fingerprint") else "")
+    return (f'<h2>What it keeps</h2><div class="scroll"><table><thead><tr><th>Volume</th><th>What it is</th></tr></thead>'
+            f"<tbody>{rows}</tbody></table></div>{check}")
+
+
+def protects_section(c: dict) -> str:
+    """What it protects: each password and key, where it is made and who sees it, from secrets:."""
+    secrets = c["card"].get("secrets") or {}
+    env = c["dir"] / "card.env"
+    old = CARD_FIT._generated(env.read_text()) if env.is_file() else []
+    if not secrets and not old:
+        return ""
+    made = [n for n, s in secrets.items() if (s or {}).get("kind") in ("internal", "shared")]
+    human = [(n, s) for n, s in secrets.items() if (s or {}).get("kind") == "human"]
+    brought = [(n, s) for n, s in secrets.items() if (s or {}).get("kind") == "external"]
+    items = []
+    if made:
+        items.append(f"<li><strong>Made on your machine, seen by nobody:</strong> {and_list([f'<code>{esc(n)}</code>' for n in made])}. "
+                     "The card makes them at first start, and only its own apps read them. They stay on the machine, and in its backups.</li>")
+    for n, s in human:
+        items.append(f"<li><strong>For you:</strong> <code>{esc(n)}</code>: {esc(s.get('for') or 'for a person')}. "
+                     "Made on your machine too, where the <code>show</code> command in the README prints it.</li>")
+    if brought:
+        def source(s: dict) -> str:
+            text = esc(s.get("from") or "")
+            return re.sub(r"(https?://[^\s,;()]+)", r'<a href="\1">\1</a>', text)
+        items.append("<li><strong>You bring</strong>, into <code>card.env</code> on your machine: " + "; ".join(
+            f"<code>{esc(n)}</code>{' (optional)' if s.get('required') is False else ''}{', from ' + source(s) if s.get('from') else ''}"
+            for n, s in brought) + ".</li>")
+    if old:
+        items.append(f"<li><strong>In card.env on your machine:</strong> {and_list([f'<code>{esc(n)}</code>' for n in old])}. "
+                     "Check fills them in, and they stay on the machine.</li>")
+    return "<h2>What it protects</h2><ul>" + "".join(items) + "</ul>"
+
+
 def esc(s: object) -> str:
     return html.escape(str(s), quote=True)
 
@@ -462,6 +521,8 @@ class Site:
 <h2>Machine</h2>
 <p>A place is one serving device. Minimum recommended for each:</p>
 <div class="scroll"><table><thead><tr><th>Place</th><th>Memory</th><th>Disk</th><th>Architecture</th><th>GPU</th></tr></thead><tbody>{places}</tbody></table></div>
+{keeps_section(c)}
+{protects_section(c)}
 {fit_section(c["fit"])}
 {needs_html}
 <article class="readme">
