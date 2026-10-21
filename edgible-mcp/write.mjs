@@ -472,6 +472,18 @@ export async function keyPage(req, res, url, body) {
   }
 }
 
+async function whoami() {
+  // The person, as mcp-signin passed them on (X-MCP-User), and the Edgible account these tools act as.
+  const by = actor.getStore() || '';
+  const person = (by.match(/[^\s@]+@[^\s@]+\.[^\s@]+/) || [])[0] || null;
+  const me = await edgibleJson(['whoami', '--json']).catch(() => ({}));
+  return {
+    you: person ? { email: person, how: 'signed in to this server with Edgible' } : { email: null, how: 'not known: this server is not behind mcp-signin' },
+    tools_act_as: { email: me.account || null, organisation: me.organization?.name || null },
+    use: 'A card setting that takes Edgible accounts, such as OPENCLAW_USERS, takes you.email: the address the person signs in to Edgible with, which may differ from their other email addresses.',
+  };
+}
+
 async function listKeys() {
   const secrets = await edgibleJson(['secret', 'list', '--json']);
   if (!secrets.length) return 'No organisation secrets are stored yet. On a computer with the Edgible CLI: edgible secret set <secret> --from-file key=<file holding the key>.';
@@ -537,6 +549,12 @@ export function registerWriteTools(server) {
     inputSchema: { app: z.string().optional() },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(cardStatus));
+  server.registerTool('whoami', {
+    title: 'Who is asking',
+    description: 'The person using this server, by the email they sign in to Edgible with (from mcp-signin), and the Edgible account and organisation these tools act as. Use it to fill a card setting that names Edgible accounts, such as OPENCLAW_USERS, rather than guessing an email.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, wrap(whoami));
   server.registerTool('request_key', {
     title: 'A link to store a key',
     description: 'A one-time link, for 10 minutes, to a page where the person pastes a key they bring, such as a model\'s API key. Edgible stores it as an organisation secret; the key never passes through the conversation. Then deploy_card takes it in keys. Use it when a card needs a key that list_keys does not show; never ask for the key itself.',
