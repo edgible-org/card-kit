@@ -10,7 +10,10 @@
 // the Compose file. A human one, such as an admin's password, the person needs once: deploy_card
 // makes a first-use password, hands it to that service through an Edgible organisation secret
 // (<app>-first-use), and shows it once in its result, for the person to change at first sign-in.
-// Cards with secrets still in card.env, and cards needing a key the person brings, are refused.
+// A key the person brings (kind external, such as a model's API key) is an Edgible organisation
+// secret they stored once with `edgible secret set`: deploy_card takes it by reference (keys) and
+// Edgible hands the value to the device, so it never passes through the conversation. list_keys
+// names the stored ones, never their values. Cards with secrets still in card.env are refused.
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -161,14 +164,26 @@ function setEnvLines(textIn, changes) {
 
 const isSecretKey = (key, generated) => generated.has(key) || /(PASSWORD|SECRET|TOKEN|KEY|SALT)/.test(key);
 
-async function selfContained({ dir, card }, { app, device, choices, seeds = [], port }) {
+// A card.env value that stands for a key Edgible fills on the device, replaced by ${NAME} once
+// the Compose file is resolved, wherever the card used it.
+// A file's text inside the Compose file: Compose would substitute each $ in it, so it is written $$.
+const literal = (text) => text.replaceAll('$', '$$$$');
+
+// card.yml's auth modes as an Application declaration names them.
+const DECLARED_AUTH = { org: 'edgible-login' };
+
+const keyMark = (name) => `__edgible_key_${name}__`;
+
+async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [] }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
   if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
   const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
   const { values, generated } = parseEnv(envText);
-  const secretKeys = Object.keys(values).filter((k) => isSecretKey(k, generated));
+  const external = new Set(Object.entries(card.secrets || {}).filter(([, s]) => s?.kind === 'external').map(([n]) => n));
+  const secretKeys = Object.keys(values).filter((k) => isSecretKey(k, generated) && !external.has(k));
   if (secretKeys.length) return refused(`${card.metadata.name} has secrets (${secretKeys.join(', ')}). This first version only deploys cards without secrets, so no password ever sits in a Compose file; secrets need Edgible's organisation secrets, which come next.`);
   const changes = { ...choices };
+  for (const name of keys) changes[name] = keyMark(name);
   if ('DEVICE' in values) changes.DEVICE = device;
   await writeFile(path.join(dir, 'card.env'), setEnvLines(envText, changes));
   const r = await run('docker', ['compose', '--env-file', 'card.env', '-f', composeFiles[0], 'config', '--format', 'json'], { cwd: dir });
@@ -188,7 +203,7 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
       const isFile = inside && existsSync(src) && (await stat(src)).isFile();
       if (!isFile) return refused(`service ${svcName} mounts ${inside ? path.relative(real, src) : src} from the machine, which a remote deploy cannot carry`);
       const key = `${svcName}-${path.basename(src)}`.replace(/[^a-zA-Z0-9_.-]/g, '-');
-      configs[key] = { content: await readFile(src, 'utf8') };
+      configs[key] = { content: literal(await readFile(src, 'utf8')) };
       svc.configs = [...(svc.configs || []), { source: key, target: v.target }];
     }
     svc.volumes = keep;
@@ -203,10 +218,19 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
   for (const group of ['volumes', 'networks']) {
     for (const v of Object.values(resolved[group] || {})) { if (v && typeof v === 'object') delete v.name; }
   }
+  // A config the card's Compose file reads from a file of its own travels inside too.
+  for (const [key, cfg] of Object.entries(resolved.configs || {})) {
+    if (!cfg?.file) continue;
+    const src = cfg.file;
+    const inside = src.startsWith(real + path.sep) || src.startsWith(dir + path.sep);
+    if (!inside || !existsSync(src)) return refused(`config ${key} reads ${src}, which a remote deploy cannot carry`);
+    resolved.configs[key] = { content: literal(await readFile(src, 'utf8')) };
+  }
   resolved.name = app;
   if (Object.keys(configs).length) resolved.configs = { ...(resolved.configs || {}), ...configs };
   // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
-  const out = resolved;
+  let out = resolved;
+  for (const name of keys) out = JSON.parse(JSON.stringify(out).replaceAll(keyMark(name), `\${${name}}`));
   if (seeds.length) {
     // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
     // agent can start an app once before it has the secret's value; :? makes that start fail, so
@@ -225,7 +249,7 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
 
 // ---------- Tools ----------
 
-async function deployCard({ card, app, device, choices = {}, hostnames = [], confirm = [] }) {
+async function deployCard({ card, app, device, choices = {}, keys = {}, hostnames = [], confirm = [] }) {
   app = app || card;
   if (!NAME.test(card) || !NAME.test(app)) return refused('card and app names are lowercase letters, digits and dashes');
   const target = await findDevice(device);
@@ -241,8 +265,25 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
     if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this first version handles cards with one`);
     if ((meta.applications || []).some((a) => a.native)) return refused(`${card} installs on the machine itself (native), which these tools never do`);
     const declared = Object.entries(meta.secrets || {});
-    const brought = declared.filter(([, s]) => s.kind === 'external' || s.kind === 'shared').map(([n]) => n);
-    if (brought.length) return refused(`${card} needs ${brought.join(', ')}, which this version cannot take yet: a key the person brings, or one shared between machines`);
+    const shared = declared.filter(([, s]) => s.kind === 'shared').map(([n]) => n);
+    if (shared.length) return refused(`${card} needs ${shared.join(', ')}, shared between machines, which this version cannot take yet`);
+    // Keys the person brings: each given in keys as an organisation secret, NAME -> "secret:key".
+    const external = declared.filter(([, s]) => s.kind === 'external');
+    const unknown = Object.keys(keys).filter((n) => !external.some(([e]) => e === n));
+    if (unknown.length) return refused(`${card} takes no key called ${unknown.join(', ')}; it takes ${external.map(([n]) => n).join(', ') || 'none'}`);
+    const needed = external.filter(([n, s]) => s.required !== false && !keys[n]);
+    if (needed.length) {
+      return refused(`${card} needs ${needed.map(([n, s]) => `${n}${s.from ? ` (from ${s.from})` : ''}`).join(', ')}. ` +
+        'The person stores each once as an Edgible organisation secret, on a computer with the Edgible CLI: ' +
+        '`edgible secret set <secret> --from-file key=<file holding the key>`. Then pass keys, such as ' +
+        `{"${needed[0][0]}": "<secret>:key"}. list_keys shows the secrets already stored. Never ask for the key itself in the conversation.`);
+    }
+    const refs = {};
+    for (const [n, ref] of Object.entries(keys)) {
+      const [secret, key] = String(ref).split(':');
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(secret || '')) return refused(`keys.${n} is "<secret>:<key>", such as "gemini:key"`);
+      refs[n] = { secret, key: key || n };
+    }
     const human = declared.filter(([, s]) => s.kind === 'human');
     const auth = (published[0].authModes || ['org']).join(',');
     const reasons = [];
@@ -250,12 +291,12 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
-    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port });
+    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port, keys: Object.keys(refs) });
     if (built.status !== 'ok') return built;
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
     const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
-    const envFrom = [];
+    const envFrom = Object.entries(refs).map(([name, secretRef]) => ({ name, secretRef }));
     if (firstUse.length) {
       const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-first-use-'));
       try {
@@ -283,7 +324,7 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
     const { organization } = await edgibleJson(['whoami', '--json']);
     const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
       type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
-      policies: { auth: { modes: auth.split(',') } }, hostname: custom ? { generated: true, custom } : { generated: true },
+      policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
     }));
     const declaration = {
       apiVersion: 'v3', kind: 'Application',
@@ -304,7 +345,7 @@ async function deployCard({ card, app, device, choices = {}, hostnames = [], con
       return { status: 'failed', reason: cliError(r) };
     }
     const created = (await apps()).find((a) => a.name === app);
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), confirmed: confirm, result: 'created' });
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, result: 'created' });
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
     if (firstUse.length) {
       result.firstUse = firstUse;
@@ -344,7 +385,9 @@ async function removeCard({ app, confirm = [] }) {
   if (!confirm.includes('remove')) {
     return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name.` }]);
   }
-  const r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
+  let r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
+  // A delete can time out waiting for a device that already let the app go; it is gone if Edgible no longer lists it.
+  if (r.code && !(await apps()).some((a) => a.name === app)) r = { code: 0, stdout: '', stderr: '' };
   if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
   await record({ tool: 'remove_card', app, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
   return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app };
@@ -366,6 +409,12 @@ async function cardStatus({ app }) {
     out.push({ app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype });
   }
   return out;
+}
+
+async function listKeys() {
+  const secrets = await edgibleJson(['secret', 'list', '--json']);
+  if (!secrets.length) return 'No organisation secrets are stored yet. On a computer with the Edgible CLI: edgible secret set <secret> --from-file key=<file holding the key>.';
+  return secrets.map((s) => ({ secret: s.name, keys: s.keys || s.keyNames || [], updated: s.updatedAt || s.createdAt }));
 }
 
 async function activity({ limit = 20 }) {
@@ -390,12 +439,13 @@ export function registerWriteTools(server) {
   };
   server.registerTool('deploy_card', {
     title: 'Deploy an Edgible app card on a device',
-    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards with one published app. A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. Cards with secrets in card.env, or needing a key the person brings, are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
+    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards with one published app. A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
       device: z.string().describe('The Edgible device to run it on, by name'),
       app: z.string().optional().describe('The app name, which sets its address; defaults to the card name'),
       choices: z.record(z.string(), z.string()).optional().describe('card.env settings, such as {"STATIC_SITE_SOURCE": "https://…/main.tar.gz"}'),
+      keys: z.record(z.string(), z.string()).optional().describe('Keys the person brings, each an organisation secret by reference: {"GEMINI_API_KEY": "gemini:key"} (secret name, then key name). list_keys shows what is stored.'),
       hostnames: z.array(z.string()).optional().describe('The person\'s own domain names to attach, such as ["www.example.com"]'),
       confirm: z.array(z.string()).optional().describe('Tokens from an earlier "needs confirmation" result, only after the person agreed'),
     },
@@ -426,6 +476,12 @@ export function registerWriteTools(server) {
     inputSchema: { app: z.string().optional() },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(cardStatus));
+  server.registerTool('list_keys', {
+    title: 'Keys stored with Edgible',
+    description: 'The organisation secrets stored with Edgible, by name and key name, never their values: the keys a person brings, such as a model\'s API key, that deploy_card can pass to a card by reference.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(listKeys));
   server.registerTool('activity', {
     title: 'What these tools did',
     description: 'A plain record of every deploy, move and removal these tools made: when, which app and device, whether the person agreed first, and the result.',
