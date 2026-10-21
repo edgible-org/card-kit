@@ -309,14 +309,61 @@ async function whoami() {
   return who.json;
 }
 
+// Signing the CLI in without a shell: `edgible auth login --no-browser` prints a link and a code
+// that anyone approves in a browser with their Edgible login, then waits up to 10 minutes. This
+// server runs it in the background when it is not signed in, and hands the link to whoever asks
+// (sign_in, or any tool that needs Edgible), so a person signs it in from their phone. A link
+// that expired starts a new sign-in. The CLI keeps the sign-in where it always does.
+let signing = null; // { link, code, at, done, failed }
+
+function startSignIn() {
+  if (signing && !signing.done && Date.now() - signing.at < 9 * 60000) return signing;
+  const s = { link: null, code: null, at: Date.now(), done: false, failed: null };
+  const proc = spawn('edgible', ['auth', 'login', '--no-browser'], {
+    env: { ...process.env, NO_COLOR: '1', EDGIBLE_NO_UPDATE_NOTIFIER: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const read = (chunk) => {
+    const out = String(chunk);
+    s.code = s.code || (out.match(/Confirm this code in your browser:\s+(\S+)/) || [])[1] || null;
+    s.link = s.link || (out.match(/(https:\/\/\S+cli-auth\S*)/) || [])[1] || null;
+  };
+  proc.stdout.on('data', read);
+  proc.stderr.on('data', read);
+  proc.on('close', (code) => { s.done = true; if (code) s.failed = `the sign-in ended (exit ${code})`; });
+  signing = s;
+  return s;
+}
+
+async function signIn() {
+  const who = await whoami();
+  if (who) return { status: 'signed in', account: who.account, organisation: who.organization?.name };
+  const s = startSignIn();
+  for (let i = 0; i < 20 && !s.link && !s.done; i++) await new Promise((ok) => setTimeout(ok, 1000));
+  if (!s.link) {
+    return { status: 'starting', next: 'Edgible is preparing a sign-in link, which takes about a minute the first time. Call sign_in again shortly.' };
+  }
+  return { status: 'needs approval', link: s.link, code: s.code, expires_in_minutes: Math.max(1, 10 - Math.round((Date.now() - s.at) / 60000)),
+    next: 'Give the person this link. They open it on any device, check the code matches, and approve with their Edgible login; this server then acts as that account. Then call the tool again. Never approve for them.' };
+}
+
+// For a server that has just started: begin signing in when it is not signed in, so the link is
+// ready by the time someone asks.
+export async function prepareSignIn() {
+  if (!(await whoami())) startSignIn();
+}
+
+async function notSignedIn() {
+  const s = await signIn();
+  if (s.status === 'signed in') return null;
+  return ['The Edgible CLI this server runs is not signed in yet, so it cannot see your apps.',
+    s.link ? `Open this link on any device, check the code is ${s.code}, and approve it with your Edgible login:\n\n    ${s.link}\n\nThen ask again.`
+      : 'A sign-in link is being prepared: call sign_in in a minute.',
+    `(Or, on the machine that runs this server: ${SIGN_IN}.) find and describe work without it.`].join('\n');
+}
+
 async function whatsRunning({ app, device }) {
   const who = await whoami();
-  if (!who) {
-    return ['The Edgible CLI this server runs is not signed in, so it cannot see your apps.',
-      'To sign it in, run this on the machine that runs the server, and open the link it prints:',
-      '', `    ${SIGN_IN}`, '',
-      'find and describe work without it.'].join('\n');
-  }
+  if (!who) return notSignedIn();
   if (app && !/^[A-Za-z0-9_-]{1,64}$/.test(app)) return `"${app}" is not an app name.`;
 
   if (!running || Date.now() - running.at > RUNNING_TTL) {
@@ -382,9 +429,9 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.7.2';
 
-export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
+export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
 // The read-only tools, on any MCP server: this one, or the combined edgible server.
 export function registerReadTools(server) {
@@ -408,6 +455,12 @@ export function registerReadTools(server) {
     },
     annotations: { ...ro, openWorldHint: true },
   }, text(describe));
+  server.registerTool('sign_in', {
+    title: 'Sign this server in to Edgible',
+    description: 'Whether the Edgible CLI this server runs is signed in; if not, a link and code to approve it from any device (a phone too) with an Edgible login, valid for 10 minutes. Use it when a tool says this server is not signed in. Give the link to the person; never approve it for them.',
+    inputSchema: {},
+    annotations: { ...ro, openWorldHint: true },
+  }, text(async () => JSON.stringify(await signIn(), null, 2)));
   server.registerTool('whats_running', {
     title: 'What is running, and does it work',
     description: 'List the devices and published apps of the Edgible organization this server is signed in to, and check each https hostname answers the way its auth mode says (none: the app; org: a redirect to sign in; api-key: 401). Give an app name for that app alone, with edgible app doctor\'s verdict. Takes up to a minute for many apps.',
