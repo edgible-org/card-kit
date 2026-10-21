@@ -578,7 +578,7 @@ async function gatewaySpend({ days = 30 }) {
     }
   }
   const byModel = Object.values(models).map((e) => ({ ...e, spend: round(e.spend) })).sort((a, b) => b.spend - a.spend);
-  return { period: `last ${days} days`, total: round(byModel.reduce((s, e) => s + e.spend, 0)), by_app: byApp, by_model: byModel,
+  return { scope: 'All apps on your AI gateway: the owner\'s view, through the gateway\'s master key', period: `last ${days} days`, total: round(byModel.reduce((s, e) => s + e.spend, 0)), by_app: byApp, by_model: byModel,
     note: 'Spend is the gateway\'s own estimate at list prices. by_app covers each key since it was made (or its budget last reset); by_model covers the period.' };
 }
 
@@ -676,7 +676,7 @@ export function registerWriteTools(server) {
   }, wrap(gatewayKey));
   server.registerTool('gateway_spend', {
     title: 'AI spending, from the shared gateway',
-    description: 'What the shared AI gateway spent: by app (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
+    description: 'The owner\'s view of the shared AI gateway\'s spending, scoped to all apps: by app (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
     inputSchema: { days: z.number().int().positive().max(365).optional().describe('How many days back for the by-model figures; default 30') },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(gatewaySpend));
