@@ -518,6 +518,7 @@ async function whoami() {
 // passes it to the app by reference and nobody sees it. It needs the gateway's address
 // (EDGIBLE_MCP_GATEWAY_URL) and its master key, kept by this server (request_key, keep server).
 const GATEWAY_URL = (process.env.EDGIBLE_MCP_GATEWAY_URL || '').replace(/\/$/, '');
+const APP_KEY_ROUTES = ['/v1/chat/completions', '/chat/completions', '/v1/models', '/models', '/key/info'];
 
 async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
   if (!NAME.test(app || '')) return refused('app is the name the app will have, such as agent-gw');
@@ -530,7 +531,8 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
   let made;
   try {
     const res = await fetch(`${GATEWAY_URL}/key/generate`, { method: 'POST', headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ key_alias: app, max_budget: Number(budget), budget_duration: period, metadata: { made_by: 'edgible-mcp gateway_key', by: actor.getStore() || 'assistant' } }) });
+      // An app's key may only use models and read its own record: never others' spending or the admin.
+      body: JSON.stringify({ key_alias: app, max_budget: Number(budget), budget_duration: period, allowed_routes: APP_KEY_ROUTES, metadata: { made_by: 'edgible-mcp gateway_key', by: actor.getStore() || 'assistant' } }) });
     made = await res.json();
     if (!res.ok || !made.key) return { status: 'failed', reason: `the gateway did not make a key (${res.status}): ${JSON.stringify(made).slice(0, 200)}` };
   } catch (err) {
