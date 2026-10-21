@@ -578,7 +578,26 @@ async function gatewaySpend({ days = 30 }) {
     }
   }
   const byModel = Object.values(models).map((e) => ({ ...e, spend: round(e.spend) })).sort((a, b) => b.spend - a.spend);
-  return { scope: 'All apps on your AI gateway: the owner\'s view, through the gateway\'s master key', period: `last ${days} days`, total: round(byModel.reduce((s, e) => s + e.spend, 0)), by_app: byApp, by_model: byModel,
+  // Each app's spend by model over the period, from LiteLLM's daily activity (per model, split by
+  // key, named by the key's alias). Calls made with no app key, such as the owner's own, are "owner".
+  const activity = await get(`/user/daily/activity?start_date=${day(start)}&end_date=${day(end)}`).catch(() => ({}));
+  const matrix = {};
+  for (const d of activity.results || []) {
+    for (const [model, m] of Object.entries((d.breakdown || {}).models || {})) {
+      for (const k of Object.values(m.api_key_breakdown || {})) {
+        const app = (k.metadata || {}).key_alias || 'owner';
+        const row = matrix[app] || (matrix[app] = {});
+        const cell = row[model] || (row[model] = { spend: 0, tokens: 0, calls: 0 });
+        const x = k.metrics || {};
+        cell.spend += Number(x.spend) || 0; cell.tokens += Number(x.total_tokens) || 0; cell.calls += Number(x.api_requests) || 0;
+      }
+    }
+  }
+  const byAppAndModel = Object.entries(matrix).map(([app, row]) => ({
+    app, total: round(Object.values(row).reduce((s, c) => s + c.spend, 0)),
+    models: Object.entries(row).map(([model, c]) => ({ model, spend: round(c.spend), tokens: c.tokens, calls: c.calls })).sort((a, b) => b.spend - a.spend),
+  })).sort((a, b) => b.total - a.total);
+  return { scope: 'All apps on your AI gateway: the owner\'s view, through the gateway\'s master key', period: `last ${days} days`, total: round(byModel.reduce((s, e) => s + e.spend, 0)), by_app: byApp, by_model: byModel, by_app_and_model: byAppAndModel,
     note: 'Spend is the gateway\'s own estimate at list prices. by_app covers each key since it was made (or its budget last reset); by_model covers the period.' };
 }
 
@@ -676,7 +695,7 @@ export function registerWriteTools(server) {
   }, wrap(gatewayKey));
   server.registerTool('gateway_spend', {
     title: 'AI spending, from the shared gateway',
-    description: 'The owner\'s view of the shared AI gateway\'s spending, scoped to all apps: by app (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
+    description: 'The owner\'s view of the shared AI gateway\'s spending, scoped to all apps: by app, by app and model, (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
     inputSchema: { days: z.number().int().positive().max(365).optional().describe('How many days back for the by-model figures; default 30') },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(gatewaySpend));
