@@ -311,6 +311,14 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
     const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
+    // A gateway deployed again under a name it had before reuses its kept master key: its old
+    // secrets volume, which remove_card leaves on the device, still holds that key, and the
+    // card never replaces a secret that exists.
+    if (gateway) {
+      const kept = await readFile(keptMaster(app), 'utf8').then((s) => s.trim()).catch(() => '');
+      const master = firstUse.find((f) => f.name === GATEWAY_MASTER);
+      if (kept && master) master.value = kept;
+    }
     const envFrom = Object.entries(refs).map(([name, secretRef]) => ({ name, secretRef }));
     if (firstUse.length) {
       const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-first-use-'));
@@ -555,10 +563,16 @@ async function publishGatewayApi({ app, deviceId, port, master }) {
   if (!host) return { status: 'failed', reason: `${name} was published without an address` };
   const url = `https://${host}`;
   await mkdir(KEYS_DIR, { recursive: true });
-  if (master) await writeFile(path.join(KEYS_DIR, GATEWAY_MASTER), master.value, { mode: 0o600 });
+  if (master) {
+    await writeFile(path.join(KEYS_DIR, GATEWAY_MASTER), master.value, { mode: 0o600 });
+    await writeFile(keptMaster(app), master.value, { mode: 0o600 });
+  }
   await writeFile(GATEWAY_FILE, JSON.stringify({ app, api: name, url }, null, 2));
   return { status: 'ok', url };
 }
+
+// Kept after remove_card too, for a redeploy under the same name (see deploy_card).
+const keptMaster = (app) => path.join(KEYS_DIR, `gateway-${app}.${GATEWAY_MASTER}`);
 
 async function forgetGateway(app) {
   await run('edgible', ['app', 'delete', `${app}-api`, '--yes'], { timeout: 300000 });
