@@ -456,7 +456,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.6';
+export const VERSION = '0.7.7';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
@@ -490,7 +490,7 @@ export function registerReadTools(server) {
   }, text(async () => JSON.stringify(await signIn(), null, 2)));
   server.registerTool('agent_spend', {
     title: 'This agent\'s own AI spending',
-    description: 'This agent\'s own spending on its AI gateway, against its own budget, and when the budget resets: scoped to this agent only, never other apps or the total. Through its own key, read-only.',
+    description: 'How much have you (this agent) spent? This agent\'s own AI spending: money, cost and usage on its AI gateway, against its own budget, what is left, and when the budget resets. Use it for any question about your spending, cost, budget or how much you have used; it needs no key or secret from you. Scoped to this agent only, never other apps or the total; read-only.',
     inputSchema: {},
     annotations: { ...ro, openWorldHint: true },
   }, text(agentSpend));
