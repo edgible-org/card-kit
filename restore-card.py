@@ -21,6 +21,12 @@ In order:
             already lost), stops it, and removes the volumes it restores
   volumes   creates them, loads each .tgz, starts each dump's service alone and loads the
             dump, and leaves rebuildable and cache volumes empty for the app to rebuild
+  --move    the target of a move (with --as, or into a new directory): each secret in card.yml's
+            secrets: follows its on-move rule. carry keeps it; new drops it, so the card's
+            <card>-secrets service makes a fresh one at start, and people sign in again; new-then-
+            update makes a fresh one too, then runs its update command in its service, which reads
+            the new value from /run/card-secrets, so the data takes it. A move then rotates every
+            secret the data does not need. Without --move, every secret is restored as it was.
   start     up --wait
   verify    verify-card against the backup: running, answering, and the same fingerprint
 
@@ -81,6 +87,51 @@ def port_taken(port: int, also: set[int]) -> bool:
     return False
 
 
+# What happens to a secret on a move when card.yml does not say, by its use (card-kit README, Secrets).
+ON_MOVE = {"signing": "new", "token": "new", "password": "new-then-update", "encryption": "carry"}
+
+
+def read_secrets(card_yml: Path) -> dict[str, dict]:
+    """secrets: from card.yml, {NAME: {kind, use, on-move, update: {service, command}}}, read
+    without a YAML library: names two spaces in, their fields four, update's six."""
+    m = re.search(r"\nsecrets:\s*\n((?:[ \t]+.*\n?|\s*\n)+)", card_yml.read_text())
+    out, name, sub = {}, None, None
+    for line in (m.group(1) if m else "").splitlines():
+        if re.match(r"^  ([A-Z][A-Z0-9_]*):\s*$", line):
+            name, sub = line.strip()[:-1], None
+            out[name] = {}
+        elif name and (f := re.match(r"^    ([a-z-]+):\s*(.*)$", line)):
+            key, value = f.groups()
+            if key == "update":
+                sub = out[name].setdefault("update", {})
+            else:
+                sub = None
+                out[name][key] = re.sub(r"\s+#.*$", "", value).strip().strip('"')
+        elif name and sub is not None and (f := re.match(r"^      ([a-z]+):\s*(.*)$", line)):
+            sub[f.group(1)] = f.group(2).strip()
+    return out
+
+
+def on_move(secret: dict) -> str:
+    if secret.get("on-move"):
+        return secret["on-move"]
+    if secret.get("kind") == "internal":
+        return ON_MOVE.get(secret.get("use", ""), "carry")
+    return "carry"
+
+
+def secrets_volume(composes: list) -> tuple[object, str, str] | None:
+    """The card-secrets service: (its Compose file, its service, the volume holding the secrets)."""
+    for c in composes:
+        config = json.loads(sh(f"{c.cmd} config --format json").stdout)
+        for name, spec in (config.get("services") or {}).items():
+            if "CARD_SECRETS" in ((spec or {}).get("environment") or {}):
+                for m in spec.get("volumes") or []:
+                    if m.get("type") == "volume" and m.get("target") == "/run/card-secrets":
+                        return c, name, c.volumes[m["source"]]
+    return None
+
+
 def make_copy(card: Path, name: str, original: str) -> list[str]:
     """Name the copy's projects and containers after NAME, and move each taken *_PORT."""
     changes = []
@@ -121,6 +172,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--as", dest="name", help="restore as a copy beside the original, named NAME")
     ap.add_argument("--yes", action="store_true", help="restore over the card without asking")
     ap.add_argument("--no-backup", action="store_true", help="in place: skip the backup of the card first")
+    ap.add_argument("--move", action="store_true",
+                    help="the target of a move: each secret follows its on-move rule in card.yml")
     ap.add_argument("--dry-run", action="store_true", help="check the files, say what it would do, change nothing")
     args = ap.parse_args(argv)
 
@@ -177,6 +230,13 @@ def main(argv: list[str]) -> int:
         print("  first: " + ("no backup of the card (--no-backup)" if args.no_backup else "backup-card of the card as it is"))
     print("  then: start, and verify-card against the backup" +
           (f" (fingerprint {json.dumps(manifest['fingerprint'])})" if manifest.get("fingerprint") else ""))
+    secrets = read_secrets(backup / "card" / "card.yml") if args.move else {}
+    if args.move and not args.name and not fresh:
+        print("--move is for the target of a move: with --as, or into a new directory", file=sys.stderr)
+        return 2
+    for s, spec in secrets.items():
+        rule = on_move(spec)
+        print(f"  secret {s}: {'kept as it was' if rule == 'carry' else 'made new at start' if rule == 'new' else 'made new, then ' + spec.get('update', {}).get('service', '?') + ' takes it'} ({rule})")
     if args.dry_run:
         print("dry run: nothing changed")
         return 0
@@ -243,6 +303,36 @@ def main(argv: list[str]) -> int:
                 raise RuntimeError(f"{v}: the restore command failed (exit {r.returncode}): "
                                    f"{r.stderr.decode(errors='replace')[-300:]}")
             print(f"loaded {v}")
+        rotate = {s: on_move(spec) for s, spec in secrets.items() if on_move(spec) != "carry"}
+        if rotate:
+            found = secrets_volume(here)
+            if not found:
+                raise RuntimeError("card.yml declares secrets, but no card-secrets service keeps them in /run/card-secrets")
+            sc, maker, volume = found
+            # Dropped, the card's secrets service makes each one fresh when the card starts.
+            sh(f"docker run --rm -v {shlex.quote(volume)}:/s alpine rm -f "
+               + " ".join(shlex.quote(f"/s/{s}") for s in rotate), timeout=300)
+            sh(f"{sc.cmd} up {shlex.quote(maker)}", timeout=600)
+            for s, rule in rotate.items():
+                if rule != "new-then-update":
+                    print(f"secret {s}: new")
+                    continue
+                update = secrets[s].get("update") or {}
+                service, command = update.get("service"), update.get("command")
+                if not service or not command:
+                    raise RuntimeError(f"secret {s} is new-then-update, but card.yml gives it no update")
+                c = next((c for c in here if service in c.services), None)
+                if c is None or volume not in {c.volumes.get(k) for k in c.mounts.get(service, set())}:
+                    raise RuntimeError(f"secret {s}: {service} must mount the secrets volume to take the new value")
+                sh(f"{c.cmd} up -d --wait {shlex.quote(service)}", timeout=900)
+                # The value goes from the file to the command inside the container, never on a command line here.
+                r = sh(f"{c.cmd} exec -T {shlex.quote(service)} sh -c "
+                       + shlex.quote(f'{s}="$(cat /run/card-secrets/{s})"; export {s}; {command}'),
+                       check=False, timeout=600)
+                if r.returncode != 0:
+                    raise RuntimeError(f"secret {s}: the update in {service} failed (exit {r.returncode}): "
+                                       f"{(r.stderr or r.stdout)[-300:]}")
+                print(f"secret {s}: new, and {service} took it")
         for c in here:
             sh(f"{c.cmd} up -d --wait", timeout=1800)
         print("started")
