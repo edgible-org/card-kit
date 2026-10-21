@@ -214,6 +214,15 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
         : `${p.host_ip ? `${p.host_ip}:` : ''}${p.published ? `${p.published}:` : ''}${p.target}${p.protocol && p.protocol !== 'tcp' ? `/${p.protocol}` : ''}`));
     }
   }
+  // A service a profile left out (such as a pattern's bundled gateway when it uses a shared one) is
+  // not in the resolved file; drop depends_on entries naming it, which the device rejects even
+  // when they are required: false.
+  for (const svc of Object.values(resolved.services || {})) {
+    if (svc?.depends_on && typeof svc.depends_on === 'object' && !Array.isArray(svc.depends_on)) {
+      for (const dep of Object.keys(svc.depends_on)) if (!(dep in resolved.services)) delete svc.depends_on[dep];
+      if (!Object.keys(svc.depends_on).length) delete svc.depends_on;
+    }
+  }
   // Names follow the new project, so nothing collides with the card's own project on the device.
   for (const group of ['volumes', 'networks']) {
     for (const v of Object.values(resolved[group] || {})) { if (v && typeof v === 'object') delete v.name; }
