@@ -4,7 +4,8 @@
     python3 verify-card.py ~/linkding-copy --against ~/linkding-backups/20261018-1001
     python3 verify-card.py ~/linkding
 
-  running      every service of each Compose file that runs here is running, and healthy
+  running      every service of each Compose file that runs here is running, and healthy; a
+               one-shot service (restart: "no") has run and exited 0
                when it has a healthcheck
   answering    every TCP port it publishes on the machine accepts a connection
   fingerprint  data.fingerprint's command; with --against, its line must equal the one in
@@ -33,13 +34,18 @@ test_card, sh = backup_card.test_card, backup_card.sh
 
 
 def services_state(c) -> dict[str, str]:
-    """Each service's state: running, healthy, or what Docker says instead."""
+    """Each service's state: running, healthy, done, or what Docker says instead. done is a
+    one-shot service (restart: "no"), such as a card's <card>-secrets, that ran and exited 0."""
     out = sh(f"{c.cmd} ps --all --format json", check=False).stdout.strip()
     rows = json.loads(out) if out.startswith("[") else [json.loads(l) for l in out.splitlines() if l.strip()]
+    config = json.loads(sh(f"{c.cmd} config --format json", check=False).stdout or "{}").get("services") or {}
     state = {}
     for r in rows:
         health = r.get("Health") or ""
         state[r["Service"]] = health if r.get("State") == "running" and health else r.get("State", "?")
+        if (r.get("State") == "exited" and r.get("ExitCode") == 0
+                and str((config.get(r["Service"]) or {}).get("restart", "no")) in ("no", "False", "false")):
+            state[r["Service"]] = "done"
     return state
 
 
@@ -88,7 +94,7 @@ def main(argv: list[str]) -> int:
         state = services_state(c)
         for service in sorted(c.services):
             s = state.get(service, "missing")
-            ok = s in ("running", "healthy")
+            ok = s in ("running", "healthy", "done")
             failed |= not ok
             print(f"running {service}: {'pass' if ok else 'fail'} ({s})")
         for service, host, port in published_ports(c):
