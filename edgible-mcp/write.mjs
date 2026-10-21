@@ -275,7 +275,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     if (needed.length) {
       return refused(`${card} needs ${needed.map(([n, s]) => `${n}${s.from ? ` (from ${s.from})` : ''}`).join(', ')}. ` +
         'The person stores each once as an Edgible organisation secret, on a computer with the Edgible CLI: ' +
-        '`edgible secret set <secret> --from-file key=<file holding the key>`. Then pass keys, such as ' +
+        '`edgible secret set <secret> --from-file key=<file holding the key>`. Or call request_key for a link where they paste it, from any device. Then pass keys, such as ' +
         `{"${needed[0][0]}": "<secret>:key"}. list_keys shows the secrets already stored. Never ask for the key itself in the conversation.`);
     }
     const refs = {};
@@ -411,6 +411,67 @@ async function cardStatus({ app }) {
   return out;
 }
 
+// Key links: request_key makes a one-time link to a page where the person pastes a key, which is
+// stored as an organisation secret and never passes through the assistant. The page is served by
+// keyPage below, at EDGIBLE_MCP_PAGES_URL (mcp-signin's /pages/ on its sign-in address, behind
+// Edgible's org sign-in), and each link works once, for KEY_LINK_MINUTES.
+const PAGES_URL = (process.env.EDGIBLE_MCP_PAGES_URL || '').replace(/\/$/, '');
+const KEY_LINK_MINUTES = 10;
+const keyLinks = new Map(); // token -> { name, secret, key, by, at }
+const SECRET_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+async function requestKey({ name, secret }) {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(name || '')) return refused('name is the key\'s variable, such as GEMINI_API_KEY');
+  secret = secret || name.toLowerCase().replace(/_api_key$|_key$/, '').replace(/_/g, '-');
+  if (!SECRET_NAME.test(secret)) return refused('secret is lower-case letters, digits and dashes, such as gemini');
+  if (!PAGES_URL) {
+    return { status: 'no link', reason: 'This server has no page for keys (EDGIBLE_MCP_PAGES_URL is not set).',
+      next: `On a computer with the Edgible CLI: edgible secret set ${secret} --from-file key=<file holding the key>. Then deploy with keys {"${name}": "${secret}:key"}.` };
+  }
+  for (const [t, l] of keyLinks) if (Date.now() - l.at > KEY_LINK_MINUTES * 60000) keyLinks.delete(t);
+  const token = randomBytes(24).toString('base64url');
+  keyLinks.set(token, { name, secret, key: 'key', by: actor.getStore() || 'assistant', at: Date.now() });
+  const exists = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).some((s) => s.name === secret);
+  return { status: 'link', link: `${PAGES_URL}/key?t=${token}`, expires_in_minutes: KEY_LINK_MINUTES, secret, replaces: exists,
+    next: `Give the person this link. They open it, sign in with Edgible, and paste the key there; it is stored as organisation secret ${secret}${exists ? ', replacing the one stored now' : ''}, and you never see it. When they say it is done, deploy with keys {"${name}": "${secret}:key"}.` };
+}
+
+const page = (title, body) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><body style="font:16px system-ui;max-width:32em;margin:3em auto;padding:0 1em;line-height:1.5"><h1>${esc(title)}</h1>${body}`;
+
+// The key page, for edgible-mcp's HTTP mode: GET shows the form, POST stores the key. Only
+// mcp-signin reaches this server, and it sets X-MCP-User once Edgible has signed the person in.
+export async function keyPage(req, res, url, body) {
+  const send = (code, title, html) => res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'" }).end(page(title, html));
+  const user = req.headers['x-mcp-user'];
+  if (!user) return send(403, 'Not allowed', '<p>Open this link from your assistant, through Edgible\'s sign-in.</p>');
+  const form = req.method === 'POST' ? new URLSearchParams(body || '') : null;
+  const token = form ? form.get('t') : url.searchParams.get('t');
+  const link = keyLinks.get(token || '');
+  if (!link || Date.now() - link.at > KEY_LINK_MINUTES * 60000) {
+    return send(410, 'This link has expired', '<p>Ask your assistant for a new one.</p>');
+  }
+  if (!form) {
+    return send(200, `Store your ${link.name}`, `<p>Paste the key below. It is stored with Edgible as the organisation secret <b>${esc(link.secret)}</b>, and goes from this page to Edgible: your assistant never sees it.</p>
+<form method="post" action="key"><input type="hidden" name="t" value="${esc(token)}"><input name="value" type="password" autocomplete="off" required style="font:inherit;width:100%;padding:.4em" aria-label="${esc(link.name)}"><p><button style="font:inherit;padding:.5em 1.2em">Store it</button></p></form>`);
+  }
+  const value = (form.get('value') || '').trim();
+  if (!value) return send(400, 'Nothing to store', '<p>Paste the key, then press Store it.</p>');
+  keyLinks.delete(token);
+  const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-key-'));
+  try {
+    const file = path.join(tmp, 'key');
+    await writeFile(file, value, { mode: 0o600 });
+    const r = await run('edgible', ['secret', 'set', link.secret, '--from-file', `${link.key}=${file}`], { timeout: 120000 });
+    await record({ tool: 'store_key', secret: link.secret, for: link.name, by: `${user} on the key page`, asked: link.by, result: r.code ? 'failed' : 'stored' });
+    if (r.code) return send(500, 'Not stored', `<p>Edgible did not store it: ${esc(cliError(r))}</p><p>Ask your assistant for a new link and try again.</p>`);
+    return send(200, 'Stored', `<p>Your ${esc(link.name)} is stored with Edgible as <b>${esc(link.secret)}</b>. Go back to your assistant and tell it it is done.</p>`);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+}
+
 async function listKeys() {
   const secrets = await edgibleJson(['secret', 'list', '--json']);
   if (!secrets.length) return 'No organisation secrets are stored yet. On a computer with the Edgible CLI: edgible secret set <secret> --from-file key=<file holding the key>.';
@@ -476,6 +537,15 @@ export function registerWriteTools(server) {
     inputSchema: { app: z.string().optional() },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(cardStatus));
+  server.registerTool('request_key', {
+    title: 'A link to store a key',
+    description: 'A one-time link, for 10 minutes, to a page where the person pastes a key they bring, such as a model\'s API key. Edgible stores it as an organisation secret; the key never passes through the conversation. Then deploy_card takes it in keys. Use it when a card needs a key that list_keys does not show; never ask for the key itself.',
+    inputSchema: {
+      name: z.string().describe('The key\'s variable, as the card names it, such as GEMINI_API_KEY'),
+      secret: z.string().optional().describe('The organisation secret to store it as, such as gemini; defaults from the name'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, wrap(requestKey));
   server.registerTool('list_keys', {
     title: 'Keys stored with Edgible',
     description: 'The organisation secrets stored with Edgible, by name and key name, never their values: the keys a person brings, such as a model\'s API key, that deploy_card can pass to a card by reference.',
