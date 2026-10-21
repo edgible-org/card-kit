@@ -20,7 +20,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { READ_INSTRUCTIONS, VERSION, registerReadTools } from './server.mjs';
-import { ALLOWED, RECORD, STATE, WRITE_INSTRUCTIONS, actor, registerWriteTools } from './write.mjs';
+import { ALLOWED, RECORD, STATE, WRITE_INSTRUCTIONS, actor, keyPage, registerWriteTools } from './write.mjs';
 
 const argv = process.argv.slice(2);
 const allowWrite = argv.includes('--allow-write') || process.env.EDGIBLE_MCP_ALLOW_WRITE === '1';
@@ -48,6 +48,17 @@ if (!port) {
   createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/healthz') { res.writeHead(200).end('ok\n'); return; }
+    // The page where a person stores a key (write.mjs), reached through mcp-signin's /pages/.
+    if (url.pathname === '/pages/key' && allowWrite) {
+      const chunks = [];
+      let size = 0;
+      if (req.method === 'POST') for await (const c of req) { size += c.length; if (size > 16384) { res.writeHead(413).end('too large\n'); return; } chunks.push(c); }
+      await keyPage(req, res, url, Buffer.concat(chunks).toString('utf8')).catch((err) => {
+        console.error(`edgible-mcp: key page failed: ${err.message}`);
+        if (!res.headersSent) res.writeHead(500).end('failed\n');
+      });
+      return;
+    }
     if (url.pathname !== '/mcp') { res.writeHead(404).end('not found\n'); return; }
     try {
       let body;

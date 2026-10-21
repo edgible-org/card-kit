@@ -1,6 +1,6 @@
 {
   "name": "mcp-signin",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Sign in with Edgible in front of any MCP server, for Claude on the web and phone",
   "type": "module",

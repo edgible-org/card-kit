@@ -130,5 +130,5 @@ export async function edgibleProvider({ state, loginUrl, organizationId, users, 
     res.redirect(303, back.href);
   }
 
-  return { provider, signinPage, signinAnswer };
+  return { provider, signinPage, signinAnswer, who };
 }
