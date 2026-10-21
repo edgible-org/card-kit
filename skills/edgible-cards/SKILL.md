@@ -158,7 +158,7 @@ Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guide
    ```
 
    It installs for the user, under `~/.edgible/cli`, checks the download's sha256, and keeps the previous version. A step it cannot pass stops it with an `EDG` code and the fix.
-4. **Log in:** `edgible auth login --no-browser` prints a link and a code, then waits up to 10 minutes. Give both to the person: they open the link in their browser, signed in to Edgible, check the code, and approve. When the command prints nothing because there is no terminal, run it as `script -qfc 'edgible auth login --no-browser' /tmp/edgible-login.log` (Linux) in the background and read the link from that file. Then `edgible whoami` shows the account and organisation. With several, `edgible auth select-org`.
+4. **Log in:** `edgible auth login --no-browser` prints a link and a code, then waits up to 10 minutes. Give both to the person: they open the link in their browser, signed in to Edgible, check the code, and approve. When the command prints nothing because there is no terminal, run it as `script -qfc 'edgible auth login --no-browser' /tmp/edgible-login.log` (Linux) in the background and read the link from that file. Then don't end your turn: the person approving is what you are waiting for. Check `edgible whoami` every few seconds until it shows them logged in (up to 10 minutes), then carry on by yourself. Whenever you do stop to wait on the person, end that message with the link and code again, since earlier output may have scrolled out of sight. Then `edgible whoami` shows the account and organisation. With several, `edgible auth select-org`.
 5. **The device.** Ask for a name: letters and digits, unique in the organisation, such as the machine and its OS (`minipc`, `lggram17ubuntu26`). Then ask how it should run:
    - **Always on** (recommended for anything others rely on): a system service that starts at boot, with nobody logged in. The CLI is in the user's `~/.local/bin`, which `sudo` does not search, so link it first:
 
@@ -171,6 +171,16 @@ Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guide
 
    It takes under a minute and ends with `Agent is online`. Use `--yes`: `--non-interactive`, in older guides, is deprecated. A machine that was a device before reconnects to it, apps included. `edgible install --help` lists the choices for that, such as `--device` and `--new-device`.
 6. **Check:** `edgible agent status` shows it running and online, and `edgible device list` shows the device `online`. Then [Keep it running](#keep-it-running) applies to it too.
+
+### Make a machine
+
+Someone with no spare computer, or who doesn't want to change theirs, can try Edgible in a virtual machine on the computer they have: nothing to buy, nothing on their own system to break, and deleted in one step when they are done. Use Multipass (Canonical's, on macOS, Windows and Linux; on macOS `brew install --cask multipass`, with their yes), and ask before making one:
+
+```bash
+multipass launch 26.04 --name edgible-vm --cpus 2 --memory 4G --disk 30G
+```
+
+Size it for what they want to run: 2 GB for a website, 4 GB for an AI agent, 20 to 30 GB of disk. Open no ports, in the VM or on the host: Edgible connects out. Then set Edgible up inside it as above, running each command through `multipass exec edgible-vm -- bash -lc '...'`, with `sudo` there for the steps that need it. There is no terminal in that route, so the sign-in runs in the background as step 4 says. Name the device after the VM in letters and digits, such as `edgiblevm`. Say plainly that the VM runs only while their computer is on and awake: fine for trying and learning, and when other people come to rely on an app, move it to a machine that stays on, as in [Move to another machine](#move-to-another-machine). For a small cloud server instead, the person makes the account and pays; you set it up over SSH the same way, with key sign-in and no inbound ports besides SSH.
 
 ## 3. Deploy
 
