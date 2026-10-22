@@ -178,7 +178,7 @@ const DECLARED_AUTH = { org: 'edgible-login' };
 
 const keyMark = (name) => `__edgible_key_${name}__`;
 
-async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [] }) {
+async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [], user = '', published = '' }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
   if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
   const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
@@ -189,6 +189,21 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
   const changes = { ...choices };
   for (const name of keys) changes[name] = keyMark(name);
   if ('DEVICE' in values) changes.DEVICE = device;
+  // Who may sign in: a card that names Edgible accounts, such as openclaw's OPENCLAW_USERS, is
+  // locked to the person deploying it unless the choices say otherwise, never left open to its
+  // own password.
+  if ('OPENCLAW_USERS' in values && !values.OPENCLAW_USERS && !choices.OPENCLAW_USERS && user) changes.OPENCLAW_USERS = user;
+  // A card that works out its own address from its app's usual name, such as
+  // OPENCLAW_URL=https://openclaw.<org>…, gets the address it will really have when the app is
+  // named otherwise (agent-vm), or its own page is refused as a foreign origin.
+  const compose = await readFile(path.join(dir, composeFiles[0]), 'utf8');
+  const label = choices.ORG_LABEL || values.ORG_LABEL;
+  const domain = choices.EDGIBLE_DOMAIN || values.EDGIBLE_DOMAIN || 'edgible.app';
+  if (published && app !== published && label) {
+    for (const m of compose.matchAll(/([A-Z][A-Z0-9_]*_URL): \$\{\1:-https:\/\/([a-z0-9-]+)\.\$\{ORG_LABEL/g)) {
+      if (m[2] === published && !values[m[1]] && !choices[m[1]]) changes[m[1]] = `https://${app}.${label}.${domain}`;
+    }
+  }
   await writeFile(path.join(dir, 'card.env'), setEnvLines(envText, changes));
   const r = await run('docker', ['compose', '--env-file', 'card.env', '-f', composeFiles[0], 'config', '--format', 'json'], { cwd: dir });
   if (r.code) {
@@ -310,7 +325,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
-    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port, keys: Object.keys(refs) });
+    const signedIn = await edgibleJson(['whoami', '--json']).catch(() => ({}));
+    const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port, keys: Object.keys(refs), user: signedIn.account || '', published: published[0].name });
     if (built.status !== 'ok') return built;
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
