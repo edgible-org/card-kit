@@ -414,7 +414,9 @@ async function whatsRunning({ app, device }) {
     return { a, modes, probes, certs, issues };
   });
 
-  const out = [`# Apps in ${who.organization?.name} (signed in as ${who.account})`, ''];
+  // Which connector answered, for a person with more than one (EDGIBLE_MCP_DEVICE, set by the card).
+  const by = process.env.EDGIBLE_MCP_DEVICE ? `, answered by the Edgible connector on ${process.env.EDGIBLE_MCP_DEVICE}` : '';
+  const out = [`# Apps in ${who.organization?.name} (signed in as ${who.account}${by})`, ''];
   const devs = running.devices.filter((d) => !device || d.name === device || d.id === device);
   out.push('## Devices', '', devs.map((d) => `- ${d.name}: ${d.status}${d.agentVersion ? `, agent ${d.agentVersion}` : ''}`).join('\n') || '- none', '');
   out.push('## Apps', '', '| App | Device | Port | Auth | Status | Works | Evidence |', '| --- | --- | --- | --- | --- | --- | --- |');
@@ -456,7 +458,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.9';
+export const VERSION = '0.7.10';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 

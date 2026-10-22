@@ -302,7 +302,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // call needs a key it issued, as the card's Share it step does, and this server keeps its
     // master key, so gateway_key and gateway_spend work with nothing copied by hand.
     const gateway = card === GATEWAY_CARD;
-    if (gateway) reasons.push({ token: 'gateway-api', reason: `${app}'s API will also be published as ${app}-api, open to the internet (auth mode none) but answering only calls with a key the gateway issued. This server keeps the gateway's master key, so it can make each app's key and report spending; the person never needs to see it.` });
+    if (gateway) reasons.push({ token: 'gateway-api', reason: `${app}'s API will also be published as ${app}-api, open to the internet (auth mode none) but answering only calls with a key the gateway issued. This server keeps the gateway's master key, so it can make each app's key and report spending; the person never needs to see it. The gateway is always deployed this way: if they say no, nothing is deployed. Don't offer another way.` });
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
@@ -383,6 +383,10 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     if (shown.length) {
       result.firstUse = shown;
       result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it and change it at once; the card made every other secret on the device, and nobody knows those.';
+      // remove_card leaves an app's volumes on its device, and a card never replaces a secret that
+      // exists, so an app deployed again under its old name keeps its old passwords.
+      const before = (await readRecord()).some((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed');
+      if (before) result.next += ` ${app} was deployed and removed before, and its data stays on the device: if it is the same device, the old passwords still apply and these first-use ones may not work. Say so to the person.`;
     }
     return result;
   } finally {
@@ -614,6 +618,36 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
     next: `Deploy the app with this key by reference, such as keys {"OPENCLAW_MODEL_KEY": "${secret}:key"} and the gateway address ${GATEWAY_URL}/v1 as its model address. Its spend shows in the gateway's admin under ${app}.` };
 }
 
+// gateway_check: one tiny question through the gateway, to show it answers: which provider replied,
+// how long it took and what it cost. It uses the master key this server keeps, and returns no key.
+async function gatewayCheck({ model = 'fast' }) {
+  if (!/^[a-z][a-z0-9-]{0,40}$/.test(model)) return refused('model is a label the gateway offers, such as fast or smart');
+  const GATEWAY_URL = await gatewayUrl();
+  if (!GATEWAY_URL) return refused('This server knows no AI gateway yet: deploy the litellm card with deploy_card, which wires it up, or set EDGIBLE_MCP_GATEWAY_URL.');
+  const master = await readFile(path.join(KEYS_DIR, GATEWAY_MASTER), 'utf8').then((s) => s.trim()).catch(() => '');
+  if (!master) return refused('This server does not have the gateway\'s master key.');
+  const started = Date.now();
+  let res, body;
+  try {
+    res = await fetch(`${GATEWAY_URL}/v1/chat/completions`, { method: 'POST', headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], max_tokens: 200 }) });
+    body = await res.json().catch(() => ({}));
+  } catch (err) {
+    return { status: 'failed', reason: `the gateway at ${GATEWAY_URL} did not answer: ${err.message}` };
+  }
+  const seconds = Math.round((Date.now() - started) / 100) / 10;
+  if (!res.ok) return { status: 'failed', model, seconds, reason: `the gateway answered ${res.status}: ${String(body?.error?.message || '').replace(/sk-[A-Za-z0-9_-]{6,}/g, 'sk-…').slice(0, 300)}` };
+  const fallbacks = Number(res.headers.get('x-litellm-attempted-fallbacks') || 0);
+  const cost = Number(res.headers.get('x-litellm-response-cost') || 0);
+  // The provider, from the address the gateway called (absent for a local model's own name).
+  const base = res.headers.get('x-litellm-model-api-base') || '';
+  const host = (() => { try { return new URL(base).hostname; } catch { return ''; } })();
+  const PROVIDERS = { 'api.deepseek.com': 'DeepSeek', 'generativelanguage.googleapis.com': 'Google Gemini', 'openrouter.ai': 'OpenRouter', 'api.anthropic.com': 'Anthropic', 'api.openai.com': 'OpenAI' };
+  const provider = PROVIDERS[host] || (/^(localhost|127\.|host\.docker\.internal|10\.|192\.168\.)/.test(host) ? 'a model on your own machine' : host || (body.model && body.model !== model ? body.model : 'the gateway did not say'));
+  return { status: 'answered', asked_for: model, answered_by: provider, used_backup: fallbacks > 0, seconds,
+    cost: `$${cost.toFixed(6)}`, reply: String(body?.choices?.[0]?.message?.content || '').slice(0, 80) };
+}
+
 // gateway_spend: what the shared AI gateway spent, by app and by model, with each app's budget and
 // the tokens used. Read-only. It names apps by their key's alias and never returns a key: the
 // gateway's logs record the caller's raw key, so only aliases, models and numbers leave here.
@@ -759,6 +793,12 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(gatewayKey));
+  server.registerTool('gateway_check', {
+    title: 'Check the AI gateway answers',
+    description: 'Send one tiny question through the AI gateway with a model label (fast by default) and report which provider answered, whether a backup was used, how long it took and what it cost (a fraction of a cent). Good for "does my AI gateway work?" right after setting it up. Uses the key this server keeps; returns no key.',
+    inputSchema: { model: z.string().optional().describe('The label to try: fast (default), smart, open, best or private') },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, wrap(gatewayCheck));
   server.registerTool('gateway_spend', {
     title: 'AI spending, from the shared gateway',
     description: 'The owner\'s view of the shared AI gateway\'s spending, scoped to all apps: by app, by app and model, (each key\'s spend against its budget) and by provider model (spend) over the last days. Read-only; names apps, never keys. Good for "show me my AI spending".',
