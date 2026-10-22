@@ -678,6 +678,80 @@ async function restartCard({ app, confirm = [] }) {
   return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'restarting', app, next: 'card_status reports when it answers again, usually within two minutes.' };
 }
 
+// bookmark_apps: every app a person visits, bookmarked in their linkding (the linkding card), tagged
+// edgible, so all they have built is one tap away. Uses linkding's API token, which this server
+// keeps (request_key LINKDING_API_TOKEN, keep server). Adds what is missing and never deletes:
+// bookmarks of apps that are gone are only reported. Addresses for apps rather than people (a
+// gateway's -api, a connector's endpoint) are left out.
+const TITLES = { 'edgible-agent': 'Your agent', openclaw: 'Your agent', litellm: 'AI gateway admin', linkding: 'Bookmarks' };
+const SKIP_CARDS = new Set(['edgible-mcp', 'mcp-bridge', 'canary']);
+function appBookmark(a) {
+  if (a.subtype === 'ingest' || (a.protocol && a.protocol !== 'https')) return null;
+  const card = a.labels?.card;
+  if (SKIP_CARDS.has(card) || /-api$/.test(a.name) || /(^|-)mcp-signin$/.test(a.name)) return { skip: 'for apps, not people' };
+  const hosts = a.hostnames || [];
+  const host = hosts.find((h) => !/\.edgible\.(app|com)$/.test(h)) || hosts[0];
+  if (!host) return null;
+  let title = TITLES[card] ? (card === 'linkding' ? TITLES[card] : `${TITLES[card]} (${a.name})`) : a.name;
+  if (/(^|-)mcp-signin-login$/.test(a.name)) title = a.name === 'mcp-signin-login' ? 'Edgible connector: sign-in and key links' : `Edgible connector: sign-in and key links (${a.name.replace(/-?mcp-signin-login$/, '') || a.name})`;
+  return { url: `https://${host}/`, title, description: a.description || `${a.name}, on Edgible` };
+}
+
+async function bookmarkApps() {
+  const token = await readFile(path.join(KEYS_DIR, 'LINKDING_API_TOKEN'), 'utf8').then((s) => s.trim()).catch(() => '');
+  const list = await apps();
+  const ld = list.find((a) => a.labels?.card === 'linkding') || list.find((a) => a.name === 'linkding');
+  if (!ld) return refused('There is no linkding in this organisation yet: deploy the linkding card first.');
+  const ldHost = (ld.hostnames || []).find((h) => !/\.edgible\.(app|com)$/.test(h)) || (ld.hostnames || [])[0];
+  if (!token) return refused(`This server does not have linkding's API token yet: the person copies it from linkding (https://${ldHost}/settings/integrations, REST API); call request_key with name LINKDING_API_TOKEN and keep "server", and give them the link.`);
+  const api = async (method, p, body) => {
+    const res = await fetch(`https://${ldHost}/api${p}`, { method, headers: { authorization: `Token ${token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    if (res.status === 401 || res.status === 403) throw new Error('linkding refused the API token: it may have been changed; ask for it again with request_key');
+    if (!res.ok) throw new Error(`linkding answered ${res.status} for ${p}`);
+    return res.json();
+  };
+  const added = [], had = [], skipped = [];
+  const wanted = new Set();
+  for (const a of list) {
+    const b = appBookmark(a);
+    if (!b) continue;
+    if (b.skip) { skipped.push(a.name); continue; }
+    wanted.add(new URL(b.url).hostname);
+    const check = await api('GET', `/bookmarks/check/?url=${encodeURIComponent(b.url)}`);
+    if (check.bookmark) { had.push(b.title); continue; }
+    await api('POST', '/bookmarks/', { url: b.url, title: b.title, description: b.description, tag_names: ['edgible'], is_archived: false, unread: false, shared: false });
+    added.push(b.title);
+  }
+  const tagged = (await api('GET', '/bookmarks/?q=%23edgible&limit=500')).results || [];
+  const gone = tagged.filter((b) => { try { return !wanted.has(new URL(b.url).hostname); } catch { return false; } }).map((b) => b.title || b.url);
+  await record({ tool: 'bookmark_apps', linkding: ld.name, added: added.length, result: 'done' });
+  return { status: 'done', linkding: `https://${ldHost}/`, added, already_there: had, left_out: skipped.length ? `${skipped.join(', ')} (addresses for apps, not people)` : undefined,
+    gone: gone.length ? gone : undefined, next: gone.length ? 'Some bookmarks tagged edgible point at apps that no longer exist; say so, and leave deleting them to the person.' : undefined };
+}
+
+// add_address: also serve an app on the person's own domain, such as links.example.com, in place
+// (edgible app update --add-hostname: not disruptive). The person adds a CNAME record to the app's
+// Edgible address at their DNS provider; Edgible then issues the certificate.
+const HOSTNAME = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+async function addAddress({ app, hostname, confirm = [] }) {
+  hostname = String(hostname || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!HOSTNAME.test(hostname)) return refused('hostname is a full name on a domain the person manages, such as links.example.com');
+  if (/\.edgible\.(app|com)$/.test(hostname)) return refused('that is an Edgible address; give one on the person\'s own domain');
+  const live = (await apps()).find((a) => a.name === app);
+  if (!live) return refused(`no app called ${app}`);
+  const where = appDevices(live);
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+  const target = (live.hostnames || []).find((h) => /\.edgible\.(app|com)$/.test(h));
+  if (!target) return refused(`${app} has no Edgible address for a CNAME to point at`);
+  if ((live.hostnames || []).includes(hostname)) return { status: 'already', app, hostname, cname: { name: hostname, points_to: target } };
+  if (!confirm.includes('address')) return needs([{ token: 'address', reason: `${app} will also answer at https://${hostname}, with the same sign-in rules as now. Nothing changes at its current address. The person then adds one DNS record at their domain provider: a CNAME from ${hostname} to ${target}.` }]);
+  const r = await run('edgible', ['app', 'update', app, '--add-hostname', hostname], { timeout: 180000 });
+  await record({ tool: 'add_address', app, hostname, confirmed: confirm, result: r.code ? 'failed' : 'added', detail: r.code ? cliError(r) : undefined });
+  if (r.code) return { status: 'failed', reason: cliError(r) };
+  return { status: 'added', app, hostname, cname: { name: hostname, points_to: target },
+    next: `Tell the person to add a CNAME record at their domain provider: name ${hostname}, value ${target}. Once it resolves (minutes, sometimes longer), Edgible issues the certificate and https://${hostname} answers; whats_running with this app shows whether it does yet. bookmark_apps then uses this address.` };
+}
+
 // gateway_check: one tiny question through the gateway, to show it answers: which provider replied,
 // how long it took and what it cost. It uses the master key this server keeps, and returns no key.
 async function gatewayCheck({ model = 'fast' }) {
@@ -873,6 +947,22 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(restartCard));
+  server.registerTool('bookmark_apps', {
+    title: 'Bookmark every app in linkding',
+    description: 'Bookmark every app the person visits (their agent, the AI gateway admin, linkding itself, and so on) in their linkding, tagged edgible, so everything they have built is one tap away; run it again to add new ones. Never deletes; reports bookmarks of apps that are gone. Needs linkding\'s API token, kept by this server through request_key. Good for "bookmark my apps" and "refresh my app bookmarks".',
+    inputSchema: {},
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(bookmarkApps));
+  server.registerTool('add_address', {
+    title: 'Put an app on your own domain',
+    description: 'Also serve an app at an address on the person\'s own domain, such as links.example.com, without interrupting it, asked first. Returns the one CNAME record the person adds at their domain provider; Edgible then issues the certificate. Good for "put my bookmarks on links.example.com".',
+    inputSchema: {
+      app: z.string().describe('The app\'s name'),
+      hostname: z.string().describe('The full address on their domain, such as links.example.com'),
+      confirm: z.array(z.string()).optional().describe('["address"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(addAddress));
   server.registerTool('gateway_check', {
     title: 'Check the AI gateway answers',
     description: 'Send one tiny question through the AI gateway with a model label (fast by default) and report which provider answered, whether a backup was used, how long it took and what it cost (a fraction of a cent). Good for "does my AI gateway work?" right after setting it up. Uses the key this server keeps; returns no key.',
