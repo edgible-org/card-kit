@@ -67,6 +67,10 @@ const refused = (reason) => ({ status: 'refused', reason });
 // The error an edgible command reports, without its banners and warnings.
 function cliError(r) {
   const out = `${r.stdout}\n${r.stderr}`;
+  // A stack deploy's own reason for each application comes first: its last line is only a summary,
+  // such as "Deployment failed for 1 of 1 application(s)", which hid an account's app limit.
+  const reasons = [...out.matchAll(/"error":\s*"((?:[^"\\]|\\.)*)"(?:,\s*"code":\s*"([A-Z_]+)")?/g)].map((x) => x[2] ? `${x[1]} (${x[2]})` : x[1]);
+  if (reasons.length) return reasons.join('; ').slice(0, 600);
   const m = out.match(/"message":\s*"((?:[^"\\]|\\.)*)"/);
   if (m) return m[1];
   return out.split('\n').filter((l) => l.trim() && !/^\s*(⚠|Using )/.test(l)).join(' ').trim().slice(-300);
