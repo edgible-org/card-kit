@@ -567,6 +567,8 @@ async function whoami() {
 // (deploy_card records it when it deploys the gateway, or EDGIBLE_MCP_GATEWAY_URL) and its master
 // key, kept by this server (deploy_card keeps it, or request_key with keep server).
 const GATEWAY_CARD = 'litellm';
+// An app's key may only use models and read its own record: never others' spending or the admin.
+const APP_KEY_ROUTES = ['/v1/chat/completions', '/chat/completions', '/v1/models', '/models', '/key/info'];
 const GATEWAY_MASTER = 'LITELLM_MASTER_KEY';
 const GATEWAY_FILE = path.join(STATE, 'gateway.json');
 
@@ -619,7 +621,7 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
   let made;
   try {
     const res = await fetch(`${GATEWAY_URL}/key/generate`, { method: 'POST', headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ key_alias: app, max_budget: Number(budget), budget_duration: period, metadata: { made_by: 'edgible-mcp gateway_key', by: actor.getStore() || 'assistant' } }) });
+      body: JSON.stringify({ key_alias: app, max_budget: Number(budget), budget_duration: period, allowed_routes: APP_KEY_ROUTES, metadata: { made_by: 'edgible-mcp gateway_key', by: actor.getStore() || 'assistant' } }) });
     made = await res.json();
     if (!res.ok || !made.key) return { status: 'failed', reason: `the gateway did not make a key (${res.status}): ${JSON.stringify(made).slice(0, 200)}` };
   } catch (err) {
@@ -636,6 +638,44 @@ async function gatewayKey({ app, budget = 5, period = '30d', confirm = [] }) {
   }
   return { status: 'made', app, secret, budget: `$${budget} per ${period}`, gateway: `${GATEWAY_URL}/v1`,
     next: `Deploy the app with this key by reference, such as keys {"OPENCLAW_MODEL_KEY": "${secret}:key"} and the gateway address ${GATEWAY_URL}/v1 as its model address. Its spend shows in the gateway's admin under ${app}.` };
+}
+
+// gateway_budget: change an app's budget on the AI gateway, by the app's name (its key's alias),
+// asked first. It also keeps the key to the app routes, for keys made before they were set.
+async function gatewayBudget({ app, budget, period, confirm = [] }) {
+  if (!NAME.test(app || '')) return refused('app is the app\'s name on the gateway, such as agent-vm');
+  if (!(Number(budget) > 0)) return refused('budget is dollars per period, more than 0');
+  const GATEWAY_URL = await gatewayUrl();
+  if (!GATEWAY_URL) return refused('This server knows no AI gateway yet.');
+  const master = await readFile(path.join(KEYS_DIR, GATEWAY_MASTER), 'utf8').then((s) => s.trim()).catch(() => '');
+  if (!master) return refused('This server does not have the gateway\'s master key.');
+  const call = async (method, p, body) => {
+    const res = await fetch(`${GATEWAY_URL}${p}`, { method, headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    if (!res.ok) throw new Error(`the gateway answered ${res.status} for ${p}`);
+    return res.json();
+  };
+  const found = ((await call('GET', `/key/list?return_full_object=true&key_alias=${encodeURIComponent(app)}`)).keys || []).filter((k) => k.key_alias === app);
+  if (!found.length) return refused(`no key for ${app} on the gateway; gateway_key makes one`);
+  const k = found[0];
+  const before = `$${k.max_budget ?? 'no limit'} per ${k.budget_duration || 'all time'}`;
+  const after = `$${Number(budget)} per ${period || k.budget_duration || '30d'}`;
+  if (!confirm.includes('budget')) return needs([{ token: 'budget', reason: `${app}'s budget on the AI gateway changes from ${before} to ${after}. It has spent $${Number(k.spend || 0).toFixed(2)} this period.` }]);
+  await call('POST', '/key/update', { key: k.token, max_budget: Number(budget), budget_duration: period || k.budget_duration || '30d', allowed_routes: APP_KEY_ROUTES });
+  await record({ tool: 'gateway_budget', app, from: before, to: after, confirmed: confirm, result: 'changed' });
+  return { status: 'changed', app, from: before, to: after, spent: `$${Number(k.spend || 0).toFixed(2)}` };
+}
+
+// restart_card: re-create a wedged app from its current release on its device, asked first.
+async function restartCard({ app, confirm = [] }) {
+  const live = (await apps()).find((a) => a.name === app);
+  if (!live) return refused(`no app called ${app}`);
+  if (live.subtype !== 'docker-compose') return refused(`${app} is a "${live.subtype}" app, which Edgible cannot restart for you`);
+  const where = appDevices(live);
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+  if (!confirm.includes('restart')) return needs([{ token: 'restart', reason: `Restarting ${app}: Edgible re-creates it from its current release on ${where.join(', ') || 'its device'}. Its data stays; it does not answer for up to a minute or two, and a reply it is writing is cut off.` }]);
+  const r = await run('edgible', ['app', 'redeploy', app], { timeout: 180000 });
+  await record({ tool: 'restart_card', app, confirmed: confirm, result: r.code ? 'failed' : 'restarted', detail: r.code ? cliError(r) : undefined });
+  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'restarting', app, next: 'card_status reports when it answers again, usually within two minutes.' };
 }
 
 // gateway_check: one tiny question through the gateway, to show it answers: which provider replied,
@@ -813,6 +853,26 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(gatewayKey));
+  server.registerTool('gateway_budget', {
+    title: 'Change an app\'s AI budget',
+    description: 'Change an app\'s or agent\'s budget on the AI gateway: dollars per period, by the app\'s name. Shows the old and new budget and what it has spent, and asks first. Good for "raise my agent\'s budget to ten dollars a month".',
+    inputSchema: {
+      app: z.string().describe('The app\'s name on the gateway, such as agent-vm'),
+      budget: z.number().positive().describe('Dollars it may spend per period'),
+      period: z.string().optional().describe('30d, 7d or 1d; default its current period'),
+      confirm: z.array(z.string()).optional().describe('["budget"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(gatewayBudget));
+  server.registerTool('restart_card', {
+    title: 'Restart an app',
+    description: 'Restart an app that is stuck or not answering: Edgible re-creates it from its current release on its device, data kept. Asks first. Good for "my agent seems stuck".',
+    inputSchema: {
+      app: z.string().describe('The app\'s name'),
+      confirm: z.array(z.string()).optional().describe('["restart"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(restartCard));
   server.registerTool('gateway_check', {
     title: 'Check the AI gateway answers',
     description: 'Send one tiny question through the AI gateway with a model label (fast by default) and report which provider answered, whether a backup was used, how long it took and what it cost (a fraction of a cent). Good for "does my AI gateway work?" right after setting it up. Uses the key this server keeps; returns no key.',
