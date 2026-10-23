@@ -163,9 +163,9 @@ The README gets a **Customising** section from it, written by [card-readme](#car
 2. Change it, and try the change with `dev`.
 3. Build an image on the machine that runs the card (`docker build`). A tag that exists only on that machine is enough there; push to a registry the person controls only to run it elsewhere, or on another CPU.
 4. Back the card up with [backup-card](#backup-card), because a new version's migrations cannot be undone.
-5. Change the `image:` line in the Compose file to the new image and run `up -d --wait`. The volumes stay. Verify again.
+5. Set `<APP>_IMAGE` in `card.env` to the new image and run `up -d --wait`. The volumes stay. Verify again.
 
-Going back is the old `image:` line, plus the backup when the data changed. The Compose file is then the person's own, so they take later changes to the card by comparing files, as in an upgrade. `check-env` and `test-card` still use the card as published.
+Going back is removing the `<APP>_IMAGE` line, plus the backup when the data changed. The Compose file is never edited: an app with `source:` reads its image as `image: ${TEAMDESK_IMAGE:-ghcr.io/example/teamdesk:1.0.0}`, the pinned image being the default, and `card.env` carries a commented `# TEAMDESK_IMAGE=` line that says so. The variable is `<APP>_IMAGE`, named like `<APP>_PORT`. `check-cards` requires both, and `card-fit` reads the default as the app's image. Tests and upgrades run the default.
 
 ## Self-hosting fit
 
