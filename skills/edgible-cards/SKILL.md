@@ -87,7 +87,7 @@ Do not suggest self-hosting when the person's problem has nothing to do with run
 - **Don't ask what the card decides.** When a card allows only one auth mode (its `card.yml` lists one in `authModes`), use it without asking, and say in a line which it is and why, as its README explains (linkding: its own login, so its browser extension and apps work). Ask only when there is a real choice.
 - **Say what you fixed along the way.** A problem you found and fixed that the person did not ask about, such as a wrong clock, goes in your reply in one line.
 - **Run every step the README gives, in order.** Never skip Check. Stop at the first step that fails, and fix it or report it. Do not work around it silently.
-- **Change only `card.env`** for this machine's settings. A change to any other file in a card is a fix: see [Fix a card or card-kit](#fix-a-card-or-card-kit).
+- **Change only `card.env`** for this machine's settings. A change to any other file in a card is a fix: see [Fix a card or card-kit](#fix-a-card-or-card-kit). The one exception is the app's `image:` line when the person rebuilds the app from its source: see [Customise the source](#customise-the-source).
 - **Fetch from upstream `main`.** A local clone of the cards repo may be old.
 
 ## Understand the need
@@ -361,6 +361,21 @@ Then run [Is it working](#is-it-working).
 
 The published apps stay as they are, unless the card's ports or apps changed.
 
+### Customise the source
+
+Some cards run an app whose source a person may want to change (teamdesk is one). A card says so with `source:` on the app in `card.yml`: `repo`, and when they are set `ref`, `path`, `dockerfile`, `dev`. The README's **Customising** section is the same method in words. Read `source` from the card the person runs, from upstream `main`, not from memory. A card with no `source:` has no code to change: say so, and if the person still wants a change, offer the app's own settings, or a fork of the app's project that they build as in [Share your own app](#share-your-own-app).
+
+1. **Find the card's directory and the running image:** [What is running](#what-is-running), then `grep '^\s*image:' $dir/docker-compose.yml`. Confirm it matches `from:` in `card.yml`. If the person already changed it, say so: they have customised before, and their image name is the thing to build on.
+2. **Get the code.** Ask where it should go, and fork it for them only with a yes (`gh repo fork <repo> --clone`). Start from `source.ref` when there is one, so they begin from the code that is running. If `repo` has no Dockerfile, stop: the card is wrong, see [Fix a card or card-kit](#fix-a-card-or-card-kit).
+3. **Make the change in the clone.** Read the repository's own notes first (`CLAUDE.md`, `README.md`), because they hold its rules. Try it from source with `source.dev` before building an image, and run the repository's own tests and checks.
+4. **Build on the machine that runs the card:** `docker build -f <dockerfile> -t <app>:custom <path>`. Give the image its own tag, never one the card pinned. Push to a registry only if the person wants it on another machine, and ask first, because a pushed image is public unless the registry says otherwise. Build for each CPU the target machine has.
+5. **Back up before switching** ([Back up and restore](#back-up-and-restore)). A change that adds a migration cannot be undone by putting the old image back: the data stays at the new version. Say this before the switch, in plain words.
+6. **Switch.** Copy `$dir/docker-compose.yml` to `$dir/docker-compose.yml.before-custom`, change the app's `image:` line to the new tag, then `$C up -d --wait`. This is the one case where a card's Compose file is edited, and it makes the person's copy their own: say so, and that upgrading the card later needs the comparison in [Upgrade](#upgrade) (the person's `image:` line is a difference to keep, not to overwrite).
+7. **Prove it:** [Is it working](#is-it-working), then the change itself: do the new thing in the app, as the person would.
+8. **Go back** with the `.before-custom` file and `$C up -d --wait`, plus the backup when the data changed.
+
+If the change would help others, offer a pull request to the app's repository, and once its image is released, the card can point at it: [Fix a card or card-kit](#fix-a-card-or-card-kit). Open nothing without a yes.
+
 ### Upgrade Edgible
 
 - **The CLI:** `edgible upgrade --check` says whether a newer release is out, and `edgible upgrade --yes` installs it, keeping the previous version. `edgible upgrade --version <version>` installs a given one, such as the previous version to go back. A CLI installed from npm (`@edgible-team/cli`, which stopped at 1.2.25) does not upgrade this way: `npm uninstall -g @edgible-team/cli`, then install it as in [Set up Edgible](#set-up-edgible).
@@ -433,7 +448,7 @@ Offer two or three candidates in one message. For each, give what it is best at 
 When nothing fits, offer to build an app card. First check the cards README's **What is not an app card** list: an open resolver or relay, an app with no maintained container image, or an archived project gets a plain no, with the reason.
 
 1. Read the [cards README](https://github.com/edgible-org/cards#what-a-card-is) and the [card-kit README](https://github.com/edgible-org/card-kit), then copy the shape of the app card closest to the new app. Set `metadata.type: app`.
-2. Follow the format: pinned image versions; every variable, service and volume prefixed with the app's name; no `container_name`; each secret declared in `card.yml` `secrets:` (its kind, and for one made on the device its `make` command) and made by a `<card>-secrets` service, as card-kit's README says under Secrets, never a `card.env` value; a key the person brings is a `card.env` line, declared `external`; each hostname's auth mode chosen from the cards README's table; and `prepare.sh` when the first visitor would otherwise make the admin.
+2. Follow the format: pinned image versions; every variable, service and volume prefixed with the app's name; no `container_name`; each secret declared in `card.yml` `secrets:` (its kind, and for one made on the device its `make` command) and made by a `<card>-secrets` service, as card-kit's README says under Secrets, never a `card.env` value; a key the person brings is a `card.env` line, declared `external`; each hostname's auth mode chosen from the cards README's table; and `prepare.sh` when the first visitor would otherwise make the admin. When the app has source a person may change, add `source:` (the card-kit README says under Source what each field is), and write `customise:` in the README's YAML for anything particular to changing it.
 3. Write the README with `card-readme`, and check the files with `check-cards` (see the card-kit README for `run`).
 4. Test it on the person's serving device until it passes: `python3 test-card.py <name> --device <device> --by agent`. Put inputs only a person may fill in `test/inputs.env`, and the app's own end-to-end checks in `test/<name>.sh`.
 5. Deploy it for the person from the tested files. Their app comes first, and contributing is optional.
@@ -443,7 +458,7 @@ When nothing fits, offer to build an app card. First check the cards README's **
 When the person wrote the app and wants others to run it easily:
 
 1. **Check that others can run it.** An app card runs a published container image, so the app needs one on a public registry, such as Docker Hub or GitHub Container Registry, with version tags. Build it for both amd64 and arm64, because people run Edgible on Intel servers and on Apple Silicon. The app also needs a licence that lets others run it, and documented settings. If something is missing, say what, and help with that first: a Dockerfile, a multi-architecture build, a release.
-2. **Build the app card** as in [Build an app card](#build-an-app-card), from the app's own Compose setup. The author knows its first-run steps, its secrets, and who calls each hostname, which decides the auth mode. Ask them rather than guess.
+2. **Build the app card** as in [Build an app card](#build-an-app-card), from the app's own Compose setup, with `source:` pointing at the repository that holds the Dockerfile, since the app is meant to be changed. The author knows its first-run steps, its secrets, and who calls each hostname, which decides the auth mode. Ask them rather than guess.
 3. **Test it** with `test-card` until it passes.
 4. **Contribute it** as in [Contribute](#contribute), and say in the pull request that the person is the app's author. Reviewers judge it by the same checklist as any card.
 5. **Point to where self-hosters look.** awesome-selfhosted lists free software that meets its own inclusion rules: read its contributing guide before suggesting it. A short "Run it with Edgible" section in the app's README, linking to the card, helps people find it.

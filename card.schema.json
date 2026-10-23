@@ -171,6 +171,9 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "Topology name, not a device name and not a device id. Applications with the same place run on one serving device. Two applications that are one process share a place, a port, and a from."
+        },
+        "source": {
+          "$ref": "#/$defs/source"
         }
       },
       "allOf": [
@@ -203,6 +206,41 @@
           }
         }
       ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo"
+      ],
+      "description": "Optional. Where the source of the app's image is, for an app a person may want to change and rebuild. The README gets a Customising section from it. Leave it out for an app whose source is not meant to be changed.",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "description": "The repository that holds the code and the Dockerfile the image is built from, such as https://github.com/example/app. It is the repository the image names in its org.opencontainers.image.source label."
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The tag or commit the pinned image was built from, so a person starts from the code that runs. Leave it out when the repository's default branch is the code."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The directory of the repository that is the build context. Default: the root."
+        },
+        "dockerfile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Dockerfile, relative to the build context. Default: Dockerfile."
+        },
+        "dev": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The command that runs the app from source with its demo data, for trying a change before building an image, such as bun run dev."
+        }
+      }
     },
     "place": {
       "type": "object",
