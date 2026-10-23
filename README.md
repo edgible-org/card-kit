@@ -138,6 +138,35 @@ secrets:
 
 `test-card` reads the secrets a card made with `show` once it starts, hides their values in what it prints, and exports them to the card's checks as it does `card.env`, so a check can sign in with the admin's password.
 
+## Source
+
+Some apps come with source a person may want to change: a small internal tool, a workshop app, anything the author wrote to be adapted. An app with `source:` in `card.yml` says where that code is, so a reader, and an agent, can find it, change it, and rebuild the image the card runs.
+
+```yaml
+applications:
+  - name: teamdesk
+    from: ghcr.io/example/teamdesk:1.0.0
+    ...
+    source:
+      repo: https://github.com/example/teamdesk   # required: the code and the Dockerfile
+      ref: v1.0.0                                  # optional: the tag the pinned image was built from
+      path: .                                      # optional: the build context, default the root
+      dockerfile: Dockerfile                       # optional: relative to path, default Dockerfile
+      dev: bun install && bun run dev              # optional: run from source, before building an image
+```
+
+`repo` is the repository the image's `org.opencontainers.image.source` label names, and it must hold the Dockerfile: the repository an app was forked from may not. `ref` makes a person start from the code that runs, not from whatever the default branch is now. Leave `source:` out for an app nobody is meant to change, such as Gitea or Postgres: the card then has no Customising section.
+
+The README gets a **Customising** section from it, written by [card-readme](#card-readme) and required by [check-cards](#check-cards). The method is the same for every card:
+
+1. Fork the repository and clone it, at `ref` when there is one.
+2. Change it, and try the change with `dev`.
+3. Build an image on the machine that runs the card (`docker build`). A tag that exists only on that machine is enough there; push to a registry the person controls only to run it elsewhere, or on another CPU.
+4. Back the card up with [backup-card](#backup-card), because a new version's migrations cannot be undone.
+5. Change the `image:` line in the Compose file to the new image and run `up -d --wait`. The volumes stay. Verify again.
+
+Going back is the old `image:` line, plus the backup when the data changed. The Compose file is then the person's own, so they take later changes to the card by comparing files, as in an upgrade. `check-env` and `test-card` still use the card as published.
+
 ## Self-hosting fit
 
 How well an app card's app suits self-hosting, as a count of checks it passes: `fit 4/5` on the card's tile on the cards site, with each check and the fact that decides it on its page. Each check is a yes or no about the app itself, never an opinion, and never a card's own unfinished work. [card-fit.py](card-fit.py) decides them; it writes nothing into a card.
@@ -293,7 +322,7 @@ git clone https://github.com/edgible-org/card-kit ../card-kit
 
 ### card-readme
 
-Writes a card's `README.md`. The parts only a person knows come from a short YAML file; the rest comes from `card.yml` and the Compose files, the same way on every card: How (Fetch, Edit card.env, Check, Start with `prepare.sh` when the card has one, Publish), each app's Verify check by its auth mode, Tear down, and the sizing sentence in What, from `places:`. After Publish it adds a "Without Edgible" note: only Publish is Edgible's, and any reverse proxy or tunnel can take its place.
+Writes a card's `README.md`. The parts only a person knows come from a short YAML file; the rest comes from `card.yml` and the Compose files, the same way on every card: How (Fetch, Edit card.env, Check, Start with `prepare.sh` when the card has one, Publish), each app's Verify check by its auth mode, Customising when an app has `source:`, Tear down, and the sizing sentence in What, from `places:`. After Publish it adds a "Without Edgible" note: only Publish is Edgible's, and any reverse proxy or tunnel can take its place.
 
 ```yaml
 why: The problem the card solves, with a link to the app.
@@ -302,6 +331,7 @@ data: Where the data lives.
 edit: What to set in card.env.
 start: Anything after `up --wait`, such as why the admin is made before Publish.
 after-prepare: What prepare.sh prints, and anything left for a person to do.
+customise: Anything specific to changing this app, such as a rule its migrations follow.
 verify:
   gitea: What the check proves, and the first sign-in.
 docs: [Gitea, https://docs.gitea.com]
