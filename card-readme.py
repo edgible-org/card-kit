@@ -13,12 +13,13 @@ The YAML file holds what only a person knows:
     after-prepare: What prepare.sh prints, and anything left for a person to do.
     verify:
       gitea: What the check proves, and the first sign-in.
+    customise: Anything specific to changing this app, such as a rule its migrations follow.
     docs: [Gitea, https://docs.gitea.com]
 
 When the card has prepare.sh, Start runs it and shows it. Everything else comes from
 card.yml and the Compose files, the same way on every card:
 How (Fetch, Edit card.env, Check, Start, Publish), each app's Verify check by its auth
-mode, Tear down, and the sizing sentence in What, from places:. Fetch reads from
+mode, Customising (when an app has source: in card.yml), Tear down, and the sizing sentence in What, from places:. Fetch reads from
 edgible-org/cards.
 
 A native card (native: in places:) runs install.sh instead of a Compose file, so its How is
@@ -167,6 +168,54 @@ It stops the service and removes it and the release. {spec.get('uninstall', '').
 rm -rf {name}
 {FENCE}
 """
+
+
+def customising(name: str, apps: list[dict], env: str, compose: str, spec: dict) -> str:
+    """The Customising section: how to change the source of an app that has source: and rebuild its image."""
+    withsrc = [a for a in apps if a.get("source")]
+    if not withsrc:
+        return ""
+    parts = ["## Customising", "",
+             "The card runs a published image, so a change to the app means a new image. "
+             "You build it on the machine that runs the card, and point the card at it."]
+    for a in withsrc:
+        src = a["source"]
+        repo, ref = src["repo"], src.get("ref")
+        path, dockerfile = src.get("path", "."), src.get("dockerfile", "Dockerfile")
+        tag = f"{a['name']}:custom"
+        parts += ["", f"The source of `{a['name']}` is [{repo.removeprefix('https://')}]({repo})"
+                      + (f", in `{path}`" if path != "." else "")
+                      + f". Its image is built from `{dockerfile}`."
+                      + (f" Tag `{ref}` is the code the pinned image was built from." if ref else "")]
+        step = 1
+        parts += ["", f"{step}. Fork the repository and clone it" + (f", then `git checkout {ref}`" if ref else "")
+                      + ". The fork is yours to keep: a pull request to the repository is how a change reaches everyone."]
+        if src.get("dev"):
+            step += 1
+            parts += [f"{step}. Change it, and try the change with `{src['dev']}`, which runs the app from source "
+                      "without a container. Its own README and the files it points to say how the code is laid out."]
+        step += 1
+        build = f"docker build -f {dockerfile} -t {tag} {path}" if dockerfile != "Dockerfile" or path != "." \
+            else f"docker build -t {tag} ."
+        parts += [f"{step}. Build the image on the machine that runs the card, from the clone:", "",
+                  f"   {FENCE}bash", f"   {build}", f"   {FENCE}", "",
+                  f"   `{tag}` exists only on that machine, which is all the card needs. To run it on another "
+                  "machine, or on a different CPU, push it to a registry you control instead, and build for "
+                  "each CPU the machine has (`docker buildx build --platform linux/amd64,linux/arm64 --push`)."]
+        step += 1
+        parts += [f"{step}. Back the card up, because a new version can change the data in a way that "
+                  "cannot be undone (see the card-kit README for `backup-card`).",
+                  f"{step + 1}. In `{compose}`, change the `image:` line of `{a['name']}` to `{tag}` "
+                  "(or to your registry's name), then start it again:", "",
+                  f"   {FENCE}bash", f"   docker compose {env} -f {name}/{compose} up -d --wait", f"   {FENCE}", "",
+                  "   The data stays in its volume. Run the Verify step again."]
+        parts += ["", f"To go back, put the old `image:` line back, restore the backup if the data changed, "
+                      "and start again."]
+    if spec.get("customise"):
+        parts += ["", spec["customise"].strip()]
+    parts += ["", "Editing the Compose file makes your copy of the card your own, so take later changes to the "
+                  "card by comparing the files rather than fetching over them."]
+    return "\n".join(parts) + "\n\n"
 
 
 def main(argv: list[str]) -> int:
@@ -355,7 +404,7 @@ edgible app list
 
 The rest of the setup is in the [{docs[0]} docs]({docs[1]}).
 
-## Tear down
+{customising(name, apps, env, composes[0], spec) if composes else ''}## Tear down
 
 Four steps, in this order. Step 1 runs wherever `edgible` is logged in. Steps 2 to 4 run on {'the machine for each place' if multi else 'the machine that runs the containers'}. Steps 2 and 3 read `card.env`, so keep it until step 4.
 
