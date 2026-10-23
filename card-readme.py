@@ -177,7 +177,7 @@ def customising(name: str, apps: list[dict], env: str, compose: str, spec: dict)
         return ""
     parts = ["## Customising", "",
              "The card runs a published image, so a change to the app means a new image. "
-             "You build it on the machine that runs the card, and point the card at it."]
+             "You build it on the machine that runs the card, and name it in `card.env`."]
     for a in withsrc:
         src = a["source"]
         repo, ref = src["repo"], src.get("ref")
@@ -203,18 +203,18 @@ def customising(name: str, apps: list[dict], env: str, compose: str, spec: dict)
                   "machine, or on a different CPU, push it to a registry you control instead, and build for "
                   "each CPU the machine has (`docker buildx build --platform linux/amd64,linux/arm64 --push`)."]
         step += 1
+        var = env_name(a["name"]) + "_IMAGE"
         parts += [f"{step}. Back the card up, because a new version can change the data in a way that "
                   "cannot be undone (see the card-kit README for `backup-card`).",
-                  f"{step + 1}. In `{compose}`, change the `image:` line of `{a['name']}` to `{tag}` "
-                  "(or to your registry's name), then start it again:", "",
+                  f"{step + 1}. In `{name}/card.env`, set `{var}={tag}` (or your registry's name), then start it again:", "",
                   f"   {FENCE}bash", f"   docker compose {env} -f {name}/{compose} up -d --wait", f"   {FENCE}", "",
                   "   The data stays in its volume. Run the Verify step again."]
-        parts += ["", f"To go back, put the old `image:` line back, restore the backup if the data changed, "
+        parts += ["", f"To go back, remove the `{var}` line, restore the backup if the data changed, "
                       "and start again."]
     if spec.get("customise"):
         parts += ["", spec["customise"].strip()]
-    parts += ["", "Editing the Compose file makes your copy of the card your own, so take later changes to the "
-                  "card by comparing the files rather than fetching over them."]
+    parts += ["", "The Compose file stays as published, so a later upgrade of the card keeps your image: "
+                  "your `card.env` line is a setting to keep, not a file to overwrite."]
     return "\n".join(parts) + "\n\n"
 
 
