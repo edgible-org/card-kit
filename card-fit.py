@@ -53,7 +53,9 @@ def fit(card_dir: Path) -> dict | None:
     services = {}
     for f in sorted(card_dir.glob("*compose*.yml")):
         services.update((yaml.safe_load(f.read_text()) or {}).get("services") or {})
-    app_services = {n: s or {} for n, s in services.items() if _image(str((s or {}).get("image", ""))) in froms}
+    # An image may be ${APP_IMAGE:-default}, which the person overrides in card.env: read the default.
+    default = lambda ref: re.sub(r"^\$\{[A-Z0-9_]+:-([^}]*)\}$", r"\1", ref)
+    app_services = {n: s or {} for n, s in services.items() if _image(default(str((s or {}).get("image", "")))) in froms}
     env_path = card_dir / "card.env"
     generated = _generated(env_path.read_text()) if env_path.is_file() else []
     made = [n for n, s in (card.get("secrets") or {}).items() if (s or {}).get("kind") in ("internal", "human", "shared")]
