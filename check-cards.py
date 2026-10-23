@@ -14,7 +14,8 @@ It also checks the naming conventions the tools rely on, so card.yml stays short
   of a card with more.
 - each Compose file sets a top-level name:, the Compose project name.
 - a place in the optional places: section is one the apps use;
-- an app with source: has a Customising section in the README (card-readme writes it).
+- an app with source: has image: ${<APP>_IMAGE:-<from>} in its Compose file, a documented <APP>_IMAGE
+  line in card.env, and a Customising section in the README (card-readme writes it).
 
 A card of metadata.type app is one app that other cards are built from, so it also must:
 - have test.yml;
@@ -165,6 +166,15 @@ def convention_errors(card_dir: Path, card: dict) -> list[str]:
         if var not in env:
             errors.append(f"card.env has no {var}, the serving device for place {place}")
     errors += risky_errors(card_dir, composes)
+    for app in card["applications"]:
+        if not app.get("source"):
+            continue
+        var = env_name(app["name"]) + "_IMAGE"
+        want = "${" + var + ":-" + app["from"] + "}"
+        if not any(want in text for text in composes.values()):
+            errors.append(f"app {app['name']} has source:, so its image: line is {want}, which a person overrides in card.env")
+        if not re.search(rf"^#?\s*{var}=", (card_dir / "card.env").read_text(), re.M):
+            errors.append(f"app {app['name']} has source:, so card.env documents {var}, left empty or commented out")
     if any(app.get("source") for app in card["applications"]):
         readme = card_dir / "README.md"
         if not readme.is_file() or not re.search(r"^## Customising$", readme.read_text(), re.M):
