@@ -203,7 +203,7 @@ A service that mounts the Docker socket, runs privileged, or uses the host's net
 
 ## Native cards
 
-Some apps need the machine itself, which Docker cannot give them. Ollama on a Mac is the first: Docker on macOS runs a Linux VM with no access to the Mac's GPU, so the models run several times slower there. Such an app gets a card of its own, beside the Docker one (`ollama-mac` beside `ollama`), not a variant inside one card, so each stays one tested path.
+Some apps need the machine itself, which Docker cannot give them. Ollama on a Mac is the first: Docker on macOS runs a Linux VM with no access to the Mac's GPU, so the models run several times slower there. Such an app gets a card of its own, beside the Docker one (`ollama-osx` beside `ollama`), not a variant inside one card, so each stays one tested path.
 
 A native place says which OS it runs on:
 
