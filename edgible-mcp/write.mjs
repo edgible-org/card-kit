@@ -25,6 +25,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { LABELS, PROVIDERS, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
 const RECORD = path.join(STATE, 'activity.jsonl');
@@ -665,6 +666,86 @@ async function gatewayBudget({ app, budget, period, confirm = [] }) {
   return { status: 'changed', app, from: before, to: after, spent: `$${Number(k.spend || 0).toFixed(2)}` };
 }
 
+// gateway_provider: add an LLM provider to the AI gateway, in the person's words ("add my OpenAI
+// key"). The key is an organisation secret they stored once; it reaches the gateway by reference.
+// Labels the gateway already answers are never taken over unless the person names them: a plain
+// cloud key fills fast and smart on a gateway where nothing answers, and becomes fast's backup
+// where something does (see gateway-provider.mjs). It patches the deployed declaration in place,
+// deploys that one app, and asks each label it changed a tiny question.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function gatewayProvider({ provider, labels, models = {}, secret, address, app, confirm = [] }) {
+  const p = PROVIDERS[provider];
+  if (!p) return refused(`I don't know a provider called ${provider}. Known: ${Object.keys(PROVIDERS).join(', ')}.`);
+  const state = JSON.parse(await readFile(GATEWAY_FILE, 'utf8').catch(() => '{}'));
+  const name = app || state.app;
+  if (!NAME.test(name || '')) return refused('Which gateway? This server knows none yet: deploy the litellm card with deploy_card, or name the app.');
+  const live = (await apps()).find((a) => a.name === name);
+  if (!live) return refused(`no app called ${name}`);
+  if (live.subtype !== 'docker-compose') return refused(`${name} is a "${live.subtype}" app, not a gateway these tools deployed`);
+  const where = appDevices(live);
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+
+  const [secretName, keyName = 'key'] = String(secret || `${provider}:key`).split(':');
+  if (!SECRET_NAME.test(secretName || '')) return refused('secret is "<secret>:<key>", such as openai:key');
+  const stored = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).find((s) => s.name === secretName);
+  const hasKey = !!stored && (stored.keys || stored.keyNames || []).includes(keyName);
+  if (address && !/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(address)) return refused('address is the Ollama app\'s address, such as https://ollama.<you>.edgible.app');
+  const remote = p.private && /^https:/.test(address || '');
+  if (!hasKey && (!p.private || remote)) {
+    return refused(`${p.title}'s key is not stored yet${stored ? ` (${secretName} has no key called ${keyName})` : ''}. Give the person a link with request_key (name ${p.env}, secret ${secretName}), or on a computer with the Edgible CLI: edgible secret set ${secretName} --from-file key=<a file holding only the key>. Then call this again. Never ask for the key in the conversation.`);
+  }
+
+  const exported = await run('edgible', ['app', 'export', name], { timeout: 120000 });
+  if (exported.code) return { status: 'failed', reason: `could not read ${name}'s declaration: ${cliError(exported)}` };
+  const declaration = YAML.parse(exported.stdout);
+  let current;
+  try { current = readGateway(declaration); } catch (err) { return refused(`${name} is not an AI gateway these tools can change: ${err.message}`); }
+
+  const pl = plan({ provider, environment: current.environment, envFrom: current.workload.envFrom || [], labels, models, address: address && address.replace(/\/$/, '') });
+  if (pl.error) return refused(pl.error);
+  if (!confirm.includes('provider')) return needs([{ token: 'provider', reason: proposal({ provider, ...pl }) }]);
+
+  const next = patch(declaration, { changes: pl.changes, address: pl.address, keyEnv: hasKey ? p.env : undefined, secret: hasKey ? { secret: secretName, key: keyName } : undefined });
+  const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-gateway-provider-'));
+  let deployed;
+  try {
+    const file = path.join(tmp, 'gateway.yaml');
+    await writeFile(file, YAML.stringify(next, { lineWidth: 0 }), { mode: 0o600 });
+    deployed = await run('edgible', ['stack', 'deploy', '-f', file, '--app', name], { timeout: 10 * 60 * 1000 });
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  if (deployed.code) {
+    await record({ tool: 'gateway_provider', app: name, provider, labels: Object.keys(pl.changes), confirmed: confirm, result: 'failed', detail: cliError(deployed) });
+    return { status: 'failed', reason: cliError(deployed) };
+  }
+
+  // Ask each label it changed a tiny question, while the gateway comes back.
+  const results = [];
+  for (const label of Object.keys(pl.changes)) {
+    const ask = label === 'fast-backup' ? 'fast-fallback' : label;
+    const started = Date.now();
+    let r;
+    for (;;) {
+      r = await gatewayCheck({ model: ask });
+      const notReady = r.status !== 'answered' && /did not answer|answered (502|503|504)/.test(r.reason || '');
+      if (r.status === 'answered' || !notReady || Date.now() - started > 240000) break;
+      await sleep(15000);
+    }
+    results.push({ label, model: pl.changes[label], answered: r.status === 'answered', ...(r.status === 'answered'
+      ? { answered_by: r.answered_by, seconds: r.seconds, cost: r.cost } : { problem: r.reason }) });
+  }
+  await record({ tool: 'gateway_provider', app: name, provider, labels: Object.keys(pl.changes), key: hasKey ? `${secretName}:${keyName}` : 'none', confirmed: confirm,
+    result: results.every((x) => x.answered) ? 'changed' : 'changed, a label did not answer' });
+  return {
+    status: 'changed', app: name, provider: p.title, key: hasKey ? `${secretName}:${keyName}, by reference` : 'none needed (an Ollama on the same machine)',
+    labels: results.length ? results : 'no label changed: the key is added and available',
+    left_alone: pl.left,
+    next: `Tell the person which labels now use which models, whether each answered, and what was left alone and why. To change a label later: "make smart use <provider>/<model>" (call this again with models), or name labels: "use ${p.title} for fast and smart". The labels are ${LABELS.join(', ')}, and fast-backup.`,
+  };
+}
+
 // restart_card: re-create a wedged app from its current release on its device, asked first.
 async function restartCard({ app, confirm = [] }) {
   const live = (await apps()).find((a) => a.name === app);
@@ -938,6 +1019,20 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(gatewayBudget));
+  server.registerTool('gateway_provider', {
+    title: 'Add an AI provider to the gateway',
+    description: 'Add an LLM provider to the AI gateway (the litellm card) from a key the person stored once as an organisation secret: "add my OpenAI key to the gateway". The key reaches the gateway by reference and is never shown. Say the labels if the person named them ("for fast and smart"); otherwise it fills fast and smart where nothing answers yet, makes the provider fast\'s backup where fast already answers, and never changes a label that already answers or fills best (the dearest) unless asked. Ollama fills private and private-smart (with its address, and a key for an Ollama on another machine). "Make smart use provider/model" is models {"smart": "provider/model"}. It shows the plan, asks first, restarts the gateway (about a minute without answers), asks each changed label a tiny question, and reports what each label now uses, what was left alone, and how to change it. If the key is not stored, it says how: request_key.',
+    inputSchema: {
+      provider: z.string().describe(`The provider: ${Object.keys(PROVIDERS).join(', ')}`),
+      labels: z.array(z.string()).optional().describe(`Labels to use it for, if the person named them: ${LABELS.join(', ')}, fast-backup`),
+      models: z.record(z.string(), z.string()).optional().describe('A model per label, if the person named one: {"smart": "openai/gpt-5"}; the model starts with the provider and a slash'),
+      secret: z.string().optional().describe('The stored key as "<secret>:<key>"; default "<provider>:key"'),
+      address: z.string().optional().describe('For ollama: the address of an Ollama published by Edgible on another machine, such as https://ollama.<you>.edgible.app'),
+      app: z.string().optional().describe('The gateway app; default the one this server knows'),
+      confirm: z.array(z.string()).optional().describe('["provider"], only after the person agreed to the plan'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(gatewayProvider));
   server.registerTool('restart_card', {
     title: 'Restart an app',
     description: 'Restart an app that is stuck or not answering: Edgible re-creates it from its current release on its device, data kept. Asks first. Good for "my agent seems stuck".',
