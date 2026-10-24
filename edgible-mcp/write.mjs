@@ -746,6 +746,61 @@ async function gatewayProvider({ provider, labels, models = {}, secret, address,
   };
 }
 
+// app_key: an Edgible API key for one app that publishes on api-key (such as the ollama-osx
+// card's app), stored as an organisation secret and never shown, so another app can be given it
+// by reference (gateway_provider takes it for Ollama). Asked first. A key of the same name made
+// before is deleted once the new one is stored, so keys do not pile up. The key goes to the CLI
+// in a private file, written without a trailing newline: a newline makes Edgible refuse it.
+async function appKey({ app, name, secret, expires, confirm = [] }) {
+  if (!NAME.test(app || '')) return refused('app is the published app the key opens, such as ollama');
+  const keyName = name || 'ai-gateway';
+  if (!SECRET_NAME.test(keyName)) return refused('name is what the key is called, such as ai-gateway');
+  const secretName = secret || app;
+  if (!SECRET_NAME.test(secretName)) return refused('secret is the organisation secret to store it in, such as ollama');
+  if (expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) return refused('expires is a date, such as 2027-01-31');
+  const live = (await apps()).find((a) => a.name === app);
+  if (!live) return refused(`no app called ${app}`);
+  const where = appDevices(live);
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+
+  const listed = await run('edgible', ['app', 'api-keys', 'list', '--app', app], { timeout: 120000 });
+  let earlier = [];
+  try { const j = JSON.parse(listed.stdout); earlier = (Array.isArray(j) ? j : j.keys || []).filter((k) => k.name === keyName); } catch { /* none */ }
+  const stored = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).some((s) => s.name === secretName);
+  if (!confirm.includes('key')) {
+    return needs([{ token: 'key', reason: `Make a key named ${keyName} for ${app} and store it as the organisation secret ${secretName}${stored ? ', replacing the one stored now' : ''}. Nobody sees the key.${earlier.length ? ' The earlier key of that name is deleted once this one is stored, so anything still using it stops working until it is given the new one.' : ''}` }]);
+  }
+  const made = await run('edgible', ['-o', 'json', 'app', 'api-keys', 'create', '--app', app, '--name', keyName, ...(expires ? ['--expires', expires] : [])], { timeout: 120000 });
+  let key, id;
+  try { const j = JSON.parse(made.stdout); key = j.apiKey; id = j.keyData?.id; } catch { /* below */ }
+  if (made.code || !key || !id) {
+    await record({ tool: 'app_key', app, key: keyName, confirmed: confirm, result: 'failed', detail: cliError(made) });
+    return { status: 'failed', reason: `Edgible did not make a key for ${app}: ${cliError(made)}. The app must publish with auth mode api-key.` };
+  }
+  const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-app-key-'));
+  let s;
+  try {
+    await writeFile(path.join(tmp, 'key'), key, { mode: 0o600 });
+    s = await run('edgible', ['secret', 'set', secretName, '--from-file', `key=${path.join(tmp, 'key')}`], { timeout: 120000 });
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  if (s.code) {
+    await run('edgible', ['app', 'api-keys', 'delete', '--app', app, '--key-id', id, '--yes'], { timeout: 120000 });
+    await record({ tool: 'app_key', app, key: keyName, confirmed: confirm, result: 'failed', detail: cliError(s) });
+    return { status: 'failed', reason: `the key was made but Edgible did not store it, so it was deleted again: ${cliError(s)}` };
+  }
+  let removed = 0;
+  for (const k of earlier) {
+    if (k.id === id) continue;
+    const d = await run('edgible', ['app', 'api-keys', 'delete', '--app', app, '--key-id', k.id, '--yes'], { timeout: 120000 });
+    if (!d.code) removed += 1;
+  }
+  await record({ tool: 'app_key', app, key: keyName, secret: secretName, confirmed: confirm, replaced: removed, result: 'made' });
+  return { status: 'made', app, key_name: keyName, secret: `${secretName}:key`, earlier_keys_deleted: removed,
+    next: `Give it to what uses ${app} by reference, such as gateway_provider with provider ollama and secret "${secretName}:key". Whatever used an earlier key of this name stops working until it is given this one; gateway_provider restarts the gateway with it.` };
+}
+
 // restart_card: re-create a wedged app from its current release on its device, asked first.
 async function restartCard({ app, confirm = [] }) {
   const live = (await apps()).find((a) => a.name === app);
@@ -1033,6 +1088,18 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(gatewayProvider));
+  server.registerTool('app_key', {
+    title: 'A key for an app that needs one, stored safely',
+    description: 'Make an Edgible API key for one published app that uses auth mode api-key (such as the ollama app of the ollama-osx card) and store it as an organisation secret, so another app can be given it by reference: nobody sees the key, and it never passes through the conversation. Use it before gateway_provider adds Ollama from another machine. Asks first; a key of the same name made before is deleted once the new one is stored, which stops whatever still uses it until it is given this one.',
+    inputSchema: {
+      app: z.string().describe('The published app the key opens, such as ollama'),
+      name: z.string().optional().describe('What the key is called in Edgible; default ai-gateway'),
+      secret: z.string().optional().describe('The organisation secret to store it in; default the app\'s name'),
+      expires: z.string().optional().describe('An end date, such as 2027-01-31; default none'),
+      confirm: z.array(z.string()).optional().describe('["key"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, wrap(appKey));
   server.registerTool('restart_card', {
     title: 'Restart an app',
     description: 'Restart an app that is stuck or not answering: Edgible re-creates it from its current release on its device, data kept. Asks first. Good for "my agent seems stuck".',
