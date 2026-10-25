@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import YAML from 'yaml';
-import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, deployNext, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 // The litellm card's settings as deploy_card writes them with no keys: nothing answers.
 const empty = () => ({
@@ -139,4 +139,11 @@ test('either way the person is kept away from the admin page and the master key'
     assert.match(t, /Never show or ask for the master key/);
     assert.match(t, /do not send the person to the gateway's admin page/);
   }
+});
+
+test('keys given to a gateway deploy are refused, naming them and the way to add a provider', () => {
+  const t = gatewayKeysRefusal(['DEEPSEEK_API_KEY', 'ANTHROPIC_API_KEY']);
+  assert.match(t, /no provider keys \(you gave DEEPSEEK_API_KEY, ANTHROPIC_API_KEY\)/);
+  assert.match(t, /added afterwards with gateway_provider, one at a time/);
+  assert.match(t, /Deploy it again without keys/);
 });

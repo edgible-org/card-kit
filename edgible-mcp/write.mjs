@@ -25,7 +25,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
-import { LABELS, PROVIDERS, deployNext, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
 const RECORD = path.join(STATE, 'activity.jsonl');
@@ -301,6 +301,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const external = declared.filter(([, s]) => s.kind === 'external');
     const unknown = Object.keys(keys).filter((n) => !external.some(([e]) => e === n));
     if (unknown.length) return refused(`${card} takes no key called ${unknown.join(', ')}; it takes ${external.map(([n]) => n).join(', ') || 'none'}`);
+    // The gateway starts with no provider; each one is added afterwards, in the person's words.
+    if (card === GATEWAY_CARD && Object.keys(keys).length) return refused(gatewayKeysRefusal(Object.keys(keys)));
     const needed = external.filter(([n, s]) => s.required !== false && !keys[n]);
     if (needed.length) {
       return refused(`${card} needs ${needed.map(([n, s]) => `${n}${s.from ? ` (from ${s.from})` : ''}`).join(', ')}. ` +
