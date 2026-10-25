@@ -179,3 +179,10 @@ export function deployNext({ apiUrl, given = [] }) {
   parts.push(" This server keeps the gateway's master key: gateway_key makes each app's key with a budget, gateway_provider adds a provider, and gateway_spend reports spending. Never show or ask for the master key, and do not send the person to the gateway's admin page: it asks for that key, which they do not have, and everything they need is done through these tools.");
   return parts.join('');
 }
+
+// deploy_card refuses provider keys for the gateway. Stored keys wired in at the first deploy made
+// best (the dearest) and open live without the person choosing them, and left gateway_provider
+// nothing to add. The gateway starts with no provider, and each is added in the person's words.
+export function gatewayKeysRefusal(given) {
+  return `The AI gateway is deployed with no provider keys (you gave ${given.join(', ')}). Each provider is added afterwards with gateway_provider, one at a time, so the person sees which labels it fills and nothing is wired in that they did not choose. Deploy it again without keys, then offer gateway_provider, such as "Add my DeepSeek key to the gateway".`;
+}
