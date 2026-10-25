@@ -25,7 +25,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
-import { LABELS, PROVIDERS, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { LABELS, PROVIDERS, deployNext, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
 const RECORD = path.join(STATE, 'activity.jsonl');
@@ -398,7 +398,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
     if (api) {
       result.gateway = `${api.url}/v1`;
-      result.next += ` Its API is ${api.url}/v1. This server keeps the gateway's master key: gateway_key makes each app's key with a budget, and gateway_spend reports spending. Never show or ask for the master key.`;
+      result.next += deployNext({ apiUrl: `${api.url}/v1`, given: Object.keys(refs) });
     }
     const shown = firstUse.filter((f) => !(gateway && f.name === GATEWAY_MASTER));
     if (shown.length) {

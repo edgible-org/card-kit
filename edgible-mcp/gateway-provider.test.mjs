@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import YAML from 'yaml';
-import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, deployNext, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 // The litellm card's settings as deploy_card writes them with no keys: nothing answers.
 const empty = () => ({
@@ -116,4 +116,27 @@ test('the proposal names the labels, what is left alone, and the restart', () =>
   assert.match(text, /fast-backup uses openai\/gpt-5-mini/);
   assert.match(text, /Left alone: fast .*smart/);
   assert.match(text, /restarts/);
+});
+
+test('a gateway deployed with no key is said to have no provider, and the next step is offered', () => {
+  const t = deployNext({ apiUrl: 'https://gw-api.example.edgible.app/v1' });
+  assert.match(t, /Its API is https:\/\/gw-api\.example\.edgible\.app\/v1\./);
+  assert.match(t, /no AI provider yet, so it cannot answer/);
+  assert.match(t, /offer gateway_provider next/);
+  assert.match(t, /Add my DeepSeek key to the gateway/);
+});
+
+test('a gateway deployed with keys says so and does not claim it has no provider', () => {
+  const t = deployNext({ apiUrl: 'https://x/v1', given: ['DEEPSEEK_API_KEY', 'GEMINI_API_KEY'] });
+  assert.match(t, /It was given DEEPSEEK_API_KEY, GEMINI_API_KEY/);
+  assert.doesNotMatch(t, /no AI provider yet/);
+  assert.match(t, /gateway_check/);
+});
+
+test('either way the person is kept away from the admin page and the master key', () => {
+  for (const given of [[], ['OPENAI_API_KEY']]) {
+    const t = deployNext({ apiUrl: 'https://x/v1', given });
+    assert.match(t, /Never show or ask for the master key/);
+    assert.match(t, /do not send the person to the gateway's admin page/);
+  }
 });

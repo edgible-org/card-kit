@@ -166,3 +166,16 @@ export function proposal({ provider, changes, left, address, restartSeconds = 60
   parts.push(`The gateway restarts and does not answer for about ${restartSeconds} seconds.`);
   return parts.join(' ');
 }
+
+// What deploy_card tells the assistant after it deploys a gateway. A gateway with no provider key
+// cannot answer, so say so and what to offer, or the person is left with a running gateway and no
+// next step. And never send the person to the admin page: it asks for the master key, which this
+// server keeps and does not show.
+export function deployNext({ apiUrl, given = [] }) {
+  const parts = [` Its API is ${apiUrl}.`];
+  parts.push(given.length
+    ? ` It was given ${given.join(', ')}: gateway_check asks it a tiny question to see that it answers.`
+    : ' It has no AI provider yet, so it cannot answer a question. Tell the person so, and offer gateway_provider next, such as "Add my DeepSeek key to the gateway" (or OpenAI, Anthropic, Gemini, Mistral, Groq or OpenRouter).');
+  parts.push(" This server keeps the gateway's master key: gateway_key makes each app's key with a budget, gateway_provider adds a provider, and gateway_spend reports spending. Never show or ask for the master key, and do not send the person to the gateway's admin page: it asks for that key, which they do not have, and everything they need is done through these tools.");
+  return parts.join('');
+}
