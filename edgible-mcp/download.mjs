@@ -1,6 +1,8 @@
 // What the first start of a card downloads, so deploy_card and card_status can tell the person the
-// wait is the app's images arriving, once, and about how long. The size is the images' size on
-// disk that test-card measured (test.yml measured: images:), so the download itself is smaller.
+// wait is the app's images arriving, once, and about how long. The size is what test-card measured
+// (test.yml measured: images:, from docker image inspect): the compressed download on Docker's
+// containerd image store, the unpacked size on the classic one, and a little different by CPU. So
+// it is only ever "about", never "unpacked" or "compressed".
 // The same buckets are in card-kit's card-readme.py: change them together.
 import YAML from 'yaml';
 
@@ -41,7 +43,7 @@ export function startNext(download) {
   if (!download) {
     return 'Edgible has handed the app to the device, which now downloads its images from their registry: how long that takes depends on the device\'s connection, and it happens once. Tell the person now. card_status reports when it answers.';
   }
-  return `Edgible has handed the app to the device, which now downloads the app's images from their registry: about ${download.size} once unpacked, ${download.time} on a typical home connection. That time is the download, not Edgible, and it happens once: later starts and upgrades reuse the images. Tell the person this now, before they wait. card_status reports when it answers; until then "starting" is normal, so do not redeploy.`;
+  return `Edgible has handed the app to the device, which now downloads the app's images from their registry: about ${download.size}, ${download.time} on a typical home connection. That time is the download, not Edgible, and it happens once: later starts and upgrades reuse the images. Tell the person this now, before they wait. card_status reports when it answers; until then "starting" is normal, so do not redeploy.`;
 }
 
 // What card_status adds for an app these tools deployed that does not answer yet. While Edgible

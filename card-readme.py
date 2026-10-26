@@ -54,7 +54,9 @@ UNITS = {"KB": 1e3, "MB": 1e6, "GB": 1e9}
 
 
 def image_bytes(d: Path) -> int | None:
-    """The size of the card's images on disk, every place together, as test-card measured it (test.yml)."""
+    """The size of the card's images, every place together, as test-card measured it (test.yml): what Docker
+    reports for them, which is the compressed download on the containerd image store and the unpacked size on
+    the classic one."""
     try:
         measured = (yaml.safe_load((d / "test.yml").read_text()) or {}).get("measured") or {}
     except (OSError, yaml.YAMLError):
@@ -69,7 +71,8 @@ def image_bytes(d: Path) -> int | None:
 
 def download_words(n: float) -> tuple[str, str]:
     """The size of a first start's images, and about how long they take on a typical home connection. The
-    size is on disk, so the download itself is smaller. The same buckets are in edgible-mcp/download.mjs:
+    size is test-card's measure (see image_bytes), about what is downloaded and a little different by CPU,
+    so it is never called "unpacked" or "compressed". The same buckets are in edgible-mcp/download.mjs:
     change them together."""
     size = f"{n / 1e9:.1f} GB".replace(".0 ", " ") if n >= 1e9 else f"{max(1, round(n / 1e6))} MB" if n >= 1e6 else f"{max(1, round(n / 1e3))} KB"
     time = ("under a minute" if n < 100e6 else "a minute or two" if n < 500e6
@@ -85,7 +88,7 @@ def download_note(d: Path) -> str:
     else:
         size, time = download_words(n)
         what = (f"The first start downloads the app's images from the registries named in the Compose file: about "
-                f"{size} once unpacked, {time} on a typical home connection.")
+                f"{size}, {time} on a typical home connection.")
     return (f"{what} `pull` does that download on its own, so you can see it. The time is the download, "
             "not Edgible, and it happens once: later starts and upgrades reuse the images on the machine and fetch only what changed.")
 
