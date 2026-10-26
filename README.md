@@ -324,7 +324,7 @@ git clone https://github.com/edgible-org/card-kit ../card-kit
 
 Writes a card's `README.md`. The parts only a person knows come from a short YAML file; the rest comes from `card.yml` and the Compose files, the same way on every card: How (Fetch, Edit card.env, Check, Start with `prepare.sh` when the card has one, Publish), each app's Verify check by its auth mode, Customising when an app has `source:`, Tear down, and the sizing sentence in What, from `places:`. After Publish it adds a "Without Edgible" note: only Publish is Edgible's, and any reverse proxy or tunnel can take its place.
 
-Start runs `pull` before `up --wait` and says what the first start downloads: about how much (the size of the images on disk that test-card measured, in `test.yml`), and about how long on a typical home connection. So a slow first start reads as the app's images arriving, once, not as Edgible being slow. A card with no measurement yet gets the same sentence without a size.
+Start runs `pull` before `up --wait` and says what the first start downloads: about how much (the image size test-card measured, in `test.yml`: about what is downloaded, a little different by CPU), and about how long on a typical home connection. So a slow first start reads as the app's images arriving, once, not as Edgible being slow. A card with no measurement yet gets the same sentence without a size.
 
 ```yaml
 why: The problem the card solves, with a link to the app.
