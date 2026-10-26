@@ -25,7 +25,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
-import { imageDownload, sizeWords, startNext, startingNote, timeWords } from './download.mjs';
+import { certificateState, imageDownload, pollUntil, sizeWords, startNext, startingNote, timeWords } from './download.mjs';
 import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
@@ -457,27 +457,41 @@ async function removeCard({ app, confirm = [] }) {
   return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app };
 }
 
-async function cardStatus({ app }) {
+async function cardStatus({ app, wait_seconds: waitInput }) {
+  const wait_seconds = app ? waitInput : 0; // waiting on every app would hold the call for one that is down
   const list = await apps();
   const pick = app ? list.filter((a) => a.name === app) : list.filter((a) => a.subtype === 'docker-compose');
   if (!pick.length) return app ? refused(`no app called ${app}`) : 'No managed apps in this organisation.';
-  const out = [];
   const mine = await ours();
-  for (const a of pick) {
-    const device = (a.devices || []).map((d) => d.name).join(', ') || 'unknown';
-    const host = (a.hostnames || [])[0];
-    let answers = null;
-    if (host && (a.status === 'deployed')) {
-      const c = await run('curl', ['-s', '-o', '/dev/null', '-m', '10', '-w', '%{http_code}', `https://${host}/`], { timeout: 20000 });
-      answers = c.stdout || 'no answer';
-    }
-    // An app these tools deployed minutes ago that does not answer is most likely still downloading its images.
-    const e = mine[a.name];
-    const note = startingNote(e?.download ? { size: sizeWords(e.download), time: timeWords(e.download) } : null,
-      e ? (Date.now() - Date.parse(e.at)) / 60000 : undefined, /^[23]/.test(answers || ''), a.status);
-    out.push({ app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype, ...(note ? { note } : {}) });
-  }
-  return out;
+  const once = async () => {
+    // Refreshed each pass: an app's status and certificate change while we wait.
+    const fresh = wait_seconds ? await apps() : list;
+    // The apps are checked at the same time: each is a CLI call and a request.
+    const out = await Promise.all(pick.map(async (a0) => {
+      const a = fresh.find((x) => x.name === a0.name) || a0;
+      const device = (a.devices || []).map((d) => d.name).join(', ') || 'unknown';
+      const host = (a.hostnames || [])[0];
+      // The certificate state is only in `app status`, not in the list.
+      const detail = await edgibleJson(['app', 'status', a.name, '--json'], 60000).catch(() => null);
+      const certificate = certificateState((Array.isArray(detail) ? detail[0] : detail)?.certificates);
+      let answers = null;
+      if (host && (a.status === 'deployed')) {
+        const c = await run('curl', ['-s', '-o', '/dev/null', '-m', '10', '-w', '%{http_code}', `https://${host}/`], { timeout: 20000 });
+        answers = c.stdout || 'no answer';
+      }
+      // An app these tools deployed minutes ago that does not answer is most likely still downloading its images.
+      const e = mine[a.name];
+      const note = startingNote(e?.download ? { size: sizeWords(e.download), time: timeWords(e.download) } : null,
+        e ? (Date.now() - Date.parse(e.at)) / 60000 : undefined, /^[23]/.test(answers || ''), a.status, certificate);
+      return { app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype, ...(certificate ? { certificate } : {}), ...(note ? { note } : {}) };
+    }));
+    return { done: out.every((o) => /^[23]/.test(o.https || '')), out };
+  };
+  // With wait_seconds the call holds until every app named answers, or the time is up, so the assistant
+  // asks once instead of looping. Edgible cannot push a message into the chat when it is ready.
+  if (!wait_seconds) return (await once()).out;
+  const r = await pollUntil(once, { seconds: wait_seconds });
+  return r.done ? r.value.out : r.value.out.map((o) => (o.note ? o : { ...o, note: `Still not answering after ${wait_seconds} s. Call card_status with wait_seconds again.` }));
 }
 
 // Key links: request_key makes a one-time link to a page where the person pastes a key, which is
@@ -1042,8 +1056,11 @@ export function registerWriteTools(server) {
   }, wrap(removeCard));
   server.registerTool('card_status', {
     title: 'Status of managed apps',
-    description: 'Each managed app (or one, by name): its status, the device it runs on, its addresses, and whether its first address answers over HTTPS. For an app deployed in the last hour that does not answer yet, a note says it is most likely still downloading its images (the first start does, once): relay that, wait, and do not redeploy.',
-    inputSchema: { app: z.string().optional() },
+    description: 'Each managed app (or one, by name): its status, the device it runs on, its addresses, its certificate (pending or issued), and whether its first address answers over HTTPS. For an app deployed in the last hour that does not answer yet, a note says why: most likely the device is still downloading its images (the first start does, once), and a new address waits for its certificate, which Edgible issues on its own, usually within a minute. Relay that, and do not redeploy. Nothing can push a message into the chat when it is ready, so ask with wait_seconds (up to 60) to hold one call until it answers.',
+    inputSchema: {
+      app: z.string().optional(),
+      wait_seconds: z.number().int().min(1).max(60).optional().describe('Hold the call until the app answers over HTTPS, or this many seconds pass (up to 60): one call instead of a loop. Use it right after deploy_card, with app.'),
+    },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(cardStatus));
   server.registerTool('whoami', {
