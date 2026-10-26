@@ -154,8 +154,8 @@ def first_start_section(c: dict) -> str:
     if not n:
         return ""
     size, time = CARD_README.download_words(n)
-    return (f"<h2>First start</h2><p>The first start downloads the app's images: about <strong>{size}</strong> once "
-            f"unpacked, {time} on a typical home connection. That time is the download from the app's registry, "
+    return (f"<h2>First start</h2><p>The first start downloads the app's images: about <strong>{size}</strong>, "
+            f"{time} on a typical home connection. That time is the download from the app's registry, "
             "not Edgible, and it happens once: later starts and upgrades reuse the images and fetch only what changed.</p>")
 
 
