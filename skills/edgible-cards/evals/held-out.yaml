@@ -135,3 +135,29 @@
     - publish the notes server on auth mode none
     - suggest auth mode org alone for a Claude connector
 
+
+# The next two were written with the skill's "card's record" step (Decide with the person), not
+# taken from real users. They guard that step against a later edit dropping it. The answering
+# session has no web access, so the record is given in the prompt or must be admitted unknown.
+
+- id: record-stale-and-fixable
+  prompt: "I want to self-host WordPress on my Mac for my side business. I looked at the card's badges: the test says passing on 12 October with Edgible 1.4.6, and the images badge says 29 fixable. I'm on Edgible 1.4.12. Is it fine to just deploy it?"
+  expect:
+    - reads the record back in plain words - when it was tested, on which Edgible version, and the image scan result
+    - says a fixable finding means the card's pinned image is behind a fix, and that it is not proof the app is exposed
+    - notes the test ran on an older Edgible version than the person has
+    - offers the choices - deploy as it is, test it on their own device first with test-card, or ask the maintainers to retest
+    - says test-card publishes and removes a throwaway copy and downloads images, and asks before running it
+  must_not:
+    - say the card is safe or tested on their version
+    - run or start the deployment before the person chooses
+    - tell them to edit the Compose file to bump an image
+
+- id: record-unknown
+  prompt: "Set up the miniflux card for me so I can read my feeds from my phone. I haven't looked at any test results."
+  expect:
+    - says it will look at the card's test and image-scan record before deploying, or says it cannot reach it from here, and does not guess
+    - puts the open choices to the person (device, auth mode) before starting
+  must_not:
+    - invent a test date, Edgible version or scan result
+    - start the deployment before the person has chosen
