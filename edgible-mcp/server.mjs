@@ -21,6 +21,7 @@ const RUNNING_TTL = 30 * 1000;
 const REPO = 'edgible-org/cards';
 const KIT = 'edgible-org/card-kit';
 const STATUS_URL = `https://raw.githubusercontent.com/${REPO}/test-status/status.json`;
+const SCAN_URL = `https://raw.githubusercontent.com/${REPO}/scan-status/scan.json`;
 // How to sign the CLI in, where this server runs. The edgible-mcp card sets its own.
 const SIGN_IN = process.env.EDGIBLE_MCP_SIGN_IN || 'edgible auth login';
 
@@ -81,6 +82,24 @@ async function loadStatus() {
   } catch { return {}; }
 }
 
+// Last night's image scan (the cards repo's scan-status branch): per card, the fixable HIGH and
+// CRITICAL findings in the images it pins. Empty when the branch cannot be read.
+async function loadScan() {
+  try {
+    const res = await fetch(SCAN_URL);
+    if (!res.ok) return {};
+    const byCard = {};
+    for (const item of Object.values(await res.json())) {
+      for (const card of item.cards || []) {
+        const c = (byCard[card] ??= { fixable: 0, critical: false, unscanned: 0 });
+        if (item.error) c.unscanned += 1;
+        for (const f of item.findings || []) { c.fixable += 1; if (f.severity === 'CRITICAL') c.critical = true; }
+      }
+    }
+    return byCard;
+  } catch { return {}; }
+}
+
 let catalog = null;
 let catalogLoading = null;
 const CACHE_FILE = path.join(CACHE_DIR, 'catalog.json');
@@ -110,8 +129,8 @@ async function getCatalog() {
       dirs.push(cards, kit);
       const needs = YAML.parse(await readFile(path.join(kit, 'skills/edgible-cards/needs-map.yaml'), 'utf8')) || [];
       const items = await loadItems(cards);
-      const status = await loadStatus();
-      catalog = { at: Date.now(), repo: REPO, needs, items, status };
+      const [status, scan] = await Promise.all([loadStatus(), loadScan()]);
+      catalog = { at: Date.now(), repo: REPO, needs, items, status, scan };
       await writeCache(catalog);
       return catalog;
     } finally {
@@ -169,6 +188,15 @@ function statusOf(cat, item) {
   return 'not tested';
 }
 
+// The nightly image scan for a card, in a line. A finding means a newer image of the same app
+// has a fix and the card's pin is behind; it is not proof the app is exposed.
+function scanOf(cat, item) {
+  const s = cat.scan?.[item.name];
+  if (!s) return null;
+  if (s.fixable) return `${s.fixable} fixable (worst ${s.critical ? 'CRITICAL' : 'HIGH'}) in last night's image scan`;
+  return s.unscanned ? 'some images not scanned' : 'clean in last night\'s image scan';
+}
+
 function authLine(item) {
   return item.applications.map((a) => `${a.name} (${a.protocol}, ${(a.authModes || []).join('+')})`).join(', ');
 }
@@ -195,7 +223,7 @@ async function find({ need }) {
     for (const i of items) {
       out.push(`- **${i.name}** (${i.type}): ${i.description}`,
         `  - apps: ${authLine(i)}`,
-        `  - status: ${statusOf(cat, i)}`,
+        `  - status: ${statusOf(cat, i)}${scanOf(cat, i) ? `; ${scanOf(cat, i)}` : ''}`,
         `  - ${i.url}`);
     }
     out.push('');
@@ -237,6 +265,8 @@ async function describe({ name }) {
       out.push('');
     }
     out.push('## Tested', '', `- status: ${statusOf(cat, i)}`);
+    const scan = scanOf(cat, i);
+    if (scan) out.push(`- image scan: ${scan}${cat.scan[i.name].fixable ? '. A fixable finding means a newer image of the same app has the fix and the card\'s pin is behind; it is not proof the app is exposed. The person can recheck on their own machine with scan-card, or ask for a retest at https://github.com/edgible-org/cards/issues/new?template=retest.yml' : ''}`);
     if (i.test) {
       out.push(`- last test.yml: ${i.test.result} on ${i.test.tested}, Edgible CLI ${i.test['edgible-cli']}, ${i.test.machine}`);
       if (i.test.images?.length) out.push(`- images: ${i.test.images.map((x) => x.split('@')[0]).join(', ')}`);
@@ -458,7 +488,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.20';
+export const VERSION = '0.7.21';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
