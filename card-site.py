@@ -77,6 +77,8 @@ def _load(tool: str):
 
 
 CARD_FIT = _load("card-fit")
+CARD_README = _load("card-readme")
+HEAVY = 1e9  # a first download at or over this gets a pill on the tile
 FIT_DOC = "https://github.com/edgible-org/card-kit/blob/main/card-fit.py"
 
 
@@ -134,6 +136,27 @@ CLASS_WORDS = {
     "rebuildable": "rebuilt by the app from the rest, such as a search index",
     "cache": "safe to lose, such as thumbnails or downloads",
 }
+
+
+def download_pill(c: dict) -> str:
+    """The tile's pill for a large first download, so a heavy card is known before it is picked."""
+    n = c.get("download")
+    if not n or n < HEAVY:
+        return ""
+    size, _ = CARD_README.download_words(n)
+    return (f'<span class="pill neutral" title="The first start downloads about {size} of images, once. '
+            f'That is the app\'s registry and your connection, not Edgible.">{size} download</span>')
+
+
+def first_start_section(c: dict) -> str:
+    """The card page's First start: what is downloaded, about how long, and that it is once."""
+    n = c.get("download")
+    if not n:
+        return ""
+    size, time = CARD_README.download_words(n)
+    return (f"<h2>First start</h2><p>The first start downloads the app's images: about <strong>{size}</strong> once "
+            f"unpacked, {time} on a typical home connection. That time is the download from the app's registry, "
+            "not Edgible, and it happens once: later starts and upgrades reuse the images and fetch only what changed.</p>")
 
 
 def keeps_section(c: dict) -> str:
@@ -229,6 +252,7 @@ def load_cards(root: Path) -> dict[str, dict]:
             "description": card.get("metadata", {}).get("description", ""),
             "readme": readme.read_text() if readme.exists() else "",
             "fit": CARD_FIT.fit(d),
+            "download": CARD_README.image_bytes(d),
         }
     return cards
 
@@ -366,7 +390,7 @@ class Site:
     def card_tile(self, c: dict, up: str) -> str:
         return (f'<li class="tile"{self.filter_data(c)}><a class="tile-head" href="{up}{esc(c["name"])}/">{self.icon(c, up, 40)}'
                 f'<strong>{esc(c["name"])}</strong></a>'
-                f'<span>{esc(c["description"])}</span><span class="pills">{status_pill(self.status.get(c["name"]))}{fit_pill(c["fit"])}</span></li>')
+                f'<span>{esc(c["description"])}</span><span class="pills">{status_pill(self.status.get(c["name"]))}{fit_pill(c["fit"])}{download_pill(c)}</span></li>')
 
     def index(self) -> None:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
@@ -521,6 +545,7 @@ class Site:
 <h2>Machine</h2>
 <p>A place is one serving device. Minimum recommended for each:</p>
 <div class="scroll"><table><thead><tr><th>Place</th><th>Memory</th><th>Disk</th><th>Architecture</th><th>GPU</th></tr></thead><tbody>{places}</tbody></table></div>
+{first_start_section(c)}
 {keeps_section(c)}
 {protects_section(c)}
 {fit_section(c["fit"])}
