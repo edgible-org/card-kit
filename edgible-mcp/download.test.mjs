@@ -47,6 +47,10 @@ test('card_status explains a recent app that does not answer, and stays quiet ot
   assert.match(startingNote(d, 3, false), /3 min ago.*2\.1 GB.*ten minutes or more.*not Edgible/);
   assert.match(startingNote(null, 0.2, false), /1 min ago.*its images/);
   assert.equal(startingNote(d, 3, true), undefined);
+  // Once Edgible says deployed, the images are down: the wait is the address, not a download.
+  assert.match(startingNote(d, 2, false, 'deployed'), /reports it deployed.*certificate and DNS.*do not redeploy/);
+  assert.doesNotMatch(startingNote(d, 2, false, 'deployed'), /downloading/);
+  assert.match(startingNote(d, 2, false, 'deploying'), /still downloading/);
   assert.equal(startingNote(d, 90, false), undefined);
   assert.equal(startingNote(d, undefined, false), undefined);
 });
