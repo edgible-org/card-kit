@@ -306,7 +306,7 @@ There are two kinds of tool, and the difference decides how each one runs.
 
 A tool that works on files in a repo runs through `run`, in the image from [Dockerfile](Dockerfile). It may use any package; add the package to the Dockerfile. Docker is the only thing an author installs.
 
-A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env`, `test-card`, `test-cards`, `backup-card`, `restore-card` and `verify-card` are these; `run` refuses them.
+A tool that checks the machine a card runs on does not run in a container, because a container sees its own ports, processes, and files, not the machine's. That tool is one Python file that uses only the standard library, so it runs with `python3` anywhere, and a card README can fetch it with `curl`. `check-env`, `test-card`, `test-cards`, `backup-card`, `restore-card`, `verify-card` and `scan-card` are these; `run` refuses them. `scan-card <card>` scans the images a card pins for fixable HIGH and CRITICAL vulnerabilities with Trivy, run as a container, changing nothing: the same check as the nightly scan in edgible-org/cards, for one card on your machine, with your `card.env` overrides.
 
 ### run
 
