@@ -44,10 +44,16 @@ export function startNext(download) {
   return `Edgible has handed the app to the device, which now downloads the app's images from their registry: about ${download.size} once unpacked, ${download.time} on a typical home connection. That time is the download, not Edgible, and it happens once: later starts and upgrades reuse the images. Tell the person this now, before they wait. card_status reports when it answers; until then "starting" is normal, so do not redeploy.`;
 }
 
-// What card_status adds for an app these tools deployed that does not answer yet.
-export function startingNote(download, minutesAgo, answering) {
+// What card_status adds for an app these tools deployed that does not answer yet. While Edgible
+// still says "deploying" the device is most likely downloading images. Once it says "deployed" the
+// images are down, and what is left is the new address's certificate and DNS, which can take a
+// minute or two: saying "downloading" then would be wrong.
+export function startingNote(download, minutesAgo, answering, status) {
   if (answering || minutesAgo === undefined || minutesAgo > 60) return undefined;
   const mins = Math.max(1, Math.round(minutesAgo));
+  if (status === 'deployed') {
+    return `Deployed ${mins} min ago: Edgible reports it deployed, but its address does not answer yet. A new address needs its certificate and DNS, which can take a minute or two. Wait and check again; do not redeploy.`;
+  }
   const what = download ? `about ${download.size} of images, ${download.time} on a typical home connection` : 'its images';
   return `Deployed ${mins} min ago and not answering yet: the device is most likely still downloading ${what}. That is the app's registry and the device's connection, not Edgible. Wait and check again; do not redeploy.`;
 }
