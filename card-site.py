@@ -338,7 +338,7 @@ class Site:
 {body}
 </main>
 <footer><div class="wrap">
-<p>Built {self.built} from <a href="{REPO_URL}">edgible-org/cards</a>{commit}. Cards are free to run and share under the repo's license. Test results come from the nightly regression, on a real Edgible serving device.</p>
+<p>Built {self.built} from <a href="{REPO_URL}">edgible-org/cards</a>{commit}. Cards are free to run and share under the repo's license. Test results come from the nightly regression, on a real Edgible serving device. Questions or ideas? <a href="https://www.edgible.ai/contact/">Contact us</a>.</p>
 </div></footer>
 </body>
 </html>
