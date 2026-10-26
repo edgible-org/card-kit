@@ -38,24 +38,63 @@ export function imageDownload(testYml) {
   return { bytes, size: sizeWords(bytes), time: timeWords(bytes) };
 }
 
-// What deploy_card's `next` says about the wait.
+// What deploy_card's `next` says about the wait. Two things take time and neither is Edgible being
+// slow: the device downloading the images (once), and Edgible issuing the new address's certificate
+// (usually under a minute, on its own). The server cannot push a message into the chat, so the
+// assistant asks card_status, which can hold the call open (wait_seconds) until the address answers.
 export function startNext(download) {
-  if (!download) {
-    return 'Edgible has handed the app to the device, which now downloads its images from their registry: how long that takes depends on the device\'s connection, and it happens once. Tell the person now. card_status reports when it answers.';
-  }
-  return `Edgible has handed the app to the device, which now downloads the app's images from their registry: about ${download.size}, ${download.time} on a typical home connection. That time is the download, not Edgible, and it happens once: later starts and upgrades reuse the images. Tell the person this now, before they wait. card_status reports when it answers; until then "starting" is normal, so do not redeploy.`;
+  const images = download
+    ? `now downloads the app's images from their registry: about ${download.size}, ${download.time} on a typical home connection. That time is the download, not Edgible, and it happens once: later starts and upgrades reuse the images.`
+    : 'now downloads its images from their registry: how long that takes depends on the device\'s connection, and it happens once.';
+  return `Edgible has handed the app to the device, which ${images} A new address also needs its certificate, which Edgible issues on its own, usually within a minute. Tell the person this now, before they wait. Then call card_status with wait_seconds (up to 60) until it answers; until then "starting" is normal, so do not redeploy.`;
+}
+
+// The certificate state from `edgible app status --json` certificates: [{hostname, status}].
+// "issued" when every one is, "pending" when one is on its way, the raw status for anything else
+// (an error, say), undefined when the app reports none.
+export function certificateState(certs) {
+  const states = (Array.isArray(certs) ? certs : []).map((c) => String(c?.status || '').toLowerCase()).filter(Boolean);
+  if (!states.length) return undefined;
+  if (states.every((s) => s === 'issued')) return 'issued';
+  const other = states.find((s) => s !== 'issued' && s !== 'pending');
+  return other || 'pending';
 }
 
 // What card_status adds for an app these tools deployed that does not answer yet. While Edgible
 // still says "deploying" the device is most likely downloading images. Once it says "deployed" the
-// images are down, and what is left is the new address's certificate and DNS, which can take a
-// minute or two: saying "downloading" then would be wrong.
-export function startingNote(download, minutesAgo, answering, status) {
+// images are down. A pending certificate is named whenever it is, because it is real, and an issued
+// one that has not started answering is DNS, which can take a minute more.
+export function startingNote(download, minutesAgo, answering, status, certificate) {
   if (answering || minutesAgo === undefined || minutesAgo > 60) return undefined;
   const mins = Math.max(1, Math.round(minutesAgo));
-  if (status === 'deployed') {
-    return `Deployed ${mins} min ago: Edgible reports it deployed, but its address does not answer yet. A new address needs its certificate and DNS, which can take a minute or two. Wait and check again; do not redeploy.`;
+  const parts = [];
+  if (status !== 'deployed') {
+    const what = download ? `about ${download.size} of images, ${download.time} on a typical home connection` : 'its images';
+    parts.push(`the device is most likely still downloading ${what}`);
   }
-  const what = download ? `about ${download.size} of images, ${download.time} on a typical home connection` : 'its images';
-  return `Deployed ${mins} min ago and not answering yet: the device is most likely still downloading ${what}. That is the app's registry and the device's connection, not Edgible. Wait and check again; do not redeploy.`;
+  if (certificate === 'pending') {
+    parts.push('Edgible is still issuing the address\'s certificate, which it does on its own, usually within a minute');
+  } else if (status === 'deployed' && certificate && certificate !== 'issued') {
+    parts.push(`the address's certificate shows "${certificate}", which Edgible needs to resolve`);
+  } else if (status === 'deployed') {
+    parts.push(certificate === 'issued'
+      ? 'its certificate is issued, and the address can take a minute more to start answering (DNS)'
+      : 'a new address needs its certificate and DNS, which can take a minute or two');
+  }
+  if (!parts.length) return undefined;
+  return `Deployed ${mins} min ago and not answering yet: ${parts.join('; ')}. That is the app's registry, the device's connection and Edgible's usual set-up, not a fault. Wait and check again; do not redeploy.`;
+}
+
+// Call check() until it says done or the time is up: { done, tries, value }. sleep is a parameter so a
+// test does not wait.
+export async function pollUntil(check, { seconds, everyMs = 5000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), now = Date.now } = {}) {
+  const deadline = now() + seconds * 1000;
+  let tries = 0;
+  for (;;) {
+    tries += 1;
+    const value = await check();
+    if (value.done) return { done: true, tries, value };
+    if (now() + everyMs > deadline) return { done: false, tries, value };
+    await sleep(everyMs);
+  }
 }
