@@ -139,6 +139,19 @@ If nothing fits:
 
 Before anything starts, put the card's open choices to the person in one message, with your recommendation for each:
 
+- **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in):
+
+  ```bash
+  curl -fsS https://raw.githubusercontent.com/edgible-org/cards/test-status/status.json | jq '.["<card>"]'
+  curl -fsS https://raw.githubusercontent.com/edgible-org/cards/scan-status/<card>.json
+  ```
+
+  The first gives `result`, `tested` (a date) and `edgible-cli` (the version it passed on); the second gives `message` (`clean`, `N fixable`, `not scanned` or `no images`) and `color`. Put it in one plain line, such as "tested and passing on 12 October with Edgible 1.4.12; the image scan found 3 fixable issues". A fixable finding means a newer image of the same app has a fix and the card's pin is behind: say so, and that it is not proof the app is exposed. Offer a recheck when the result is `fail`, the test is older than 30 days, it ran on an older `edgible --version` than the person has, or the scan shows `fixable`. The person chooses:
+  - **Deploy as it is**, if they accept the record.
+  - **Test it on their own device first**: `test-card <card> --device <device>`. It publishes and removes a throwaway copy, takes minutes, and downloads the images, so ask first and say so. Where you have no shell on their machine, give them the command (see [Where you are running](#where-you-are-running)).
+  - **Ask the maintainers to retest it**: open an issue on edgible-org/cards naming the card. Someone with write access can also run the regression for one card: `gh workflow run regression.yml -R edgible-org/cards -f only=<card>`. Say that it is not instant.
+
+  A card with no entry in the status data has not been through the regression: say so. If the data cannot be fetched, say that too and carry on; never invent a record.
 - **Which device runs each place.** `edgible device list` prints the names. One machine can hold every place of a small, trusted setup. Say what the card's README says about keeping places apart. Each place in the card's `card.yml` has a minimum (`places:`: memory, disk, CPU type, GPU), which the README's What section says in words. Match it to a device that has that much to spare, not just in total: a laptop already running other apps may not. When none fits, say so now, and offer another device, a larger cloud server, or stopping something, before anything starts.
 - **Each hostname's auth mode**, and what it means: `none` is the open internet, protected only by the app's own login. When the data is sensitive, offer the needs map's `exposure.sensitive` choices, including not publishing at all, even when the card uses `none`.
 - **Their own domain**, for an app people reach from outside. Set it at the first Publish with `--hostnames`, because the CLI cannot add one later without unpublishing the app. It must be a domain they control, not a name under `edgible.app` or `edgible.com`, which Edgible reserves for the hostnames it generates.
