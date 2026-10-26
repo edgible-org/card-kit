@@ -408,7 +408,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const shown = firstUse.filter((f) => !(gateway && f.name === GATEWAY_MASTER));
     if (shown.length) {
       result.firstUse = shown;
-      result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it and change it at once; the card made every other secret on the device, and nobody knows those.';
+      result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
       // remove_card leaves an app's volumes on its device, and a card never replaces a secret that
       // exists, so an app deployed again under its old name keeps its old passwords.
       const before = (await readRecord()).some((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed');
@@ -474,7 +474,7 @@ async function cardStatus({ app }) {
     // An app these tools deployed minutes ago that does not answer is most likely still downloading its images.
     const e = mine[a.name];
     const note = startingNote(e?.download ? { size: sizeWords(e.download), time: timeWords(e.download) } : null,
-      e ? (Date.now() - Date.parse(e.at)) / 60000 : undefined, /^[23]/.test(answers || ''));
+      e ? (Date.now() - Date.parse(e.at)) / 60000 : undefined, /^[23]/.test(answers || ''), a.status);
     out.push({ app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype, ...(note ? { note } : {}) });
   }
   return out;
