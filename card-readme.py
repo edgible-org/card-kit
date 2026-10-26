@@ -50,6 +50,46 @@ def env_name(name: str) -> str:
     return name.upper().replace("-", "_")
 
 
+UNITS = {"KB": 1e3, "MB": 1e6, "GB": 1e9}
+
+
+def image_bytes(d: Path) -> int | None:
+    """The size of the card's images on disk, every place together, as test-card measured it (test.yml)."""
+    try:
+        measured = (yaml.safe_load((d / "test.yml").read_text()) or {}).get("measured") or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    total = 0
+    for place in measured.values():
+        m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*(KB|MB|GB)", str((place or {}).get("images", "")).strip(), re.I)
+        if m:
+            total += float(m.group(1)) * UNITS[m.group(2).upper()]
+    return round(total) or None
+
+
+def download_words(n: float) -> tuple[str, str]:
+    """The size of a first start's images, and about how long they take on a typical home connection. The
+    size is on disk, so the download itself is smaller. The same buckets are in edgible-mcp/download.mjs:
+    change them together."""
+    size = f"{n / 1e9:.1f} GB".replace(".0 ", " ") if n >= 1e9 else f"{max(1, round(n / 1e6))} MB" if n >= 1e6 else f"{max(1, round(n / 1e3))} KB"
+    time = ("under a minute" if n < 100e6 else "a minute or two" if n < 500e6
+            else "a few minutes" if n < 1.5e9 else "ten minutes or more")
+    return size, time
+
+
+def download_note(d: Path) -> str:
+    """What the first start downloads, and that it is the app's images, once, not Edgible."""
+    n = image_bytes(d)
+    if n is None:
+        what = "The first start downloads the app's images from the registries named in the Compose file, which takes longer for a larger app."
+    else:
+        size, time = download_words(n)
+        what = (f"The first start downloads the app's images from the registries named in the Compose file: about "
+                f"{size} once unpacked, {time} on a typical home connection.")
+    return (f"{what} `pull` does that download on its own, so you can see it. The time is the download, "
+            "not Edgible, and it happens once: later starts and upgrades reuse the images on the machine and fetch only what changed.")
+
+
 def sizing(card: dict) -> str:
     sentences = []
     for place, p in (card.get("places") or {}).items():
@@ -321,12 +361,12 @@ def main(argv: list[str]) -> int:
         where = f"On the machine for place `{pl}`. " if multi else ""
         note = ((spec.get("helpers") or {}).get(pl) or "").strip()
         helper_steps += (f"\n### {6 + i}. Start the {pl}\n\n{where}Its services connect out to what Publish "
-                         f"published, so they start now.\n\n{FENCE}bash\n{run_files(files_of[pl], 'up -d --wait')}\n"
+                         f"published, so they start now.\n\n{FENCE}bash\n{run_files(files_of[pl], 'pull')}\n{run_files(files_of[pl], 'up -d --wait')}\n"
                          f"{run_files(files_of[pl], 'ps')}\n{FENCE}\n\n{note}\n")
     fetch_note = ("\n\nOn each machine that runs a place, fetch the card and set up `card.env` the same way: "
                   "the places share its settings." if multi else "")
     stop_order = helper_places + app_places
-    up_ps = lambda files: (f"{FENCE}bash\n{run_files(files, 'up -d --wait')}\n"
+    up_ps = lambda files: (f"{FENCE}bash\n{run_files(files, 'pull')}\n{run_files(files, 'up -d --wait')}\n"
                            f"{run_files(files, 'ps')}\n{FENCE}")
     start_block = ("\n\n".join(on(pl) + up_ps(files_of[pl]) for pl in app_places if files_of[pl])
                    if multi else up_ps(composes))
@@ -382,7 +422,7 @@ python3 check-env.py {name}
 
 {start_block}
 
-`--wait` returns when each service is running, and healthy when it has a healthcheck. {spec.get('start', '').strip()}{prepare_block}
+{download_note(d)} `--wait` returns when each service is running, and healthy when it has a healthcheck. {spec.get('start', '').strip()}{prepare_block}
 
 ### 5. Publish
 
