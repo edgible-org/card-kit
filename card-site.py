@@ -65,8 +65,8 @@ DRIVER_WORDS = {
     "shut-down": "a service that shut down or got worse", "compliance": "compliance",
     "local": "it has to run at home",
 }
-SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai"}
-RESERVED = {"about", "ai", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible"}
+RESERVED = {"about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -405,7 +405,7 @@ class Site:
 <li><strong>The same steps every time</strong><span>Check, Start, Publish, Verify, Tear down. Learn one card and you know them all, and so does an AI agent.</span></li>
 <li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result on every card.</span></li>
 </ul>
-<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{REPO_URL}/blob/main/CONTRIBUTING.md">share it back</a>. <a href="about/">Why cards &rarr;</a></p>
+<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{REPO_URL}/blob/main/CONTRIBUTING.md">share it back</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 <p class="stats">{len(apps)} app cards, {len(patterns)} pattern cards, {tested} passing their latest test, {len(self.needs)} needs mapped.</p>
 <p class="star-ask">Found one that helps? <a href="{REPO_URL}">Star edgible-org/cards on GitHub</a>, so other people find it too.</p>
 </section>
@@ -464,6 +464,13 @@ class Site:
                      "Use Edgible cards with your AI agent",
                      "Install the edgible-cards skill, describe what you need in your own words, and your AI "
                      "agent finds a card, runs it on your machine, and builds and shares a new one when none fits.")
+
+    def run_without_edgible_page(self) -> None:
+        """/run-without-edgible/, from RUN-WITHOUT-EDGIBLE.md: running a card on your own server."""
+        self.md_page("RUN-WITHOUT-EDGIBLE.md", "run-without-edgible", "Run a card without Edgible",
+                     "Run an Edgible card without Edgible",
+                     "A card is plain Docker Compose: how to run one on your own server and domain, "
+                     "and what Edgible does for you instead.")
 
     def md_page(self, source: str, path: str, fallback: str, title_tag: str, description: str) -> None:
         """A page from a Markdown file at the root of the cards repo, such as ABOUT.md."""
@@ -703,6 +710,7 @@ class Site:
 
 Why cards exist, and why they are shaped for sharing: {base}about/
 How to use cards with an AI agent, and the skill to install: {base}ai/
+How to run a card on your own server without Edgible: {base}run-without-edgible/
 
 Each card page has how to start, publish, check, and remove the card. Each need page says whether self-hosting suits that need, which questions decide it, and how to publish it safely. The source of every card is {REPO_URL}. An AI agent can do the whole flow with the edgible-cards skill: {SKILL_URL}
 
@@ -755,6 +763,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
             self.card_page(c)
         self.about_page()
         self.ai_page()
+        self.run_without_edgible_page()
         self.needs_index()
         for n in self.needs:
             self.need_page(n)
