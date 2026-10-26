@@ -25,6 +25,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { imageDownload, sizeWords, startNext, startingNote, timeWords } from './download.mjs';
 import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
@@ -289,6 +290,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
   if (!fetched) return refused(`no card called ${card} in ${REPO}`);
   try {
     const { card: meta } = fetched;
+    // What the first start downloads, from the images test-card measured, to tell the person before they wait.
+    const download = imageDownload(await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => ''));
     // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.
     const published = (meta.applications || []).filter((a) => a.published !== false);
     if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this version handles cards that publish one`);
@@ -396,8 +399,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       if (api.status !== 'ok') return api;
     }
     const created = (await apps()).find((a) => a.name === app);
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, result: 'created' });
-    const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], next: 'Edgible is starting it on the device; card_status reports when it answers, usually within two minutes.' };
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
+    const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], ...(download ? { download: { size: download.size, time: download.time } } : {}), next: startNext(download) };
     if (api) {
       result.gateway = `${api.url}/v1`;
       result.next += deployNext({ apiUrl: `${api.url}/v1`, given: Object.keys(refs) });
@@ -459,6 +462,7 @@ async function cardStatus({ app }) {
   const pick = app ? list.filter((a) => a.name === app) : list.filter((a) => a.subtype === 'docker-compose');
   if (!pick.length) return app ? refused(`no app called ${app}`) : 'No managed apps in this organisation.';
   const out = [];
+  const mine = await ours();
   for (const a of pick) {
     const device = (a.devices || []).map((d) => d.name).join(', ') || 'unknown';
     const host = (a.hostnames || [])[0];
@@ -467,7 +471,11 @@ async function cardStatus({ app }) {
       const c = await run('curl', ['-s', '-o', '/dev/null', '-m', '10', '-w', '%{http_code}', `https://${host}/`], { timeout: 20000 });
       answers = c.stdout || 'no answer';
     }
-    out.push({ app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype });
+    // An app these tools deployed minutes ago that does not answer is most likely still downloading its images.
+    const e = mine[a.name];
+    const note = startingNote(e?.download ? { size: sizeWords(e.download), time: timeWords(e.download) } : null,
+      e ? (Date.now() - Date.parse(e.at)) / 60000 : undefined, /^[23]/.test(answers || ''));
+    out.push({ app: a.name, status: a.status, device, hostnames: a.hostnames, https: answers, kind: a.subtype, ...(note ? { note } : {}) });
   }
   return out;
 }
@@ -1001,7 +1009,7 @@ export function registerWriteTools(server) {
   };
   server.registerTool('deploy_card', {
     title: 'Deploy an Edgible app card on a device',
-    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone.',
+    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone. The first start downloads the app\'s images on the device, once; the result says about how much and how long, so tell the person before they wait, and say it is the download, not Edgible.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
       device: z.string().describe('The Edgible device to run it on, by name'),
@@ -1034,7 +1042,7 @@ export function registerWriteTools(server) {
   }, wrap(removeCard));
   server.registerTool('card_status', {
     title: 'Status of managed apps',
-    description: 'Each managed app (or one, by name): its status, the device it runs on, its addresses, and whether its first address answers over HTTPS.',
+    description: 'Each managed app (or one, by name): its status, the device it runs on, its addresses, and whether its first address answers over HTTPS. For an app deployed in the last hour that does not answer yet, a note says it is most likely still downloading its images (the first start does, once): relay that, wait, and do not redeploy.',
     inputSchema: { app: z.string().optional() },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, wrap(cardStatus));
