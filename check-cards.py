@@ -56,6 +56,7 @@ say pass only when no step failed, and name no hostname.
 from __future__ import annotations
 
 import importlib.util
+from datetime import date
 import json
 import re
 import sys
@@ -434,6 +435,10 @@ def main(argv: list[str]) -> int:
     for path in card_paths(argv):
         try:
             card = yaml.safe_load(path.read_text())
+            # YAML reads an unquoted 2026-10-11 as a date; the schema wants the text.
+            meta = card.get("metadata") or {}
+            if isinstance(meta.get("added"), date):
+                meta["added"] = meta["added"].isoformat()
             name = card["metadata"]["name"]
             if name != path.parent.name:
                 raise SystemExit(
