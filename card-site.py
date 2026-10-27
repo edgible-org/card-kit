@@ -450,13 +450,13 @@ class Site:
         recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
         recent_html = ("<p class=\"stats\">Recently added: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent) + ".</p>") if recent else ""
         body = f"""<section class="hero">
-<h1>Self-hosted setups you can copy, tested every week</h1>
+<h1>Self-hosted setups you can copy, with the test date on every card</h1>
 <p class="lead">A card is a working self-hosted setup in a form made to be shared: plain files that anyone can read, run on a machine they control, change, and share back. One app, or several wired together.</p>
 <ul class="pillars">
 <li><strong>Made to share</strong><span>Nothing personal is in it: no device names, hostnames or passwords. You fill in your own. It is plain files in git, so you can fork it and share your version back.</span></li>
 <li><strong>The whole setup</strong><span>The apps, images and ports, which machine runs what, and who gets in to each hostname: anyone, your organization's sign-in, or an API key. Edgible publishes them, with TLS.</span></li>
 <li><strong>The same steps every time</strong><span>Check, Start, Publish, Verify, Tear down. Learn one card and you know them all, and so does an AI agent.</span></li>
-<li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result on every card.</span></li>
+<li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result and its date on every card. Rechecked on a rolling schedule, when an app's image changes, and on request; images are scanned every night.</span></li>
 </ul>
 <p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{REPO_URL}/blob/main/CONTRIBUTING.md">share it back</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 {recent_html}
@@ -478,7 +478,7 @@ class Site:
 <h2>With an AI agent</h2>
 <p>The <a href="{SKILL_URL}">edgible-cards skill</a> teaches an AI agent, such as Claude Code, to go from a need to a running, published card, to look after it, and to build and share a new card when none fits. <a href="ai/">Use cards with your AI &rarr;</a></p>
 """
-        self.page("", "Edgible cards: self-hosted apps, tested every week",
+        self.page("", "Edgible cards: self-hosted apps, with the test date on every card",
                   "Self-hosted setups written down to be shared: run one on a machine you control, change it, and share it back. Each is tested end to end on a real Edgible serving device.",
                   body)
 
