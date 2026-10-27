@@ -13,7 +13,7 @@ repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 if [ $# -eq 0 ]; then
   echo "usage: <path to card-kit>/run <tool> [args...]" >&2
-  echo "tools: $(cd "$kit" && ls *.py | sed 's/\.py$//' | grep -vE '^(check-env|test-card|test-cards|backup-card|restore-card|verify-card|scan-card)$' | tr '\n' ' ')" >&2
+  echo "tools: $(cd "$kit" && ls *.py | sed 's/\.py$//' | grep -vE '^(upstream|check-env|test-card|test-cards|backup-card|restore-card|verify-card|scan-card)$' | tr '\n' ' ')" >&2
   exit 2
 fi
 

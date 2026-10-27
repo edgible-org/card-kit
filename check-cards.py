@@ -491,6 +491,19 @@ def main(argv: list[str]) -> int:
             failed = True
             continue
         print(f"ok {path}")
+    # The upstream/ requests are checked with the whole repo, not when one card is named.
+    if not argv and (Path.cwd() / "upstream").is_dir():
+        spec = importlib.util.spec_from_file_location("upstream", Path(__file__).resolve().parent / "upstream.py")
+        upstream = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(upstream)
+        names = {p.parent.name for p in Path.cwd().glob("*/card.yml")}
+        for file, errs in upstream.problems(Path.cwd(), names):
+            for error in errs:
+                print(f"upstream/{file}: {error}", file=sys.stderr)
+            if errs:
+                failed = True
+            else:
+                print(f"ok upstream/{file}")
     return 1 if failed else 0
 
 

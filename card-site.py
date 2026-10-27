@@ -66,7 +66,7 @@ DRIVER_WORDS = {
     "local": "it has to run at home",
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible"}
-RESERVED = {"about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+RESERVED = {"upstream", "about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -78,6 +78,7 @@ def _load(tool: str):
 
 CARD_FIT = _load("card-fit")
 CARD_README = _load("card-readme")
+UPSTREAM = _load("upstream")
 HEAVY = 1e9  # a first download at or over this gets a pill on the tile
 FIT_DOC = "https://github.com/edgible-org/card-kit/blob/main/card-fit.py"
 
@@ -211,6 +212,27 @@ def protects_section(c: dict) -> str:
     return "<h2>What it protects</h2><ul>" + "".join(items) + "</ul>"
 
 
+def ticks(text: str) -> str:
+    """Text with `code` in backticks, escaped, as HTML."""
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", esc(text))
+
+
+def upstream_section(requests: list[dict]) -> str:
+    """Known upstream issues: what testing this card suggests the app's authors could change."""
+    if not requests:
+        return ""
+    words = {"draft": "not yet reported", "sent": "reported", "resolved": "resolved", "wontfix": "declined"}
+    items = []
+    for r in requests:
+        m = r["meta"]
+        link = (f' <a href="{esc(m["sent"])}" rel="noopener">The issue</a>.' if str(m.get("sent") or "").startswith("https://") else "")
+        items.append(f'<li><strong><a href="{REPO_URL}/blob/main/upstream/{esc(r["file"])}">{ticks(r["title"])}</a></strong> '
+                     f'({esc(words.get(m["status"], m["status"]))}, found {esc(m["found"])}). '
+                     f'For <a href="{esc(m["project"])}" rel="noopener">{esc(m["app"])}</a>.{link}</li>')
+    return ("<h2>Known upstream issues</h2><p>Found while testing this card. Each is a request for the app's "
+            "authors, not a fault in the card.</p><ul>" + "".join(items) + "</ul>")
+
+
 def esc(s: object) -> str:
     return html.escape(str(s), quote=True)
 
@@ -317,6 +339,7 @@ class Site:
         self.root, self.out, self.cards, self.needs = root, out, cards, needs
         self.status, self.base = status, base_url.rstrip("/")
         self.commit = commit
+        self.upstream = UPSTREAM.load(root)
         self.stars = f" · {stars:,}" if stars >= STARS_SHOWN_FROM else ""
         self.built = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         self.pages: list[str] = []
@@ -587,6 +610,7 @@ class Site:
 {keeps_section(c)}
 {protects_section(c)}
 {fit_section(c["fit"])}
+{upstream_section(UPSTREAM.for_card(self.upstream, name))}
 {needs_html}
 <article class="readme">
 {self.readme_html(c)}
