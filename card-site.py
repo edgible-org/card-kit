@@ -29,7 +29,7 @@ import json
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import importlib.util
@@ -250,11 +250,27 @@ def load_cards(root: Path) -> dict[str, dict]:
             "card": card,
             "type": card.get("metadata", {}).get("type", "app"),
             "description": card.get("metadata", {}).get("description", ""),
+            "added": str(card.get("metadata", {}).get("added", "")),
+            "homepage": card.get("metadata", {}).get("homepage", ""),
             "readme": readme.read_text() if readme.exists() else "",
             "fit": CARD_FIT.fit(d),
             "download": CARD_README.image_bytes(d),
         }
     return cards
+
+
+def added_html(c: dict) -> str:
+    """"Added 18 October 2026" for a card that says when it was added."""
+    try:
+        d = date.fromisoformat(c.get("added", ""))
+    except ValueError:
+        return ""
+    return f'<span class="added">Added {d.day} {d.strftime("%B %Y")}</span>'
+
+
+def homepage_html(c: dict) -> str:
+    url = c.get("homepage", "")
+    return f'<a href="{esc(url)}" rel="noopener">App home page</a>' if url.startswith("https://") else ""
 
 
 def memory_mb(v: object) -> float | None:
@@ -396,6 +412,8 @@ class Site:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
         patterns = [c for c in self.cards.values() if c["type"] != "app"]
         tested = sum(1 for c in self.cards if self.status.get(c, {}).get("result") == "pass")
+        recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
+        recent_html = ("<p class=\"stats\">Recently added: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent) + ".</p>") if recent else ""
         body = f"""<section class="hero">
 <h1>Self-hosted setups you can copy, tested every week</h1>
 <p class="lead">A card is a working self-hosted setup in a form made to be shared: plain files that anyone can read, run on a machine they control, change, and share back. One app, or several wired together.</p>
@@ -406,6 +424,7 @@ class Site:
 <li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result on every card.</span></li>
 </ul>
 <p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{REPO_URL}/blob/main/CONTRIBUTING.md">share it back</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
+{recent_html}
 <p class="stats">{len(apps)} app cards, {len(patterns)} pattern cards, {tested} passing their latest test, {len(self.needs)} needs mapped.</p>
 <p class="star-ask">Found one that helps? <a href="{REPO_URL}">Star edgible-org/cards on GitHub</a>, so other people find it too.</p>
 </section>
@@ -545,7 +564,7 @@ class Site:
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
 <h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
 <p class="lead">{esc(c["description"])}</p>
-<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
