@@ -51,6 +51,19 @@
           "type": "string",
           "pattern": "^https://",
           "description": "The app's own home page, such as its website or documentation. Shown on the card's page."
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The app's licence as an SPDX identifier, such as AGPL-3.0-only or MIT. Shown on the card's page. Leave it out when unsure."
+        },
+        "status": {
+          "enum": [
+            "experimental",
+            "stable",
+            "deprecated"
+          ],
+          "description": "experimental: newly made, less proven. stable: the default when this is left out. deprecated: still here but do not start new setups on it; the README says what replaces it."
         }
       }
     },
