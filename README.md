@@ -12,7 +12,7 @@ Most apps are web apps published over `https`. An app that is not web, such as a
 
 A card is a directory whose name is the card's name. In a cards repo, every top-level directory that holds a `card.yml` is one card.
 
-A card is one of two types, set as `metadata.type` in `card.yml`:
+A card's `metadata` in `card.yml` has `name`, `description`, `type`, and two optional lines: `added: 2026-10-18`, the date it joined the catalog (the site shows it and lists the newest), and `homepage: https://...`, the app's own home page. Neither affects whether a card needs testing again. A card is one of two types, set as `metadata.type`:
 
 - **`app`**: one self-hosted app, such as Gitea or Umami, ready to run on its own or to build other cards from. The app may sit on more than one hostname and bring its own database, but not a second app. An app card always has `test.yml`, one Compose file, and one place, and names every service and volume after itself (`umami`, `umami-db`, `umami-db-data`) with no `container_name`, so two app cards drop into one Compose file without a clash. `check-cards` checks these rules.
 - **`pattern`**: several apps wired together for a purpose, possibly across several machines, such as a Git server with a CI runner. A pattern is built from app cards. Its README says which.
