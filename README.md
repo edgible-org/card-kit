@@ -300,6 +300,10 @@ Everything `test-card` needs is in the card, so anyone, or a CI job, runs the sa
 
 Each step is `pass`, `fail`, or `skip`. `check-cards` fails a `test.yml` that gives no Verify result for an app, says `pass` while a step failed, or names a hostname or an address. Like the rest of a card, it leaves out device names, hostnames, and the organization id: `machine` is the operating system, architecture, and Docker version, not the device.
 
+## Upstream requests
+
+A cards repo may have an `upstream/` folder: requests the cards' testing suggests the authors of an app could act on, each a file ready to paste as an issue in the app's own project. A file starts with a header (`app`, `project`, `cards`, `status`, `found`, and `sent` once it is filed), then a `# Title` line and the request. `status` is `draft`, `sent`, `resolved` or `wontfix`. The header is the only place a card is linked to a request, so `card.yml` does not change when one does. `check-cards` (run on the whole repo) checks the header, that each name in `cards` is a card, and that a `sent` request has the issue's address. [card-site](#card-site) lists a card's requests on its page, under Known upstream issues.
+
 ## Tools
 
 There are two kinds of tool, and the difference decides how each one runs.
