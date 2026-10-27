@@ -252,6 +252,8 @@ def load_cards(root: Path) -> dict[str, dict]:
             "description": card.get("metadata", {}).get("description", ""),
             "added": str(card.get("metadata", {}).get("added", "")),
             "homepage": card.get("metadata", {}).get("homepage", ""),
+            "license": str(card.get("metadata", {}).get("license", "")),
+            "status": card.get("metadata", {}).get("status", "stable"),
             "readme": readme.read_text() if readme.exists() else "",
             "fit": CARD_FIT.fit(d),
             "download": CARD_README.image_bytes(d),
@@ -266,6 +268,16 @@ def added_html(c: dict) -> str:
     except ValueError:
         return ""
     return f'<span class="added">Added {d.day} {d.strftime("%B %Y")}</span>'
+
+
+def license_html(c: dict) -> str:
+    return f'<span class="license">License {esc(c["license"])}</span>' if c.get("license") else ""
+
+
+def lifecycle_html(c: dict) -> str:
+    """A pill for a card that is not plainly stable: experimental or deprecated."""
+    st = c.get("status", "stable")
+    return f'<span class="lifecycle {esc(st)}">{esc(st.capitalize())}</span>' if st in ("experimental", "deprecated") else ""
 
 
 def homepage_html(c: dict) -> str:
@@ -564,7 +576,7 @@ class Site:
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
 <h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
 <p class="lead">{esc(c["description"])}</p>
-<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
