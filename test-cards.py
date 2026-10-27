@@ -18,6 +18,7 @@ per card in the shape of a shields.io endpoint badge, labelled with the Edgible 
     https://img.shields.io/endpoint?url=<raw URL of the status directory>/gitea.json
 
 --spread DAYS spreads that work over the days: a new card, or one whose files changed, is tested at once,
+as is a card whose last result was a failure (on the next day, once a day until it passes),
 and every other test waits for the card's turn (card i on day i mod DAYS), which also retests
 each card once in every DAYS days, to catch an image that changed under the same tag.
 
@@ -119,7 +120,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--by", choices=["agent", "person", "ci"], default="ci")
     ap.add_argument("--spread", type=int, default=0, metavar="DAYS",
                     help="spread the work over this many days: a card whose files changed is tested at "
-                         "once, as is a new card; any other test (a new Edgible version, or none for DAYS days) "
+                         "once, as is a new card, and a card that failed is tested again the next day; any other test "
+                         "(a new Edgible version, or none for DAYS days) "
                          "waits for the card's turn, card i on day i mod DAYS")
     ap.add_argument("--plan", type=Path, metavar="FILE",
                     help="test nothing: write the cards due as a GitHub Actions matrix, with the labels each job needs")
@@ -171,6 +173,8 @@ def main(argv: list[str]) -> int:
             reason = "no status yet"
         elif entry.get("files") != files:
             reason = "its files changed"
+        elif entry.get("result") == "fail" and date.fromisoformat(entry["tested"]) < today:
+            reason = f"it failed on {entry['tested']}"
         elif not turn:
             reason = ""
         elif entry.get("edgible-cli") != cli:
