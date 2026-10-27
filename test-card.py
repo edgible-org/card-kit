@@ -195,6 +195,27 @@ def env_values(env_file: Path) -> dict[str, str]:
     return {k: v.strip('"') for k, v in re.findall(r"^([A-Z0-9_]+)=(.*)$", env_file.read_text(), re.M)}
 
 
+def isolate_native(env_file: Path) -> list[str]:
+    """A native card installs services on the machine it is tested on, which may already run the
+    same card for real. Give the test its own service name, and move any other port of the card
+    that something here already listens on, so the test never stops or replaces the real one."""
+    notes, values = [], env_values(env_file)
+    if values.get("SERVICE"):
+        set_env(env_file, "SERVICE", f"test-{values['SERVICE']}")
+        notes.append(f"its service was named test-{values['SERVICE']}, so the test left {values['SERVICE']} alone.")
+    taken = {int(v) for k, v in values.items() if k.endswith("_PORT") and v.isdigit()}
+    for k, v in values.items():
+        if k.endswith("_PORT") and v.isdigit():
+            with socket.socket() as s:
+                busy = s.connect_ex(("127.0.0.1", int(v))) == 0
+            if busy:
+                port = free_port(int(v), taken)
+                taken.add(port)
+                set_env(env_file, k, str(port))
+                notes.append(f"port {v} ({k}) was taken on the test machine, so it was tested on {port}.")
+    return notes
+
+
 def moved_port(app: dict, before: dict[str, str], after: dict[str, str]) -> int:
     """The host port an app is on once check-env's fixes ran. card.yml names the port and card.env
     the variable that sets it, so the variable that held the app's port before the fixes is the
@@ -594,6 +615,8 @@ def main(argv: list[str]) -> int:
                 notes.append(f"{app['name']}'s port {app['port']} was taken on the test machine, "
                              f"so it was tested on {port}.")
                 app["port"] = port
+        if native:
+            notes.extend(isolate_native(env_file))
         report = sh(f"cd {work} && python3 {CHECK_ENV} {src.name} --project-prefix {project}-", check=False).stdout
         conflicts = [l for l in report.splitlines()
                      if "conflict " in l and not re.search(r"app \S+ already exists", l)]
