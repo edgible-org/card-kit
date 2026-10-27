@@ -98,7 +98,7 @@
     sensitive: the same; members' contact details stay in the app
   permissions: "admins set booking rules, such as length, how far ahead, and who may book which resource"
   machine: always on, so usually a small cloud server; little else
-  cards: []
+  cards: [rallly]
   ask: ["who looks after it when you step down?", "a home machine, or a small cloud server at a few dollars a month? and do bookings need payment?"]
 
 - category: Analytics
@@ -134,7 +134,7 @@
     default: the blog on none, the admin behind the app's own login
     sensitive: n/a, a blog is public
   machine: always on
-  cards: []
+  cards: [bloglite, ech0]
   ask: ["newsletter emails too?", "paid members?"]
 
 - category: Static Site Generators
