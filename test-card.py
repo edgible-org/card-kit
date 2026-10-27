@@ -459,13 +459,18 @@ def places_yaml(places: dict[str, dict]) -> str:
 
 def files_hash(card_dir: Path) -> str:
     """A fingerprint of what a test depends on: every file of the card but README.md, images/,
-    test.yml, and hidden files. A change to any of them means the card should be tested again."""
+    test.yml, and hidden files. A change to any of them means the card should be tested again.
+    card.yml's metadata added:, homepage:, license: and status: say nothing about how the card runs, so they are
+    left out: filling them in does not make every card stale."""
     digest = hashlib.sha256()
     for path in sorted(p for p in card_dir.rglob("*") if p.is_file()):
         rel = path.relative_to(card_dir)
         if rel.parts[0] in ("README.md", "test.yml", "images") or any(x.startswith(".") for x in rel.parts):
             continue
-        digest.update(rel.as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+        data = path.read_bytes()
+        if rel.as_posix() == "card.yml":
+            data = re.sub(rb"(?m)^  (?:added|homepage|license|status):[^\n]*\n", b"", data)
+        digest.update(rel.as_posix().encode() + b"\0" + data + b"\0")
     return "sha256:" + digest.hexdigest()[:16]
 
 
