@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import YAML from 'yaml';
-import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { ADDRESS_ENV, LABEL_ENV, PROVIDERS, REVISION_ENV, deployNext, gatewayKeysRefusal, patch, patchRemove, plan, planRemove, proposal, proposalRemove, readGateway } from './gateway-provider.mjs';
 
 // The litellm card's settings as deploy_card writes them with no keys: nothing answers.
 const empty = () => ({
@@ -146,4 +146,33 @@ test('keys given to a gateway deploy are refused, naming them and the way to add
   assert.match(t, /no provider keys \(you gave DEEPSEEK_API_KEY, ANTHROPIC_API_KEY\)/);
   assert.match(t, /added afterwards with gateway_provider, one at a time/);
   assert.match(t, /Deploy it again without keys/);
+});
+
+test('removing Ollama puts the private labels, address and key back as the card has them', () => {
+  const ollama = patch(declaration(), { changes: { private: 'ollama/llama3.2:3b', 'private-smart': 'ollama/gpt-oss:20b' }, address: 'https://ollama.me.edgible.app', keyEnv: 'OLLAMA_API_KEY', secret: { secret: 'ollama', key: 'key' } });
+  const cur = readGateway(ollama);
+  const pl = planRemove({ provider: 'ollama', environment: cur.environment, envFrom: cur.workload.envFrom });
+  assert.deepEqual(pl.changes, { private: 'ollama/qwen2.5:7b', 'private-smart': 'ollama/qwen3.5:27b' });
+  assert.equal(pl.address, 'http://host.docker.internal:11434');
+  assert.equal(pl.keyEnv, 'OLLAMA_API_KEY');
+  assert.equal(pl.secret, 'ollama');
+  assert.match(proposalRemove({ provider: 'ollama', ...pl }), /stored key ollama stays/);
+  const after = readGateway(patchRemove(ollama, pl));
+  assert.equal(after.environment.LITELLM_PRIVATE_MODEL, 'ollama/qwen2.5:7b');
+  assert.equal(after.environment.LITELLM_PRIVATE_URL, 'http://host.docker.internal:11434');
+  assert.equal(after.environment.OLLAMA_API_KEY, 'ollama');
+  assert.ok(!after.workload.envFrom.some((e) => e.name === 'OLLAMA_API_KEY'));
+  assert.ok(after.workload.envFrom.some((e) => e.name === 'LITELLM_MASTER_KEY'), 'other keys stay');
+  assert.notEqual(after.environment[REVISION_ENV], cur.environment[REVISION_ENV]);
+});
+
+test('removing a cloud provider resets its labels and stops its key; a provider that is not there is refused', () => {
+  const d = patch(declaration(), { changes: { smart: 'openai/gpt-5', best: 'openai/gpt-5.5' }, keyEnv: 'OPENAI_API_KEY', secret: { secret: 'openai', key: 'key' } });
+  const cur = readGateway(d);
+  const pl = planRemove({ provider: 'openai', environment: cur.environment, envFrom: cur.workload.envFrom });
+  assert.deepEqual(pl.changes, { smart: 'deepseek/deepseek-reasoner', best: 'anthropic/claude-opus-5-5' });
+  assert.equal(readGateway(patchRemove(d, pl)).environment.OPENAI_API_KEY, '');
+  const none = readGateway(declaration());
+  assert.match(planRemove({ provider: 'openai', environment: none.environment, envFrom: none.workload.envFrom }).error, /nothing to remove/);
+  assert.match(planRemove({ provider: 'nope', environment: {} }).error, /don't know/);
 });
