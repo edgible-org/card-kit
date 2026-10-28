@@ -161,6 +161,16 @@ function render(d) {
       keys.length ? keys.map(k => u[k] + " " + k).join(" · ") : "none"),
       el("div", { class: "s" }, "drafts wait for you to file them")))));
 
+  const cand = d.upstream_candidates || [];
+  if (cand.length) {
+    const byCard = {};
+    cand.forEach(x => { (byCard[x.card] = byCard[x.card] || []).push(x.topic); });
+    app.append(section("Upstream: to check", el("div", { class: "list" },
+      el("div", { class: "row" }, el("div", { class: "t" }, plural(cand.length, "thing") + " the cards work around"),
+        el("div", { class: "s" }, Object.keys(byCard).map(k => k + " (" + byCard[k].join(", ") + ")").join("; ") +
+          ". Not checked against the apps yet.")))));
+  }
+
   document.getElementById("foot").replaceChildren(
     el("a", { href: REPO + "/issues?q=label%3Areport" }, "Daily report"), " · ",
     el("a", { href: REPO + "/actions" }, "All runs"), " · ",
