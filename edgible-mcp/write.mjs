@@ -26,7 +26,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { certificateState, imageDownload, pollUntil, sizeWords, startNext, startingNote, timeWords } from './download.mjs';
-import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, plan, proposal, readGateway } from './gateway-provider.mjs';
+import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, patchRemove, plan, planRemove, proposal, proposalRemove, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
 const RECORD = path.join(STATE, 'activity.jsonl');
@@ -446,15 +446,43 @@ async function removeCard({ app, confirm = [] }) {
   const where = live ? appDevices(live) : [mine[app].device];
   if (notAllowed(...where)) return refused(notAllowed(...where));
   if (!confirm.includes('remove')) {
-    return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name.` }]);
+    return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. If it has a key on the AI gateway (from gateway_key), that key is revoked so nothing can spend on its behalf, and its stored copy is deleted. Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name.` }]);
   }
   let r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
   // A delete can time out waiting for a device that already let the app go; it is gone if Edgible no longer lists it.
   if (r.code && !(await apps()).some((a) => a.name === app)) r = { code: 0, stdout: '', stderr: '' };
   if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
   if (!r.code && mine[app].gateway) await forgetGateway(app);
+  const revoked = r.code ? undefined : await revokeGatewayKey(app);
   await record({ tool: 'remove_card', app, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
-  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app };
+  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app, ...(revoked ? { gateway_key: revoked } : {}),
+    next: 'Its data stays on the device. Keys the person stored for it (list_keys) stay too: offer delete_key for any they will not use again.' };
+}
+
+// An app made with gateway_key has a key on the AI gateway (its alias is the app's name) and a
+// stored copy (<app>-gateway). Removing the app revokes the one and deletes the other, so a key
+// nobody holds cannot spend. Best effort: the app is already gone, so say what did not work.
+async function revokeGatewayKey(app) {
+  const GATEWAY_URL = await gatewayUrl();
+  const master = await readFile(path.join(KEYS_DIR, GATEWAY_MASTER), 'utf8').then((s) => s.trim()).catch(() => '');
+  if (!GATEWAY_URL || !master) return undefined;
+  const call = (method, p, body) => fetch(`${GATEWAY_URL}${p}`, { method, headers: { authorization: `Bearer ${master}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  let revoked = false;
+  try {
+    const found = ((await (await call('GET', `/key/list?return_full_object=true&key_alias=${encodeURIComponent(app)}`)).json()).keys || []).filter((k) => k.key_alias === app);
+    if (found.length) {
+      const res = await call('POST', '/key/delete', { key_aliases: [app] });
+      if (!res.ok) return `the app is removed, but the gateway would not revoke its key (${res.status}): revoke it in the gateway's admin`;
+      revoked = true;
+    }
+  } catch (err) {
+    return `the app is removed, but the gateway did not answer, so its key is not revoked: ${err.message}`;
+  }
+  const secret = `${app}-gateway`;
+  const stored = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).some((x) => x.name === secret);
+  if (stored) await run('edgible', ['secret', 'delete', secret, '--yes'], { timeout: 120000 });
+  await record({ tool: 'remove_card', app, gatewayKey: revoked ? 'revoked' : 'none', storedCopy: stored ? 'deleted' : 'none', result: 'key cleanup' });
+  return revoked ? 'revoked on the gateway' : undefined;
 }
 
 async function cardStatus({ app, wait_seconds: waitInput }) {
@@ -698,7 +726,7 @@ async function gatewayBudget({ app, budget, period, confirm = [] }) {
 // deploys that one app, and asks each label it changed a tiny question.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function gatewayProvider({ provider, labels, models = {}, secret, address, app, confirm = [] }) {
+async function gatewayProvider({ provider, labels, models = {}, secret, address, app, remove = false, confirm = [] }) {
   const p = PROVIDERS[provider];
   if (!p) return refused(`I don't know a provider called ${provider}. Known: ${Object.keys(PROVIDERS).join(', ')}.`);
   const state = JSON.parse(await readFile(GATEWAY_FILE, 'utf8').catch(() => '{}'));
@@ -709,6 +737,8 @@ async function gatewayProvider({ provider, labels, models = {}, secret, address,
   if (live.subtype !== 'docker-compose') return refused(`${name} is a "${live.subtype}" app, not a gateway these tools deployed`);
   const where = appDevices(live);
   if (notAllowed(...where)) return refused(notAllowed(...where));
+
+  if (remove) return gatewayProviderRemove({ provider, name, confirm });
 
   const [secretName, keyName = 'key'] = String(secret || `${provider}:key`).split(':');
   if (!SECRET_NAME.test(secretName || '')) return refused('secret is "<secret>:<key>", such as openai:key');
@@ -768,6 +798,35 @@ async function gatewayProvider({ provider, labels, models = {}, secret, address,
     left_alone: pl.left,
     next: `Tell the person which labels now use which models, whether each answered, and what was left alone and why. To change a label later: "make smart use <provider>/<model>" (call this again with models), or name labels: "use ${p.title} for fast and smart". The labels are ${LABELS.join(', ')}, and fast-backup.`,
   };
+}
+
+// gateway_provider with remove: the other half of adding. The labels that use the provider go back
+// to the card's own models, a private address goes back to the card's, and the key stops being
+// passed on. The stored secret stays until delete_key; the gateway restarts, asked first.
+async function gatewayProviderRemove({ provider, name, confirm }) {
+  const exported = await run('edgible', ['app', 'export', name], { timeout: 120000 });
+  if (exported.code) return { status: 'failed', reason: `could not read ${name}'s declaration: ${cliError(exported)}` };
+  const declaration = YAML.parse(exported.stdout);
+  let current;
+  try { current = readGateway(declaration); } catch (err) { return refused(`${name} is not an AI gateway these tools can change: ${err.message}`); }
+  const pl = planRemove({ provider, environment: current.environment, envFrom: current.workload.envFrom || [] });
+  if (pl.error) return refused(pl.error);
+  if (!confirm.includes('provider')) return needs([{ token: 'provider', reason: proposalRemove({ provider, ...pl }) }]);
+
+  const tmp = await mkdtemp(path.join(tmpdir(), 'edgible-gateway-provider-'));
+  let deployed;
+  try {
+    const file = path.join(tmp, 'gateway.yaml');
+    await writeFile(file, YAML.stringify(patchRemove(declaration, pl), { lineWidth: 0 }), { mode: 0o600 });
+    deployed = await run('edgible', ['stack', 'deploy', '-f', file, '--app', name], { timeout: 10 * 60 * 1000 });
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  await record({ tool: 'gateway_provider', app: name, provider, remove: true, labels: Object.keys(pl.changes), confirmed: confirm,
+    result: deployed.code ? 'failed' : 'removed', detail: deployed.code ? cliError(deployed) : undefined });
+  if (deployed.code) return { status: 'failed', reason: cliError(deployed) };
+  return { status: 'removed', app: name, provider: PROVIDERS[provider].title, labels_reset: pl.changes, address_reset: pl.address,
+    next: `Tell the person which labels went back to the gateway's own models${PROVIDERS[provider].private ? ' (private and private-smart now have nothing behind them)' : ''}. ${pl.secret ? `The key is still stored as ${pl.secret}: offer delete_key if they will not use it again, and remind them to revoke it at the provider's own website, which only they can do.` : ''}` };
 }
 
 // app_key: an Edgible API key for one app that publishes on api-key (such as the ollama-osx
@@ -1001,6 +1060,38 @@ async function listKeys() {
   return secrets.map((s) => ({ secret: s.name, keys: s.keys || s.keyNames || [], updated: s.updatedAt || s.createdAt }));
 }
 
+// delete_key: delete one stored organisation secret, asked first. Edgible refuses while a running
+// app still refers to it, which is the safeguard: remove the app first.
+async function deleteKey({ secret, confirm = [] }) {
+  if (!SECRET_NAME.test(secret || '')) return refused('secret is the name list_keys shows, such as openai');
+  const stored = (await edgibleJson(['secret', 'list', '--json']).catch(() => [])).find((x) => x.name === secret);
+  if (!stored) return refused(`no stored key called ${secret}; list_keys shows what there is`);
+  if (!confirm.includes('delete')) {
+    return needs([{ token: 'delete', reason: `Delete the stored key ${secret} (${(stored.keys || stored.keyNames || []).join(', ') || 'no key names'}) from your Edgible account. Nothing can use it afterwards and it cannot be undone. A key a provider issued still works at the provider until the person revokes it on their website, which only they can do. Edgible refuses while a running app still uses it.` }]);
+  }
+  const r = await run('edgible', ['secret', 'delete', secret, '--yes'], { timeout: 120000 });
+  await record({ tool: 'delete_key', secret, confirmed: confirm, result: r.code ? 'failed' : 'deleted', detail: r.code ? cliError(r) : undefined });
+  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'deleted', secret,
+    next: 'If it was a provider\'s key, remind the person to revoke it on the provider\'s own website.' };
+}
+
+// remove_device: take a device off the account, asked first. It must have no apps. This removes
+// the device from Edgible; the software on the machine stays until `edgible uninstall` runs there.
+async function removeDevice({ device, confirm = [] }) {
+  let d;
+  try { d = await findDevice(device); } catch (err) { return refused(err.message); }
+  if (notAllowed(d.name)) return refused(notAllowed(d.name));
+  const still = (await apps()).filter((a) => appDevices(a).includes(d.name)).map((a) => a.name);
+  if (still.length) return refused(`${d.name} still runs ${still.join(', ')}; remove or move ${still.length > 1 ? 'them' : 'it'} first`);
+  if (!confirm.includes('device')) {
+    return needs([{ token: 'device', reason: `Take ${d.name} off your Edgible account. It stops being a device you can put apps on, and the person has to sign it in again to use it. Nothing on the machine itself is deleted.` }]);
+  }
+  const r = await run('edgible', ['device', 'delete', '--device', d.name, '--yes'], { timeout: 120000 });
+  await record({ tool: 'remove_device', device: d.name, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
+  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', device: d.name,
+    next: `${d.name} is off the account. Edgible\'s software is still installed on the machine itself: to remove that too, the person runs "edgible uninstall" there, or asks Claude Code on that machine.` };
+}
+
 async function activity({ limit = 20 }) {
   const entries = (await readRecord()).slice(-limit);
   if (!entries.length) return 'These tools have not done anything yet.';
@@ -1008,7 +1099,9 @@ async function activity({ limit = 20 }) {
     const when = e.at.replace('T', ' ').slice(0, 16) + ' UTC';
     const what = e.tool === 'deploy_card' ? `deployed the ${e.card} card as ${e.app} on ${e.device}`
       : e.tool === 'move_card' ? `moved ${e.app} to ${e.to}${e.seconds ? ` (${e.seconds}s)` : ''}`
-      : e.tool === 'remove_card' ? `removed ${e.app}` : e.tool;
+      : e.tool === 'remove_card' ? `removed ${e.app}`
+      : e.tool === 'delete_key' ? `deleted the stored key ${e.secret}`
+      : e.tool === 'remove_device' ? `took ${e.device} off the account` : e.tool;
     const asked = e.confirmed?.length ? `, after the person agreed (${e.confirmed.join(', ')})` : '';
     return `${when}: ${e.by} ${what}${asked}: ${e.result}${e.detail ? ` (${e.detail})` : ''}`;
   }).join('\n');
@@ -1047,7 +1140,7 @@ export function registerWriteTools(server) {
   }, wrap(moveCard));
   server.registerTool('remove_card', {
     title: 'Remove an app these tools deployed',
-    description: 'Remove an app that deploy_card deployed: Edgible stops it and removes it from its device. Refuses anything else. Always returns "needs confirmation" first.',
+    description: 'Remove an app that deploy_card deployed: Edgible stops it and removes it from its device, and if the app had a key on the AI gateway (gateway_key) it is revoked and its stored copy deleted. The app\'s data stays on the device, which these tools cannot delete. Refuses anything else. Always returns "needs confirmation" first.',
     inputSchema: {
       app: z.string().describe('The app to remove'),
       confirm: z.array(z.string()).optional().describe('["remove"], only after the person agreed'),
@@ -1103,7 +1196,7 @@ export function registerWriteTools(server) {
   }, wrap(gatewayBudget));
   server.registerTool('gateway_provider', {
     title: 'Add an AI provider to the gateway',
-    description: 'Add an LLM provider to the AI gateway (the litellm card) from a key the person stored once as an organisation secret: "add my OpenAI key to the gateway". The key reaches the gateway by reference and is never shown. Say the labels if the person named them ("for fast and smart"); otherwise it fills fast and smart where nothing answers yet, makes the provider fast\'s backup where fast already answers, and never changes a label that already answers or fills best (the dearest) unless asked. Ollama fills private and private-smart (with its address, and a key for an Ollama on another machine). "Make smart use provider/model" is models {"smart": "provider/model"}. It shows the plan, asks first, restarts the gateway (about a minute without answers), asks each changed label a tiny question, and reports what each label now uses, what was left alone, and how to change it. If the key is not stored, it says how: request_key.',
+    description: 'Add an LLM provider to the AI gateway (the litellm card) from a key the person stored once as an organisation secret: "add my OpenAI key to the gateway". The key reaches the gateway by reference and is never shown. Say the labels if the person named them ("for fast and smart"); otherwise it fills fast and smart where nothing answers yet, makes the provider fast\'s backup where fast already answers, and never changes a label that already answers or fills best (the dearest) unless asked. Ollama fills private and private-smart (with its address, and a key for an Ollama on another machine). "Make smart use provider/model" is models {"smart": "provider/model"}. It shows the plan, asks first, restarts the gateway (about a minute without answers), asks each changed label a tiny question, and reports what each label now uses, what was left alone, and how to change it. If the key is not stored, it says how: request_key. With remove true it takes the provider out instead ("take Ollama out of my gateway"): its labels go back to the gateway\'s own models, its key stops being passed on, the gateway restarts; the stored key stays until delete_key.',
     inputSchema: {
       provider: z.string().describe(`The provider: ${Object.keys(PROVIDERS).join(', ')}`),
       labels: z.array(z.string()).optional().describe(`Labels to use it for, if the person named them: ${LABELS.join(', ')}, fast-backup`),
@@ -1111,6 +1204,7 @@ export function registerWriteTools(server) {
       secret: z.string().optional().describe('The stored key as "<secret>:<key>"; default "<provider>:key"'),
       address: z.string().optional().describe('For ollama: the address of an Ollama published by Edgible on another machine, such as https://ollama.<you>.edgible.app'),
       app: z.string().optional().describe('The gateway app; default the one this server knows'),
+      remove: z.boolean().optional().describe('Take the provider out instead: its labels go back to the gateway\'s own models, its key stops being passed on; the stored key stays (delete_key)'),
       confirm: z.array(z.string()).optional().describe('["provider"], only after the person agreed to the plan'),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -1127,6 +1221,24 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(appKey));
+  server.registerTool('delete_key', {
+    title: 'Delete a stored key',
+    description: 'Delete one organisation secret stored with Edgible (list_keys shows them), such as an AI provider\'s key the person is done with. Edgible refuses while a running app still uses it. Always returns "needs confirmation" first, and it cannot be undone. Remind the person that a provider\'s key still works until they revoke it on the provider\'s website.',
+    inputSchema: {
+      secret: z.string().describe('The secret\'s name, as list_keys shows it'),
+      confirm: z.array(z.string()).optional().describe('["delete"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, wrap(deleteKey));
+  server.registerTool('remove_device', {
+    title: 'Take a device off the account',
+    description: 'Take a device off the Edgible account with `edgible device delete`. Refuses while it still runs apps: remove or move them first. Always returns "needs confirmation" first. The software on the machine stays installed until `edgible uninstall` runs there.',
+    inputSchema: {
+      device: z.string().describe('The device, by name'),
+      confirm: z.array(z.string()).optional().describe('["device"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, wrap(removeDevice));
   server.registerTool('restart_card', {
     title: 'Restart an app',
     description: 'Restart an app that is stuck or not answering: Edgible re-creates it from its current release on its device, data kept. Asks first. Good for "my agent seems stuck".',
