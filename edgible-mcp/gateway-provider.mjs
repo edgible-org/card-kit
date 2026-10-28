@@ -167,6 +167,68 @@ export function proposal({ provider, changes, left, address, restartSeconds = 60
   return parts.join(' ');
 }
 
+// ---------- taking a provider out ----------
+
+// The litellm card's own settings (its docker-compose.yml): what a label goes back to when its
+// provider is removed, and where a private model is looked for when no address is given.
+export const CARD_DEFAULTS = {
+  fast: 'deepseek/deepseek-chat',
+  'fast-backup': 'gemini/gemini-3.5-flash',
+  smart: 'deepseek/deepseek-reasoner',
+  open: 'openrouter/z-ai/glm-5.3',
+  best: 'anthropic/claude-opus-5-5',
+  private: 'ollama/qwen2.5:7b',
+  'private-smart': 'ollama/qwen3.5:27b',
+};
+export const DEFAULT_ADDRESS = 'http://host.docker.internal:11434';
+
+// What removing `provider` does: the labels that use it go back to the card's own models, a
+// private address goes back to the card's, and the key stops being passed on. The stored secret
+// itself is not touched (delete_key does that).
+// Returns { changes: { label: model }, address, keyEnv, secret, error }.
+export function planRemove({ provider, environment, envFrom = [] }) {
+  const p = PROVIDERS[provider];
+  if (!p) return { error: `I don't know a provider called ${provider}. Known: ${Object.keys(PROVIDERS).join(', ')}.` };
+  const changes = {};
+  for (const [label, env] of Object.entries(LABEL_ENV)) {
+    const model = environment[env];
+    if (model && providerOf(model) === provider && model !== CARD_DEFAULTS[label]) changes[label] = CARD_DEFAULTS[label];
+  }
+  const ref = envFrom.find((e) => e.name === p.env);
+  const address = p.private && environment[ADDRESS_ENV] && environment[ADDRESS_ENV] !== DEFAULT_ADDRESS ? DEFAULT_ADDRESS : undefined;
+  if (!Object.keys(changes).length && !ref && !address) return { error: `${p.title} is not set up in this gateway, so there is nothing to remove.` };
+  return { changes, address, keyEnv: ref ? p.env : undefined, secret: ref?.secretRef?.secret };
+}
+
+// Returns a new declaration with the labels back at the card's models, the private address back
+// at the card's, the provider's key no longer passed on, and a new revision.
+export function patchRemove(declaration, { changes = {}, address, keyEnv, revision = String(Date.now()) }) {
+  const copy = structuredClone(declaration);
+  const { workload, compose, service, environment } = readGateway(copy);
+  for (const [label, model] of Object.entries(changes)) environment[LABEL_ENV[label]] = model;
+  if (address) environment[ADDRESS_ENV] = address;
+  if (keyEnv) {
+    // Back to the card's own value: a dummy for Ollama, empty for a cloud provider.
+    environment[keyEnv] = PROVIDERS[Object.keys(PROVIDERS).find((k) => PROVIDERS[k].env === keyEnv)].private ? 'ollama' : '';
+    workload.envFrom = (workload.envFrom || []).filter((e) => e.name !== keyEnv);
+  }
+  environment[REVISION_ENV] = revision;
+  service.environment = environment;
+  workload.composeFile = encode(YAML.stringify(compose, { lineWidth: 0 }));
+  return copy;
+}
+
+export function proposalRemove({ provider, changes, address, keyEnv, secret, restartSeconds = 60 }) {
+  const p = PROVIDERS[provider];
+  const parts = [`Take ${p.title} out of the AI gateway.`];
+  const set = Object.entries(changes);
+  if (set.length) parts.push(`Labels go back to the gateway's own models: ${set.map(([l, m]) => `${l} to ${m}`).join('; ')}${p.private ? ', which has nothing behind it unless a model runs on the gateway\'s own machine, so they stop answering' : ', which answer only if their provider has a key'}.`);
+  if (address) parts.push(`Its address goes back to ${address}.`);
+  if (keyEnv) parts.push(`The key stops being passed on${secret ? `; the stored key ${secret} stays in your Edgible account until you delete it` : ''}.`);
+  parts.push(`The gateway restarts and does not answer for about ${restartSeconds} seconds. Other providers, keys and budgets are untouched.`);
+  return parts.join(' ');
+}
+
 // What deploy_card tells the assistant after it deploys a gateway. A gateway with no provider key
 // cannot answer, so say so and what to offer, or the person is left with a running gateway and no
 // next step. And never send the person to the admin page: it asks for the master key, which this
