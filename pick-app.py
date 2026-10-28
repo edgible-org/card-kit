@@ -3,6 +3,7 @@
 
     ../card-kit/run pick-app                       # from the root of a cards repo
     ../card-kit/run pick-app --exclude linkwarden wallabag
+    ../card-kit/run pick-app --exclude-category Wikis   # skip a category, such as one with a card proposed lately
     ../card-kit/run pick-app --app ownCloud           # a named app, and its category
 
 A gap is a needs-map category that people ask about (its fit is good or conditional) and
@@ -95,6 +96,9 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--exclude", nargs="*", default=[], metavar="NAME",
                     help="apps not to pick, such as ones already proposed (names or card names)")
+    ap.add_argument("--exclude-category", nargs="*", default=[], metavar="CATEGORY",
+                    help="categories to skip, such as ones a card was proposed for lately, so a night's "
+                         "card is not another of the same kind")
     ap.add_argument("--count", type=int, default=5)
     ap.add_argument("--app", metavar="NAME", help="pick this app, by its name on awesome-selfhosted, and find its category")
     args = ap.parse_args(argv)
@@ -109,7 +113,10 @@ def main(argv: list[str]) -> int:
     listed = [e for e in gaps if e.get("source") != "edgible"]
     software = apps()
 
+    skip = {c.strip().lower() for c in args.exclude_category}
     for entry in listed:
+        if entry["category"].lower() in skip:
+            continue
         candidates = []
         for app in software:
             if entry["category"] not in (app.get("tags") or []):
