@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Overnight | Edgible cards</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #5d6673; --line: #dfe3e8;
+  --ok: #1a7f37; --ok-bg: #e6f4ea; --warn: #9a6700; --warn-bg: #fff4d6; --bad: #b42318; --bad-bg: #fde8e6;
+  --info: #0b5cad; --info-bg: #e5f0fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216; --card: #171b21; --text: #e8ebef; --muted: #98a2b0; --line: #2a313a;
+    --ok: #56d364; --ok-bg: #12301b; --warn: #e3b341; --warn-bg: #33290c; --bad: #ff7b72; --bad-bg: #3a1613;
+    --info: #79b8ff; --info-bg: #11263c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 640px; margin: 0 auto; padding: 16px 16px 48px; }
+h1 { font-size: 1.35rem; margin: 8px 0 2px; }
+h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 26px 0 8px; font-weight: 600; }
+.when { color: var(--muted); font-size: .85rem; }
+.banner { border-radius: 12px; padding: 14px 16px; margin: 14px 0 0; font-weight: 600; }
+.banner small { display: block; font-weight: 400; margin-top: 4px; color: inherit; opacity: .9; }
+.banner.ok { background: var(--ok-bg); color: var(--ok); }
+.banner.warn { background: var(--warn-bg); color: var(--warn); }
+.banner.bad { background: var(--bad-bg); color: var(--bad); }
+.list { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.row { display: block; padding: 12px 14px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.row:first-child { border-top: 0; }
+a.row:active { background: var(--bg); }
+.row .t { font-weight: 600; word-break: break-word; }
+.row .s { color: var(--muted); font-size: .88rem; margin-top: 2px; }
+.pill { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; margin-right: 6px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .03em; }
+.pill.ready, .pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.review, .pill.running { background: var(--info-bg); color: var(--info); }
+.pill.hold { background: var(--warn-bg); color: var(--warn); }
+.pill.fail { background: var(--bad-bg); color: var(--bad); }
+.pill.none { background: var(--line); color: var(--muted); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; color: inherit; text-decoration: none; display: block; }
+.tile .n { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.tile .l { color: var(--muted); font-size: .85rem; }
+.empty { padding: 14px; color: var(--muted); }
+footer { margin-top: 28px; color: var(--muted); font-size: .82rem; }
+footer a { color: var(--info); }
+noscript, .err { display: block; padding: 14px; color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+<h1>Overnight</h1>
+<div class="when" id="when">Loading…</div>
+<div id="app"></div>
+<footer id="foot"></footer>
+</main>
+<script>
+const DATA = "__DATA_URL__";
+const REPO = "__REPO_URL__";
+const el = (tag, props, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v; else if (k === "href") e.href = v; else e[k] = v;
+  }
+  for (const k of kids.flat()) if (k != null && k !== "") e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+const ago = (iso) => {
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 2) return "just now";
+  if (m < 90) return m + " minutes ago";
+  const h = Math.round(m / 60);
+  return h < 36 ? h + " hours ago" : Math.round(h / 24) + " days ago";
+};
+const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+const section = (title, ...kids) => { const s = el("div", {}, el("h2", {}, title), ...kids); return s; };
+const list = (rows, empty) => rows.length ? el("div", { class: "list" }, rows) : el("div", { class: "list" }, el("div", { class: "empty" }, empty));
+
+function render(d) {
+  const app = document.getElementById("app");
+  app.replaceChildren();
+  document.getElementById("when").textContent = "Updated " + ago(d.generated) + " · covers the last 24 hours";
+
+  const ready = d.queue.filter(q => q.state === "ready");
+  const review = d.queue.filter(q => q.state === "review");
+  const hold = d.queue.filter(q => q.state === "hold");
+  const failedJobs = d.jobs.filter(j => j.state === "fail");
+  const failing = d.cards.failing;
+  const people = ready.length + review.length + d.regression_issues.length + d.grow.could_not_make.length + d.card_kit_prs.length;
+
+  let level = "ok", head = "All good", sub = "Nothing needs you.";
+  if (failedJobs.length || failing.length) {
+    level = "bad";
+    head = "Something failed";
+    sub = [failedJobs.length && failedJobs.map(j => j.name).join(", ") + " failed", failing.length && plural(failing.length, "card") + " failing: " + failing.join(", ")].filter(Boolean).join(". ");
+  } else if (people) {
+    level = "warn";
+    head = plural(people, "thing") + " for you";
+    sub = [ready.length && ready.length + " ready to merge", review.length && review.length + " to review"].filter(Boolean).join(", ") || "See below.";
+  }
+  const b = el("div", { class: "banner " + level }, head, el("small", {}, sub));
+  app.append(b);
+  if (d.summary) app.append(el("p", {}, d.summary));
+
+  // For you
+  const rows = [];
+  const pr = (q, label) => el("a", { class: "row", href: q.url },
+    el("div", { class: "t" }, el("span", { class: "pill " + q.state }, label || q.state), "#" + q.number + " " + q.title),
+    el("div", { class: "s" }, q.kind + " · " + q.why));
+  ready.forEach(q => rows.push(pr(q, "ready")));
+  review.forEach(q => rows.push(pr(q, "review")));
+  d.regression_issues.forEach(i => rows.push(el("a", { class: "row", href: i.url },
+    el("div", { class: "t" }, el("span", { class: "pill fail" }, "fails"), i.title),
+    el("div", { class: "s" }, "open for " + plural(i.days, "day") + "; closes itself when the card passes"))));
+  d.grow.could_not_make.forEach(i => rows.push(el("a", { class: "row", href: i.url },
+    el("div", { class: "t" }, el("span", { class: "pill hold" }, "grow"), i.title),
+    el("div", { class: "s" }, "grow could not make this card; pick it up or close it"))));
+  d.card_kit_prs.forEach(q => rows.push(el("a", { class: "row", href: q.url },
+    el("div", { class: "t" }, el("span", { class: "pill review" }, "card-kit"), "#" + q.number + " " + q.title),
+    el("div", { class: "s" }, "open in card-kit"))));
+  app.append(section("For you", list(rows, "Nothing waiting.")));
+  if (hold.length) app.append(section("On hold", list(hold.map(q => pr(q)), "")));
+
+  // Last night
+  const tiles = d.jobs.map(j => {
+    let n = { ok: "OK", fail: "Failed", running: "Running", none: "Didn't run" }[j.state];
+    let l = j.name;
+    if (j.workflow === "grow") { n = plural(d.grow.made.length, "card"); l = "Grow · " + (j.state === "fail" ? "a run failed" : "made last night"); }
+    if (j.workflow === "regression") { n = d.cards.tested_24h + " tested"; l = "Regression · " + (j.state === "ok" ? "all passed" : j.state); }
+    const t = el("a", { class: "tile", href: j.latest || REPO + "/actions" },
+      el("div", { class: "n" }, n), el("div", { class: "l" }, el("span", { class: "pill " + j.state }, j.state), l));
+    return t;
+  });
+  app.append(section("Last night", el("div", { class: "grid" }, tiles)));
+
+  // Cards
+  const c = d.cards;
+  const cardRows = [
+    el("div", { class: "row" }, el("div", { class: "t" }, c.passing + " of " + c.with_status + " tested cards pass"),
+      el("div", { class: "s" }, c.oldest[0] ? "oldest test: " + c.oldest[0] + ", " + plural(c.oldest[1], "day") + " ago" : "no tests yet")),
+  ];
+  if (c.no_test_yet.length) cardRows.push(el("div", { class: "row" }, el("div", { class: "t" }, plural(c.no_test_yet.length, "card") + " not tested yet"),
+    el("div", { class: "s" }, c.no_test_yet.join(", "))));
+  app.append(section("Cards", el("div", { class: "list" }, cardRows)));
+
+  // Images
+  const im = d.images;
+  app.append(section("Image scan", el("div", { class: "list" },
+    el("div", { class: "row" }, el("div", { class: "t" }, plural(im.cards_with_fixable, "card") + " with fixable vulnerabilities"),
+      el("div", { class: "s" }, im.worst.length ? "most: " + im.worst.map(w => w.card + " " + w.count).join(", ") : "none")))));
+
+  // Upstream
+  const u = d.upstream;
+  const keys = Object.keys(u);
+  app.append(section("Upstream requests", el("div", { class: "list" },
+    el("a", { class: "row", href: REPO + "/tree/main/upstream" }, el("div", { class: "t" },
+      keys.length ? keys.map(k => u[k] + " " + k).join(" · ") : "none"),
+      el("div", { class: "s" }, "drafts wait for you to file them")))));
+
+  document.getElementById("foot").replaceChildren(
+    el("a", { href: REPO + "/issues?q=label%3Areport" }, "Daily report"), " · ",
+    el("a", { href: REPO + "/actions" }, "All runs"), " · ",
+    el("a", { href: REPO }, "edgible-org/cards"));
+}
+
+fetch(DATA + "?t=" + Math.floor(Date.now() / 300000), { cache: "no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(render)
+  .catch(e => {
+    document.getElementById("when").textContent = "";
+    document.getElementById("app").replaceChildren(el("div", { class: "err" },
+      "Could not load last night's data (" + e.message + "). The daily report may not have run yet."));
+  });
+</script>
+<noscript>This page needs JavaScript to show last night's data.</noscript>
+</body>
+</html>

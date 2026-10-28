@@ -66,7 +66,7 @@ DRIVER_WORDS = {
     "local": "it has to run at home",
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible"}
-RESERVED = {"upstream", "about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -505,6 +505,17 @@ class Site:
 <p class="find-count" aria-live="polite"></p>
 </form>"""
 
+    def ops_page(self) -> None:
+        """/ops/, a phone-sized summary of the night, for the person who looks after the repo. It is
+        one static page that reads latest.json from the reports branch, which the daily report writes,
+        so the page is the same after every build and the data is as fresh as the report. It is not
+        in the sitemap or the navigation, and asks search engines to leave it out."""
+        template = (KIT / "ops-page.html").read_text()
+        raw = REPO_URL.replace("https://github.com/", "https://raw.githubusercontent.com/") + "/reports/latest.json"
+        (self.out / "ops").mkdir(parents=True, exist_ok=True)
+        (self.out / "ops" / "index.html").write_text(
+            template.replace("__DATA_URL__", raw).replace("__REPO_URL__", REPO_URL))
+
     def about_page(self) -> None:
         """/about/, from the cards repo's ABOUT.md, so the story is written in one place."""
         self.md_page("ABOUT.md", "about", "About cards",
@@ -818,6 +829,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
             self.card_page(c)
         self.about_page()
         self.ai_page()
+        self.ops_page()
         self.run_without_edgible_page()
         self.needs_index()
         for n in self.needs:
