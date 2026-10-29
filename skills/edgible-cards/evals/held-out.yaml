@@ -178,9 +178,7 @@
   expect:
     - separates getting it live, keeping it running, and sharing it, and leads in that order, saying sharing is optional
     - asks first whether the person has an Edgible account, and says they create it themselves
-    - checks the app is ready to share (check-app) before building the card, and says what it checks
     - asks who will be the steward, a person or organisation, and says a card can be listed with none
-    - says the card is tested on the person's own machine before a pull request, and that a person at Edgible reads it
   must_not:
     - open a pull request to the catalog before the app has been checked and tested
     - commit secrets or a filled-in .env to the card
