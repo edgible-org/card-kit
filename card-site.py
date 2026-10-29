@@ -550,7 +550,7 @@ class Site:
         recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
         recent_html = ("<p class=\"stats\">Recently added: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent) + ".</p>") if recent else ""
         body = f"""<section class="hero">
-<h1>Self-hosted setups you can copy, with the test date on every card</h1>
+<h1>Self-hosted setups you can copy or share</h1>
 <p class="lead">A card is a working self-hosted setup in a form made to be shared: plain files that anyone can read, run on a machine they control, change, and share back. One app, or several wired together.</p>
 <ul class="pillars">
 <li><strong>Made to share</strong><span>Nothing personal is in it: no device names, hostnames or passwords. You fill in your own. It is plain files in git, so you can fork it and share your version back.</span></li>
