@@ -46,6 +46,43 @@ ASSETS = KIT / "site"
 # Edgible symbol on a navy tile instead.
 ICONS = ("icon.svg", "icon.png")
 REPO_URL = "https://github.com/edgible-org/cards"
+
+# An icon for each need on the needs page, from site/images/needs-icons.svg (Edgible's line-icon style).
+NEED_ICONS = {
+    'Bookmarks and Link Sharing': 'bookmark',
+    'Photo Galleries': 'photo',
+    'File Transfer & Synchronization': 'sync',
+    'Password Managers': 'key',
+    'Booking and Scheduling': 'calendar',
+    'Analytics': 'chart',
+    'Content Management Systems (CMS)': 'window',
+    'Blogging Platforms': 'pen',
+    'Static Site Generators': 'code',
+    'Federated Identity & Authentication': 'shield',
+    'Wikis': 'book',
+    'Knowledge Management Tools': 'bulb',
+    'Note-taking & Editors': 'note',
+    'Document Management': 'folder',
+    'Feed Readers': 'rss',
+    'Media Streaming - Multimedia Streaming': 'play',
+    'Internet of Things (IoT)': 'signal',
+    'Video Surveillance': 'cam',
+    'Automation': 'bolt',
+    'Generative Artificial Intelligence (GenAI)': 'ai',
+    'AI tools for assistants (MCP servers)': 'plug',
+    'Vector databases and AI search': 'search',
+    'AI chatbots for customers and communities': 'chat',
+    'AI app builders and agents': 'cube',
+    'LLM observability and evaluation': 'eye',
+    'Image, audio, and speech AI': 'wave',
+    'Software Development - Project Management': 'board',
+    'Software Development - Continuous Integration & Deployment': 'pipeline',
+    'Monitoring & Status Pages': 'pulse',
+    'Calendar & Contacts': 'contact',
+    'Games': 'pad',
+    'Communication - Email - Complete Solutions': 'mail',
+    'DNS': 'globe',
+}
 ADD_YOUR_APP = "https://www.edgible.ai/add-your-app/"
 SKILL_URL = "https://github.com/edgible-org/card-kit/tree/main/skills/edgible-cards"
 AWESOME = "https://awesome-selfhosted.net/tags/{slug}.html"
@@ -732,7 +769,9 @@ class Site:
             if not ns:
                 continue
             items = "".join(
-                f'<li class="tile"><a href="{slug(n["category"])}/"><strong>{esc(n["category"])}</strong></a>'
+                f'<li class="tile"><a class="tile-head" href="{slug(n["category"])}/">'
+                f'<span class="nicon" aria-hidden="true"><svg><use href="../assets/images/needs-icons.svg#{NEED_ICONS.get(n["category"], "cube")}"/></svg></span>'
+                f'<strong>{esc(n["category"])}</strong></a>'
                 f'<span>{esc(", ".join((n.get("jobs") or [])[:2]))}</span>{self.card_count(n)}</li>'
                 for n in ns)
             groups.append(f'<h2>{FIT_WORDS[rating]}</h2><ul class="tiles">{items}</ul>')
@@ -945,6 +984,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .deprecated-note{border-left:4px solid var(--none);padding:8px 12px;background:var(--panel)}
 .tile a{text-decoration:none;color:var(--ink)}.tile span:not(.pill):not(.icon):not(.pills){color:var(--muted);font-size:.95rem}
 .tile-head{display:flex;align-items:center;gap:12px;font-size:1.1rem}
+.nicon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:11px;background:var(--navy)}.nicon svg{width:32px;height:32px}
 .icon{flex:none;border-radius:10px;object-fit:contain;display:inline-block}
 /* A logo sits on a white tile, like an app icon, so a black logo still reads in dark mode. */
 img.icon{background:#fff;padding:5px;border:1px solid var(--edge)}
