@@ -432,9 +432,16 @@ class Site:
 <main class="wrap">
 {body}
 </main>
-<footer><div class="wrap">
-<p>Built {self.built} from <a href="{REPO_URL}">edgible-org/cards</a>{commit}. Cards are free to run and share under the repo's license. Test results come from the nightly regression, on a real Edgible serving device. Questions or ideas? <a href="https://www.edgible.ai/contact/">Contact us</a>.</p>
-</div></footer>
+<footer>
+<div class="wrap foot">
+<span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors.</span>
+<div class="foot-right">
+<span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span>
+<a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
+</div>
+</div>
+<div class="wrap built"><p>Built {self.built} from <a href="{REPO_URL}">edgible-org/cards</a>{commit}. Test results come from the nightly regression, on a real Edgible serving device.</p></div>
+</footer>
 </body>
 </html>
 """
@@ -985,6 +992,10 @@ dt{font-weight:600;margin-top:10px}dd{margin:2px 0 0 0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 footer{background:var(--navy);color:rgba(255,255,255,.88);font-size:.88rem;padding:18px 0 28px}
 footer a{color:#ffa07a}
+footer .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px 20px}
+footer .foot-right{display:flex;align-items:center;gap:20px}
+footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
+footer .built p{margin:14px 0 0;font-size:.8rem;color:rgba(255,255,255,.6)}
 """
 
 
