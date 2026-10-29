@@ -437,8 +437,9 @@ def main(argv: list[str]) -> int:
             card = yaml.safe_load(path.read_text())
             # YAML reads an unquoted 2026-10-11 as a date; the schema wants the text.
             meta = card.get("metadata") or {}
-            if isinstance(meta.get("added"), date):
-                meta["added"] = meta["added"].isoformat()
+            for key in ("added", "reviewed"):
+                if isinstance(meta.get(key), date):
+                    meta[key] = meta[key].isoformat()
             name = card["metadata"]["name"]
             if name != path.parent.name:
                 raise SystemExit(
@@ -451,6 +452,8 @@ def main(argv: list[str]) -> int:
             errors += data_errors
             for note in data_notes:
                 print(f"note {path}: {note}")
+            if not meta.get("steward"):
+                print(f"note {path}: no steward: the site shows the card as having none")
             env_path = path.parent / "card.env"
             env_text = env_path.read_text() if env_path.exists() else ""
             secret_errors, secret_notes = secrets_problems(
