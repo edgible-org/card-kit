@@ -46,6 +46,7 @@ ASSETS = KIT / "site"
 # Edgible symbol on a navy tile instead.
 ICONS = ("icon.svg", "icon.png")
 REPO_URL = "https://github.com/edgible-org/cards"
+ADD_YOUR_APP = "https://www.edgible.ai/add-your-app/"
 SKILL_URL = "https://github.com/edgible-org/card-kit/tree/main/skills/edgible-cards"
 AWESOME = "https://awesome-selfhosted.net/tags/{slug}.html"
 # The star count shows from this many on; below it, a small number puts people off more
@@ -420,7 +421,7 @@ class Site:
 <body>
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
-<nav><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
@@ -504,7 +505,7 @@ class Site:
 <li><strong>The same steps every time</strong><span>Check, Start, Publish, Verify, Tear down. Learn one card and you know them all, and so does an AI agent.</span></li>
 <li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result and its date on every card. Rechecked on a rolling schedule, when an app's image changes, and on request; images are scanned every night.</span></li>
 </ul>
-<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{REPO_URL}/blob/main/CONTRIBUTING.md">share it back</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
+<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{ADD_YOUR_APP}">share it back</a>. Built an app yourself? <a href="{ADD_YOUR_APP}">Add it</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 {recent_html}
 <p class="stats">{len(apps)} app cards, {len(patterns)} pattern cards, {tested} passing their latest test, {len(self.needs)} needs mapped.</p>
 <p class="star-ask">Found one that helps? <a href="{REPO_URL}">Star edgible-org/cards on GitHub</a>, so other people find it too.</p>
