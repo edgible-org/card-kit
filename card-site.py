@@ -278,6 +278,7 @@ def load_cards(root: Path) -> dict[str, dict]:
             "license": str(card.get("metadata", {}).get("license", "")),
             "status": card.get("metadata", {}).get("status", "stable"),
             "steward": str(card.get("metadata", {}).get("steward", "")),
+            "contact": str(card.get("metadata", {}).get("contact", "")),
             "reviewed": str(card.get("metadata", {}).get("reviewed", "")),
             "replaced_by": str(card.get("metadata", {}).get("replaced-by", "")),
             "readme": readme.read_text() if readme.exists() else "",
@@ -317,7 +318,12 @@ def steward_html(c: dict) -> str:
         when = f', reviewed {d.day} {d.strftime("%B %Y")}'
     except ValueError:
         when = ""
-    return (f'<span class="steward">Stewarded by <a href="https://github.com/{esc(who)}">{esc(who)}</a>{when}</span>')
+    contact = c.get("contact", "")
+    link = ""
+    if contact:
+        href = contact if contact.startswith(("https://", "mailto:")) else f"mailto:{contact}"
+        link = f' <a class="contact" href="{esc(href)}">Contact</a>'
+    return (f'<span class="steward">Stewarded by <a href="https://github.com/{esc(who)}">{esc(who)}</a>{when}{link}</span>')
 
 
 def homepage_html(c: dict) -> str:
