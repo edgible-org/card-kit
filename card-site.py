@@ -440,7 +440,7 @@ class Site:
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
-<div class="wrap built"><p>Built {self.built} from <a href="{REPO_URL}">edgible-org/cards</a>{commit}. Test results come from the nightly regression, on a real Edgible serving device.</p></div>
+<!-- Built {self.built} from edgible-org/cards {esc(self.commit[:7])} -->
 </footer>
 </body>
 </html>
@@ -995,7 +995,6 @@ footer a{color:#ffa07a}
 footer .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px 20px}
 footer .foot-right{display:flex;align-items:center;gap:20px}
 footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
-footer .built p{margin:14px 0 0;font-size:.8rem;color:rgba(255,255,255,.6)}
 """
 
 
