@@ -10,10 +10,11 @@ Run it from the app's folder, or point it at one, on the machine where you build
 It reads the app's files and asks the registry about the image (it needs Docker for that, and the
 network). It changes nothing, and it prints only the names of what it finds, never a value.
 
-Two lists. REQUIRED is what a card needs: a public image with a version tag that runs on both amd64 and
-arm64, a licence others can use, settings that are written down, a port and a place for the data, nobody's
-secrets committed, and someone who answers for it (the steward, a GitHub name). NICE TO HAVE is what makes it
-a better card: a healthcheck, a non-root user, secrets that can come from files, a backup note, an icon.
+Three lists. REQUIRED is what a card needs: a public image with a version tag that runs on both amd64 and
+arm64, a licence others can use, settings that are written down, a port and a place for the data, and
+nobody's secrets committed. YOUR CALL is who answers for the card (the steward, a GitHub name): a card can
+be listed with none, so it never fails the check, but the person should choose. NICE TO HAVE is what makes
+it a better card: a healthcheck, a non-root user, secrets that can come from files, a backup note, an icon.
 Each gap says what to do. Exit 0 when every required item passes, 1 when one does not, 2 when it cannot run.
 
 --json prints the same as data, for an agent: it can loop until `ready` is true.
@@ -103,6 +104,7 @@ def check(root: Path, image: str, steward: str) -> dict:
     ctext = "\n".join(read(p) for p in composes)
     readme = next((read(p) for p in find(root, "README.md", "README", "readme.md")), "")
     required: list[dict] = []
+    decide: list[dict] = []
     nice: list[dict] = []
 
     # image
@@ -180,11 +182,11 @@ def check(root: Path, image: str, steward: str) -> dict:
                          "Remove them from git (and change them: they are public now). A card makes secrets on the machine "
                          "at first start; the app should read them from the environment or, better, from files."))
 
-    # steward
-    required.append(item("steward", "Someone answers for it (the steward)", bool(steward),
-                         f"steward: {steward}" if steward else "no --steward given",
-                         "Give the GitHub user or organisation that will review changes to the card and fix it when its test "
-                         "fails: --steward <github-name>. Without one the card is listed as having no steward."))
+    # steward: a choice, not a requirement, since a card can be listed with none
+    decide.append(item("steward", "Who answers for it (the steward)", None if not steward else True,
+                       f"steward: {steward}" if steward else "none named: the card will be listed as having no steward",
+                       "Optional. Give the GitHub user or organisation that will review changes to the card and fix it "
+                       "when its test fails: --steward <github-name>. If nobody will, leave it: that is allowed."))
 
     # nice to have
     health = bool(re.search(r"(?mi)^\s*HEALTHCHECK\b", dtext)) or bool(re.search(r"(?m)^\s*healthcheck:", ctext))
@@ -215,7 +217,7 @@ def check(root: Path, image: str, steward: str) -> dict:
     nice.append(item("releases", "It makes versioned releases", len(tags) > 0, f"{len(tags)} git tag(s)" if tags else "no git tags",
                      "Tag releases (v1.2.0), so a card can pin a version and a bump bot can propose the next one."))
 
-    return {"app": str(root), "image": image, "required": required, "nice": nice,
+    return {"app": str(root), "image": image, "required": required, "decide": decide, "nice": nice,
             "ready": all(i["ok"] is True for i in required)}
 
 
@@ -227,6 +229,11 @@ def show(report: dict) -> None:
     for i in report["required"]:
         print(f"  {mark(i)}{i['title']}: {i['detail']}")
         if i["fix"]:
+            print(f"        -> {i['fix']}")
+    print("\nYOUR CALL")
+    for i in report["decide"]:
+        print(f"  {mark(i)}{i['title']}: {i['detail']}")
+        if i["fix"] and i["ok"] is not True:
             print(f"        -> {i['fix']}")
     print("\nNICE TO HAVE")
     for i in report["nice"]:
