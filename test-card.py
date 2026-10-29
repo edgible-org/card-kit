@@ -490,7 +490,7 @@ def files_hash(card_dir: Path) -> str:
             continue
         data = path.read_bytes()
         if rel.as_posix() == "card.yml":
-            data = re.sub(rb"(?m)^  (?:added|homepage|license|status|steward|reviewed):[^\n]*\n", b"", data)
+            data = re.sub(rb"(?m)^  (?:added|homepage|license|status|steward|reviewed|replaced-by):[^\n]*\n", b"", data)
         digest.update(rel.as_posix().encode() + b"\0" + data + b"\0")
     return "sha256:" + digest.hexdigest()[:16]
 

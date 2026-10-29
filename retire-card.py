@@ -29,6 +29,14 @@ is only reported, because a person has to read it.
 
 It refuses to remove a card another card depends on unless --force, and refuses a working tree with
 uncommitted changes.
+
+The gentler step, with --deprecate: keep the card listed and say plainly not to start new setups on it.
+
+    python3 retire-card.py canary --deprecate --replaced-by canary2 --reason "its test is no longer maintained"
+
+On a new branch, in one commit: `status: deprecated` (and `replaced-by:` when given) in card.yml, and a
+note under the README's title. Neither changes the card's test fingerprint, so nothing is retested. The
+site shows a Deprecated pill and a note at the top of the card's page. Nothing is pushed.
 """
 from __future__ import annotations
 
@@ -201,6 +209,50 @@ def remove(root: Path, name: str, kit: Path | None, force: bool, deps: list[str]
     return 0
 
 
+def deprecate(root: Path, name: str, replaced_by: str, reason: str) -> int:
+    if replaced_by and not (root / replaced_by / "card.yml").is_file():
+        print(f"Refusing: --replaced-by {replaced_by} is not a card here.", file=sys.stderr)
+        return 2
+    if git(root, "status", "--porcelain").strip():
+        print(f"Refusing: {root} has uncommitted changes.", file=sys.stderr)
+        return 2
+    card_yml = root / name / "card.yml"
+    text = card_yml.read_text()
+    if re.search(r"(?m)^  status:\s*deprecated\s*$", text):
+        print(f"{name} is already deprecated.", file=sys.stderr)
+        return 2
+    extra = "  status: deprecated\n" + (f"  replaced-by: {replaced_by}\n" if replaced_by else "")
+    text = re.sub(r"(?m)^  (?:status|replaced-by):[^\n]*\n", "", text)
+    m = None
+    for key in ("steward", "license", "homepage", "added", "description"):
+        found = list(re.finditer(rf"(?m)^  {key}:[^\n]*\n", text))
+        if found:
+            m = found[0]
+            break
+    if not m:
+        print(f"{card_yml}: no metadata line to put it after.", file=sys.stderr)
+        return 2
+    card_yml.write_text(text[:m.end()] + extra + text[m.end():])
+    sentence = ("**Deprecated.** " + (reason.rstrip(". ") + ". " if reason else "")
+                + "Do not start a new setup on this card."
+                + (f" Use [{replaced_by}](../{replaced_by}/) instead." if replaced_by else ""))
+    readme = root / name / "README.md"
+    if readme.is_file() and "**Deprecated.**" not in readme.read_text():
+        lines = readme.read_text().split("\n")
+        at = next((i for i, l in enumerate(lines) if l.startswith("# ")), -1) + 1
+        lines[at:at] = ["", "> " + sentence]
+        readme.write_text("\n".join(lines))
+    branch = f"deprecate-{name}"
+    git(root, "checkout", "-q", "-b", branch)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", f"Deprecate the {name} card\n\n{reason or 'On a person' + chr(39) + 's decision.'}\n"
+                                    "Made by retire-card --deprecate.")
+    print(f"cards repo, branch {branch}, one commit: {name} is deprecated"
+          + (f", replaced by {replaced_by}" if replaced_by else "")
+          + ". Nothing was pushed. The test fingerprint ignores both lines, so nothing is retested.")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="What removing a card would touch.")
     ap.add_argument("card")
@@ -209,12 +261,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--remove", action="store_true", help="make the edits on a new branch, in one commit; nothing is pushed")
     ap.add_argument("--kit", type=Path, metavar="PATH", help="with --remove: also edit the needs map in this card-kit checkout")
     ap.add_argument("--force", action="store_true", help="with --remove: even when another card depends on it")
+    ap.add_argument("--deprecate", action="store_true", help="keep the card listed, marked deprecated, on a new branch")
+    ap.add_argument("--replaced-by", metavar="CARD", default="", help="with --deprecate: the card that replaces it")
+    ap.add_argument("--reason", default="", help="with --deprecate: why, in a sentence")
     args = ap.parse_args(argv)
     root = Path.cwd()
     own = root / args.card
     if not (own / "card.yml").is_file():
         print(f"{args.card}: not a card here (run it from the root of a cards repo)", file=sys.stderr)
         return 2
+    if args.deprecate:
+        return deprecate(root, args.card, args.replaced_by, args.reason)
     if args.remove:
         return remove(root, args.card, args.kit.resolve() if args.kit else None, args.force, dependents(root, args.card))
     mentions = scan(root, args.card, own, "cards") + (scan(KIT, args.card, None, "card-kit") if KIT != root else [])

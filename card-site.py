@@ -278,6 +278,7 @@ def load_cards(root: Path) -> dict[str, dict]:
             "status": card.get("metadata", {}).get("status", "stable"),
             "steward": str(card.get("metadata", {}).get("steward", "")),
             "reviewed": str(card.get("metadata", {}).get("reviewed", "")),
+            "replaced_by": str(card.get("metadata", {}).get("replaced-by", "")),
             "readme": readme.read_text() if readme.exists() else "",
             "fit": CARD_FIT.fit(d),
             "download": CARD_README.image_bytes(d),
@@ -352,6 +353,13 @@ def failing_banner(name: str, st: dict | None) -> str:
     return (f'<p class="failing-note">This card\'s latest test failed on {esc(st.get("tested", ""))}. It stays listed, '
             f'but do not start a new setup on it until it passes: <a href="{REPO_URL}/issues?q=is%3Aissue+Regression%3A+{esc(name)}">'
             f'what failed</a>.</p>\n')
+
+
+def deprecated_banner(c: dict) -> str:
+    if c.get("status") != "deprecated":
+        return ""
+    use = (f' Use <a href="../{esc(c["replaced_by"])}/">{esc(c["replaced_by"])}</a> instead.' if c.get("replaced_by") else "")
+    return f'<p class="deprecated-note">This card is deprecated: do not start a new setup on it.{use}</p>\n'
 
 
 def status_text(st: dict | None) -> str:
@@ -479,7 +487,7 @@ class Site:
                     f'<span class="why">Its latest test failed, so it is not offered until it passes.</span></li>')
         return (f'<li class="tile"{self.filter_data(c)}><a class="tile-head" href="{up}{esc(c["name"])}/">{self.icon(c, up, 40)}'
                 f'<strong>{esc(c["name"])}</strong></a>'
-                f'<span>{esc(c["description"])}</span>{pills}</li>')
+                f'<span>{esc(c["description"])}</span>{pills}{lifecycle_html(c)}</li>')
 
     def index(self) -> None:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
@@ -648,7 +656,7 @@ class Site:
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
 <h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
 <p class="lead">{esc(c["description"])}</p>
-{failing_banner(name, st)}<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+{deprecated_banner(c)}{failing_banner(name, st)}<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
@@ -920,6 +928,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .tile{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;transition:border-color .15s,box-shadow .15s}
 .tile:hover{border-color:var(--navy-mid);box-shadow:0 2px 10px rgba(0,0,51,.08)}
 .tile.failing{opacity:.55;filter:grayscale(.7)}.tile.failing:hover{border-color:var(--edge);box-shadow:none}.tile.failing .tile-head{cursor:not-allowed}.tile .why{font-size:.85rem}.failing-note{border-left:4px solid var(--fail,#b42318);padding:8px 12px;background:var(--panel)}
+.deprecated-note{border-left:4px solid var(--none);padding:8px 12px;background:var(--panel)}
 .tile a{text-decoration:none;color:var(--ink)}.tile span:not(.pill):not(.icon):not(.pills){color:var(--muted);font-size:.95rem}
 .tile-head{display:flex;align-items:center;gap:12px;font-size:1.1rem}
 .icon{flex:none;border-radius:10px;object-fit:contain;display:inline-block}
