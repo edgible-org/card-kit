@@ -64,6 +64,16 @@
             "deprecated"
           ],
           "description": "experimental: newly made, less proven. stable: the default when this is left out. deprecated: still here but do not start new setups on it; the README says what replaces it."
+        },
+        "steward": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$",
+          "description": "The GitHub user or organisation that answers for this card: reviews changes to it, approves its upgrades, fixes it when its test fails, and can be reached through its issues. Shown on the card's page, linked to github.com/<steward>. Leave it out when nobody does, and the card is shown as having no steward."
+        },
+        "reviewed": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The date a person last read the card and its test, YYYY-MM-DD. Shown with the steward. Leave it out when unknown."
         }
       }
     },
