@@ -341,6 +341,19 @@ def status_pill(st: dict | None, prefix: str = "") -> str:
             f'{word} {esc(st.get("tested", ""))}{ver}</span>')
 
 
+def failing(st: dict | None) -> bool:
+    """The card's latest test failed. It stays listed, dimmed, so nobody starts a new setup on it."""
+    return bool(st) and st.get("result") == "fail"
+
+
+def failing_banner(name: str, st: dict | None) -> str:
+    if not failing(st):
+        return ""
+    return (f'<p class="failing-note">This card\'s latest test failed on {esc(st.get("tested", ""))}. It stays listed, '
+            f'but do not start a new setup on it until it passes: <a href="{REPO_URL}/issues?q=is%3Aissue+Regression%3A+{esc(name)}">'
+            f'what failed</a>.</p>\n')
+
+
 def status_text(st: dict | None) -> str:
     if not st:
         return "not tested yet"
@@ -455,9 +468,18 @@ class Site:
         return "".join(f' data-{k}="{esc(v)}"' for k, v in attrs.items())
 
     def card_tile(self, c: dict, up: str) -> str:
+        st = self.status.get(c["name"])
+        pills = f'<span class="pills">{status_pill(st)}{fit_pill(c["fit"])}{download_pill(c)}</span>'
+        if failing(st):
+            # Listed but not offered: no link, dimmed, and the reason in words. The page is still there at
+            # its address, for anyone who followed a link, with the same reason at the top.
+            return (f'<li class="tile failing" aria-disabled="true"{self.filter_data(c)}>'
+                    f'<span class="tile-head">{self.icon(c, up, 40)}<strong>{esc(c["name"])}</strong></span>'
+                    f'<span>{esc(c["description"])}</span>{pills}'
+                    f'<span class="why">Its latest test failed, so it is not offered until it passes.</span></li>')
         return (f'<li class="tile"{self.filter_data(c)}><a class="tile-head" href="{up}{esc(c["name"])}/">{self.icon(c, up, 40)}'
                 f'<strong>{esc(c["name"])}</strong></a>'
-                f'<span>{esc(c["description"])}</span><span class="pills">{status_pill(self.status.get(c["name"]))}{fit_pill(c["fit"])}{download_pill(c)}</span></li>')
+                f'<span>{esc(c["description"])}</span>{pills}</li>')
 
     def index(self) -> None:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
@@ -626,7 +648,7 @@ class Site:
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
 <h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
 <p class="lead">{esc(c["description"])}</p>
-<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+{failing_banner(name, st)}<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
@@ -897,6 +919,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .tiles{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .tile{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;transition:border-color .15s,box-shadow .15s}
 .tile:hover{border-color:var(--navy-mid);box-shadow:0 2px 10px rgba(0,0,51,.08)}
+.tile.failing{opacity:.55;filter:grayscale(.7)}.tile.failing:hover{border-color:var(--edge);box-shadow:none}.tile.failing .tile-head{cursor:not-allowed}.tile .why{font-size:.85rem}.failing-note{border-left:4px solid var(--fail,#b42318);padding:8px 12px;background:var(--panel)}
 .tile a{text-decoration:none;color:var(--ink)}.tile span:not(.pill):not(.icon):not(.pills){color:var(--muted);font-size:.95rem}
 .tile-head{display:flex;align-items:center;gap:12px;font-size:1.1rem}
 .icon{flex:none;border-radius:10px;object-fit:contain;display:inline-block}
