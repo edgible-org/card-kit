@@ -16,14 +16,26 @@ loose ones are counted, and shown with --loose).
 It exits 1 when another card depends on this one (a pattern that includes it), because removing it
 would break that card: say so first, then decide. It exits 0 otherwise, 2 when it cannot run.
 
-Removing a card is a person's decision. This tool only shows the cost; a later step makes the edits as
-a pull request.
+Removing a card is a person's decision. With --remove it then makes the edits, on a new branch of the
+cards repo and one commit, and stops there: it never pushes or opens anything. The edits are the card's
+folder, its row in the catalog table, and its name in each upstream/ request's `cards:` list (a request
+left with no card is never deleted: it is about the app, so a person decides). With --kit PATH
+it also takes the card out of the `cards:` lists in the skill's needs map in that card-kit checkout (its
+own branch and commit; never ~/.card-kit, which the installed skill links to). Everything else it found
+is only reported, because a person has to read it.
+
+    python3 retire-card.py canary --remove
+    python3 retire-card.py canary --remove --kit ~/CC/card-kit-catalog-site
+
+It refuses to remove a card another card depends on unless --force, and refuses a working tree with
+uncommitted changes.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -78,17 +90,133 @@ def dependents(root: Path, name: str) -> list[str]:
     return out
 
 
+def git(repo: Path, *args: str) -> str:
+    out = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    if out.returncode != 0:
+        raise SystemExit(f"git {' '.join(args)} failed in {repo}: {out.stderr.strip()}")
+    return out.stdout
+
+
+def without(items: str, name: str) -> list[str]:
+    return [i.strip() for i in items.split(",") if i.strip() and i.strip() != name]
+
+
+def edit_readme(root: Path, name: str) -> str:
+    path = root / "README.md"
+    if not path.is_file():
+        return ""
+    lines = path.read_text().split("\n")
+    keep = [l for l in lines if not re.match(rf"\|\s*\[{re.escape(name)}\]\({re.escape(name)}\)\s*\|", l)]
+    if len(keep) == len(lines):
+        return ""
+    path.write_text("\n".join(keep))
+    return f"README.md: removed {len(lines) - len(keep)} catalog row(s)"
+
+
+def edit_upstream(root: Path, name: str) -> list[str]:
+    done = []
+    for f in sorted((root / "upstream").glob("*.md")):
+        if f.name == "README.md":
+            continue
+        text = f.read_text()
+        m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+        if not m:
+            continue
+        head = m.group(1)
+        c = re.search(r"(?m)^cards:\s*\[([^\]]*)\]\s*$", head)
+        if not c or name not in [i.strip() for i in c.group(1).split(",")]:
+            continue
+        rest = without(c.group(1), name)
+        status = (re.search(r"(?m)^status:\s*(\S+)", head) or [None, ""])[1]
+        if rest:
+            f.write_text(text.replace(c.group(0), f"cards: [{', '.join(rest)}]", 1))
+            done.append(f"upstream/{f.name}: took {name} out of cards:")
+        else:
+            # The request is about the app, and stays true when its card goes: a person decides whether to
+            # send it, keep it under another card, or drop it.
+            done.append(f"upstream/{f.name}: NEEDS A PERSON: status {status or '?'}, and it only names {name}; "
+                        "left as it is, and check-cards will object until it names a card or goes")
+    return done
+
+
+def edit_needs_map(kit: Path, name: str) -> list[str]:
+    path = kit / "skills" / "edgible-cards" / "needs-map.yaml"
+    if not path.is_file():
+        return [f"{kit}: no skills/edgible-cards/needs-map.yaml"]
+    out, text = [], path.read_text()
+
+    def fix(m: re.Match) -> str:
+        items = [i.strip() for i in m.group(2).split(",") if i.strip()]
+        if name not in items:
+            return m.group(0)
+        out.append(f"needs-map.yaml: {name} out of a cards: list ({m.group(2).strip()})")
+        return f"{m.group(1)}[{', '.join(i for i in items if i != name)}]"
+
+    new = re.sub(r"(?m)^(\s*cards:\s*)\[([^\]]*)\]", fix, text)
+    if new != text:
+        path.write_text(new)
+    return out
+
+
+def remove(root: Path, name: str, kit: Path | None, force: bool, deps: list[str]) -> int:
+    if deps and not force:
+        print(f"Refusing: {', '.join(deps)} depend on {name}. Decide about them first, or pass --force.", file=sys.stderr)
+        return 1
+    for repo in [root] + ([kit] if kit else []):
+        if git(repo, "status", "--porcelain").strip():
+            print(f"Refusing: {repo} has uncommitted changes.", file=sys.stderr)
+            return 2
+    branch = f"retire-{name}"
+    git(root, "checkout", "-q", "-b", branch)
+    git(root, "rm", "-rq", name)
+    notes = [f"{name}/: folder removed"]
+    for step in (edit_readme(root, name),):
+        if step:
+            notes.append(step)
+    notes += edit_upstream(root, name)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", f"Remove the {name} card\n\nMade by retire-card --remove, on a person's decision.")
+    print(f"cards repo, branch {branch}, one commit:")
+    for n in notes:
+        print(f"  {n}")
+    if kit:
+        git(kit, "checkout", "-q", "-b", branch)
+        kit_notes = edit_needs_map(kit, name)
+        if kit_notes:
+            git(kit, "add", "-A")
+            git(kit, "commit", "-q", "-m", f"Needs map: take {name} out\n\nIts card was removed from the catalog.")
+            print(f"card-kit ({kit}), branch {branch}, one commit:")
+            for n in kit_notes:
+                print(f"  {n}")
+        else:
+            git(kit, "checkout", "-q", "-")
+            git(kit, "branch", "-q", "-D", branch)
+            print(f"card-kit ({kit}): nothing to change in the needs map")
+    print("\nNothing was pushed. Read the branch, then push it and open the pull request yourself. "
+          "Still mentioned, and for a person to read:")
+    left = [m for m in scan(root, name, None, "cards") if m["kind"] == "firm"]
+    for m in left:
+        print(f"  {m['file']}:{m['line']}  {m['text']}")
+    print("Also: the card's entry in the nightly status (the test-status branch) and its badge are not touched.")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="What removing a card would touch.")
     ap.add_argument("card")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--loose", action="store_true", help="also list the loose mentions")
+    ap.add_argument("--remove", action="store_true", help="make the edits on a new branch, in one commit; nothing is pushed")
+    ap.add_argument("--kit", type=Path, metavar="PATH", help="with --remove: also edit the needs map in this card-kit checkout")
+    ap.add_argument("--force", action="store_true", help="with --remove: even when another card depends on it")
     args = ap.parse_args(argv)
     root = Path.cwd()
     own = root / args.card
     if not (own / "card.yml").is_file():
         print(f"{args.card}: not a card here (run it from the root of a cards repo)", file=sys.stderr)
         return 2
+    if args.remove:
+        return remove(root, args.card, args.kit.resolve() if args.kit else None, args.force, dependents(root, args.card))
     mentions = scan(root, args.card, own, "cards") + (scan(KIT, args.card, None, "card-kit") if KIT != root else [])
     deps = dependents(root, args.card)
     firm = [m for m in mentions if m["kind"] == "firm"]
