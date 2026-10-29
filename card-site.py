@@ -459,16 +459,19 @@ class Site:
 <meta property="og:description" content="{esc(description)}">
 {og_url}<meta name="twitter:card" content="summary">
 <link rel="icon" type="image/png" href="{up}assets/images/favicon.png">
+<script>document.documentElement.className+=" js"</script>
 <link rel="stylesheet" href="{up}style.css?v={STYLE_VERSION}">
 </head>
 <body>
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
-<nav><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
 </main>
+<script>{MENU_JS}</script>
 <footer>
 <div class="wrap foot">
 <span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors.</span>
@@ -962,6 +965,21 @@ a{color:var(--link)}
 nav{display:flex;flex-wrap:wrap;gap:18px;align-items:center}nav a{text-decoration:none;color:rgba(255,255,255,.85)}nav a:hover{color:#fff}
 nav a.star{border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:1px 12px;color:#fff}nav a.star:hover{background:rgba(255,255,255,.12)}
 .star-ask{color:var(--muted)}
+.menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:44px;margin-right:-10px;padding:0;border:0;border-radius:10px;background:none;cursor:pointer}
+.menu-btn:hover{background:rgba(255,255,255,.1)}.menu-btn:focus-visible{outline:2px solid #ffd21f;outline-offset:2px}
+.menu-btn span,.menu-btn span::before,.menu-btn span::after{display:block;width:22px;height:2px;border-radius:2px;background:#fff;transition:transform .15s,background .15s}
+.menu-btn span{position:relative}.menu-btn span::before,.menu-btn span::after{content:"";position:absolute;left:0}
+.menu-btn span::before{top:-7px}.menu-btn span::after{top:7px}
+.top.open .menu-btn span{background:transparent}.top.open .menu-btn span::before{transform:translateY(7px) rotate(45deg)}.top.open .menu-btn span::after{transform:translateY(-7px) rotate(-45deg)}
+@media (max-width:920px){
+.top{position:relative}
+.js .top .wrap{flex-wrap:nowrap}
+.js .menu-btn{display:inline-flex}
+.js .top nav{display:none;position:absolute;top:100%;left:0;right:0;z-index:20;flex-direction:column;align-items:stretch;gap:0;padding:4px 16px 12px;background:var(--navy);border-top:1px solid rgba(255,255,255,.12);box-shadow:0 8px 16px rgba(0,0,0,.2);font-size:17px}
+.js .top.open nav{display:flex}
+.js .top nav a{padding:13px 4px;border-top:1px solid rgba(255,255,255,.08)}.js .top nav a:first-child{border-top:0}
+.js .top nav a.star{align-self:flex-start;margin-top:10px;padding:6px 16px;border:1px solid rgba(255,255,255,.45)}
+}
 main.wrap{padding-top:40px;padding-bottom:56px;flex:1;width:100%}
 h1,h2,h3{font-weight:600;letter-spacing:-.01em}
 h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .3em}h2{font-size:1.4rem;margin:2em 0 .5em}h3{font-size:1.1rem}
@@ -1041,6 +1059,16 @@ footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
 # The index's search and filters. Every word typed must appear in a card's search text;
 # each filter narrows further. The choices go in the address, so a filtered view can be
 # shared, and the cards keep their order.
+MENU_JS = """(() => {
+  const bar = document.querySelector('header.top'), btn = bar && bar.querySelector('.menu-btn');
+  if (!btn) return;
+  const set = (open) => { bar.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); };
+  btn.addEventListener('click', () => set(!bar.classList.contains('open')));
+  bar.addEventListener('click', (e) => { if (e.target.closest('nav a')) set(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { set(false); btn.focus(); } });
+  document.addEventListener('click', (e) => { if (!bar.contains(e.target)) set(false); });
+})();"""
+
 FINDER_JS = """(() => {
 const f = document.querySelector(".finder"); if (!f) return;
 const tiles = [...document.querySelectorAll(".tiles .tile[data-search]")];
