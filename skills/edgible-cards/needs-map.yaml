@@ -175,7 +175,7 @@
   permissions: "books, spaces, or page roles decide who reads and edits what; set them before importing confidential material"
   builders: "a documentation or help centre for a product"
   machine: little
-  cards: [docmost]
+  cards: [docmost, wiki-go, xwiki, leafwiki, otter-wiki, wiki-js]
   ask: ["for your team, or public?"]
 
 - category: Knowledge Management Tools
