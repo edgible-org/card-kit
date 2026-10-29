@@ -79,6 +79,11 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "For a deprecated card: the card that replaces it. Shown on the card's page."
+        },
+        "contact": {
+          "type": "string",
+          "pattern": "^(https://\\S+|mailto:\\S+|[^@\\s]+@[^@\\s]+\\.[^@\\s]+)$",
+          "description": "Optional. A public way to reach whoever looks after the card, of their own choosing: an https address (a page, a chat or a form) or an email address, such as a role address. It is public and permanent in git history, so use one you are happy to have scraped, not a personal or account sign-in address. Shown on the card's page next to the steward."
         }
       }
     },
