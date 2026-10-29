@@ -13,7 +13,7 @@ network). It changes nothing, and it prints only the names of what it finds, nev
 Two lists. REQUIRED is what a card needs: a public image with a version tag that runs on both amd64 and
 arm64, a licence others can use, settings that are written down, a port and a place for the data, nobody's
 secrets committed, and someone who answers for it (the steward, a GitHub name). NICE TO HAVE is what makes it
-a better card: a healthcheck, a non-root user, secrets that can come from files, a backup note.
+a better card: a healthcheck, a non-root user, secrets that can come from files, a backup note, an icon.
 Each gap says what to do. Exit 0 when every required item passes, 1 when one does not, 2 when it cannot run.
 
 --json prints the same as data, for an agent: it can loop until `ready` is true.
@@ -208,6 +208,10 @@ def check(root: Path, image: str, steward: str) -> dict:
                      "Add a short Backup section: what to copy (the data folder, the database) and how to restore it."))
     tags = (subprocess.run(["git", "-C", str(root), "tag", "--list"], capture_output=True, text=True).stdout.split()
             if (root / ".git").exists() else [])
+    icons = [n for n in sorted(names) if re.search(r"(^|/)(icon|logo|favicon)[^/]*\.(svg|png)$", n, re.I)]
+    nice.append(item("icon", "It has an icon", bool(icons), icons[0] if icons else "none found",
+                     "Add a square icon, SVG if you can (or PNG), the app's own logo. An AI tool can draw a simple one in a minute. "
+                     "A card keeps it as images/icon.svg; without one the catalog shows the Edgible symbol."))
     nice.append(item("releases", "It makes versioned releases", len(tags) > 0, f"{len(tags)} git tag(s)" if tags else "no git tags",
                      "Tag releases (v1.2.0), so a card can pin a version and a bump bot can propose the next one."))
 
