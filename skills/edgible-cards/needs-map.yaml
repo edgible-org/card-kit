@@ -202,7 +202,7 @@
     default: org for the web; none with the app's login when its phone app must sync
     sensitive: org, or not published
   machine: little
-  cards: []
+  cards: [memos]
   ask: ["do you need a phone app?"]
 
 - category: Document Management
