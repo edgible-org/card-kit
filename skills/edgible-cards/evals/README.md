@@ -4,8 +4,8 @@ The prompts the skill is measured against, and how to measure it. [EXAMPLES.md](
 
 | File | What it is |
 |---|---|
-| [trigger-set.json](trigger-set.json) | 28 prompts, each marked `should_trigger`: 16 that should load the skill (needs described in people's words, a named app, a day-two problem, upgrading Edgible itself, sharing an app you built, AI tools) and 12 near-misses on the same topics that should not. Reviewed by a person. |
-| [held-out.yaml](held-out.yaml) | 11 prompts, mostly real, with what a good answer does (`expect`) and what fails it (`must_not`). Answers are scored against them, and the skill is never tuned to them. |
+| [trigger-set.json](trigger-set.json) | 34 prompts, each marked `should_trigger`: 22 that should load the skill (needs described in people's words, a named app, a day-two problem, upgrading Edgible itself, sharing an app you built, AI tools, an agent asked to add an app) and 12 near-misses on the same topics that should not. Reviewed by a person. |
+| [held-out.yaml](held-out.yaml) | 20 prompts, mostly real, four of them from builders who made an app and want it on Edgible or in the catalog, with what a good answer does (`expect`) and what fails it (`must_not`). Answers are scored against them, and the skill is never tuned to them. |
 | [run-evals.py](run-evals.py) | Answers each held-out prompt in a fresh read-only session with the skill, has a second session judge the answer against its `expect`, `must_not`, and the skill's principles, and writes a report. |
 | [eval-summary.py](eval-summary.py) | Combines the last week of nightly runs into one report, from each prompt's latest result. |
 | [trigger-probe.py](trigger-probe.py) | Runs each trigger prompt in fresh, read-only `claude -p` sessions with the skill installed, and reports whether and at which step it loaded. |
