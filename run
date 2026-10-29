@@ -13,14 +13,14 @@ repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 if [ $# -eq 0 ]; then
   echo "usage: <path to card-kit>/run <tool> [args...]" >&2
-  echo "tools: $(cd "$kit" && ls *.py | sed 's/\.py$//' | grep -vE '^(upstream|check-env|test-card|test-cards|backup-card|restore-card|verify-card|scan-card)$' | tr '\n' ' ')" >&2
+  echo "tools: $(cd "$kit" && ls *.py | sed 's/\.py$//' | grep -vE '^(upstream|check-env|test-card|test-cards|backup-card|restore-card|verify-card|scan-card|check-app)$' | tr '\n' ' ')" >&2
   exit 2
 fi
 
 tool=$1
 shift
 
-if [ "$tool" = check-env ] || [ "$tool" = test-card ] || [ "$tool" = test-cards ] || [ "$tool" = backup-card ] || [ "$tool" = restore-card ] || [ "$tool" = verify-card ] || [ "$tool" = scan-card ]; then
+if [ "$tool" = check-env ] || [ "$tool" = test-card ] || [ "$tool" = test-cards ] || [ "$tool" = backup-card ] || [ "$tool" = restore-card ] || [ "$tool" = verify-card ] || [ "$tool" = scan-card ] || [ "$tool" = check-app ]; then
   echo "$tool works on the machine a card runs on, so it runs outside a container:" >&2
   echo "  python3 $kit/$tool.py $*" >&2
   exit 2
