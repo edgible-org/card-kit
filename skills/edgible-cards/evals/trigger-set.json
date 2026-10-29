@@ -118,5 +118,21 @@
   {
     "query": "How do I use my own MCP server from the Claude app on my phone?",
     "should_trigger": true
+  },
+  {
+    "query": "I built a small noticeboard app for my club with an AI tool. It runs on my laptop. I'd like it on Edgible so the committee can use it, and I'd like to share it so other clubs can run it too. How do I do that?",
+    "should_trigger": true
+  },
+  {
+    "query": "I made a little dashboard with Cursor that my team uses. How do I get it on the internet so they can reach it from home? I don't need to share it with anyone else.",
+    "should_trigger": true
+  },
+  {
+    "query": "You're my coding agent. I built the app in ./recipe-box and I'm away this afternoon. Add it to the Edgible card catalog for me.",
+    "should_trigger": true
+  },
+  {
+    "query": "My app's repo has a .env with my Stripe key and an admin password in it. I want to turn it into a card and share it. Is that fine?",
+    "should_trigger": true
   }
 ]
