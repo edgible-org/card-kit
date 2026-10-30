@@ -84,6 +84,7 @@ NEED_ICONS = {
     'DNS': 'globe',
 }
 ADD_YOUR_APP = "https://www.edgible.ai/add-your-app/"
+PLAYBOOKS = "https://www.edgible.ai/playbooks/"
 SKILL_URL = "https://github.com/edgible-org/card-kit/tree/main/skills/edgible-cards"
 AWESOME = "https://awesome-selfhosted.net/tags/{slug}.html"
 # The star count shows from this many on; below it, a small number puts people off more
@@ -466,7 +467,7 @@ class Site:
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
-<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{PLAYBOOKS}">Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
@@ -476,7 +477,7 @@ class Site:
 <div class="wrap foot">
 <span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors.</span>
 <div class="foot-right">
-<span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span>
+<span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a> &middot; <a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
