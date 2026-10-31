@@ -475,7 +475,7 @@ class Site:
 <script>{MENU_JS}</script>
 <footer>
 <div class="wrap foot">
-<span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors.</span>
+<span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors. Keep your data close.</span>
 <div class="foot-right">
 <span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a> &middot; <a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
