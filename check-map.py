@@ -27,6 +27,8 @@ from pathlib import Path
 import yaml
 
 MAP = Path(__file__).resolve().parent / "skills" / "edgible-cards" / "needs-map.yaml"
+SOURCES_FILE = MAP.with_name("sources.yaml")
+READ_BY = {"code", "agent", "person"}
 TAGS = "https://github.com/awesome-selfhosted/awesome-selfhosted-data/archive/refs/heads/master.tar.gz"
 FIELDS = {"category", "jobs", "replaces", "drivers", "fit", "exposure", "machine", "cards", "ask"}
 OPTIONAL = {"permissions", "builders", "source", "find", "candidates"}
@@ -85,6 +87,17 @@ def main() -> int:
             problems.append(f"{c}: exposure needs default and sensitive")
         problems += [f"{c}: unknown exposure {k}" for k in sorted(set(e.get("exposure", {})) - EXPOSURE)]
         problems += [f"{c}: no card {s} in edgible-org/cards" for s in e.get("cards", []) if s not in card_names]
+    listed = yaml.safe_load(SOURCES_FILE.read_text())
+    for src in listed.get("sources", []):
+        for k in ("name", "url", "good_for", "read_by", "used_for", "reviewed"):
+            if not src.get(k):
+                problems.append(f"sources.yaml: {src.get('name', '?')}: no {k}")
+        if src.get("read_by") not in READ_BY:
+            problems.append(f"sources.yaml: {src.get('name', '?')}: read_by must be one of {', '.join(sorted(READ_BY))}")
+    for item in listed.get("passed_over", []):
+        for k in ("name", "repo", "date", "why"):
+            if not item.get(k):
+                problems.append(f"sources.yaml: passed over {item.get('name', '?')}: no {k}")
     for p in problems:
         print(p)
     named = {s for e in entries for s in e.get("cards", [])}
