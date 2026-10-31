@@ -475,7 +475,7 @@ class Site:
 <script>{MENU_JS}</script>
 <footer>
 <div class="wrap foot">
-<div class="foot-legal">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br>&copy; {self.built[:4]} Edgible and contributors.</div>
+<div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
 <div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a></span><span><a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
@@ -1083,6 +1083,8 @@ footer .foot{display:flex;justify-content:space-between;align-items:center;flex-
 footer .foot-right{display:flex;align-items:center;gap:20px;margin-left:auto}
 footer .foot-links{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
 footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
+/* On a phone the footer is one short line and the symbol: the menu has the links. */
+@media (max-width:640px){footer .foot{flex-wrap:nowrap}footer .foot-lic,footer .foot-links{display:none}}
 """
 
 
