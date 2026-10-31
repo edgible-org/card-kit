@@ -40,6 +40,7 @@ import yaml
 
 KIT = Path(__file__).resolve().parent
 NEEDS_MAP = KIT / "skills" / "edgible-cards" / "needs-map.yaml"
+SOURCES = KIT / "skills" / "edgible-cards" / "sources.yaml"
 # Fonts, logo and favicon shared with Edgible's guides, copied into every build as assets/.
 ASSETS = KIT / "site"
 # A card's icon: its app's own logo, square, from card-icon. A card without one shows the
@@ -105,7 +106,7 @@ DRIVER_WORDS = {
     "local": "it has to run at home",
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible"}
-RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -477,7 +478,7 @@ class Site:
 <div class="wrap foot">
 <div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
-<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a></span><span><a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
+<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
@@ -663,6 +664,40 @@ class Site:
                      "Run an Edgible card without Edgible",
                      "A card is plain Docker Compose: how to run one on your own server and domain, "
                      "and what Edgible does for you instead.")
+
+    def sources_page(self) -> None:
+        """/sources/, from sources.yaml: where apps are found, what one needs to become a card, and
+        the apps looked at and not yet made into one. Written from the file so it cannot drift."""
+        if not SOURCES.exists():
+            return
+        data = yaml.safe_load(SOURCES.read_text()) or {}
+        read = {"code": "Read automatically", "agent": "Followed by our AI agent", "person": "Browsed by a person"}
+        rows = "".join(
+            f'<tr><td><a href="{esc(s["url"])}">{esc(s["name"])}</a></td><td>{esc(s["good_for"])}'
+            + (f'<br><small>{esc(s["note"])}</small>' if s.get("note") else "")
+            + f'</td><td>{esc(read.get(s["read_by"], s["read_by"]))}</td><td>{esc(str(s["reviewed"]))}</td></tr>'
+            for s in data.get("sources", []) if str(s["url"]).startswith("http"))
+        bar = "".join(f"<li>{esc(b)}</li>" for b in data.get("bar", []))
+        later = "".join(
+            f'<tr><td><a href="https://github.com/{esc(p["repo"])}">{esc(p["name"])}</a></td><td>{esc(p["why"])}'
+            + (f'<br><small>Worth another look if {esc(p["revisit"])}.</small>' if p.get("revisit") else "")
+            + f'</td><td>{esc(str(p["date"]))}</td></tr>'
+            for p in data.get("passed_over", []))
+        body = f"""<p class="crumbs"><a href="../">Cards</a> / sources</p>
+<h1>Where we find apps</h1>
+<p class="lead">The places we look when choosing which app to make a card for, what an app needs to qualify, and the apps we have looked at that are not cards yet. Apps change quickly, so each source shows when it was last reviewed.</p>
+<h2>Sources</h2>
+<div class="scroll"><table><thead><tr><th>Source</th><th>Good for</th><th>How we use it</th><th>Reviewed</th></tr></thead><tbody>{rows}</tbody></table></div>
+<h2>What an app needs to become a card</h2>
+<ul>{bar}</ul>
+<h2>Looked at, not yet a card</h2>
+<p>Listed so the same app is not researched twice. A reason describes the app as it was on that date, and any of these can become a card.</p>
+<div class="scroll"><table><thead><tr><th>App</th><th>Notes</th><th>Looked at</th></tr></thead><tbody>{later}</tbody></table></div>
+<p>Know a source or an app we have missed? <a href="{REPO_URL}/issues/new">Tell us</a>, or <a href="{ADD_YOUR_APP}">add your own app</a>.</p>
+"""
+        self.page("sources/", "Where we find apps | Edgible cards",
+                  "The sources Edgible looks at when choosing apps for cards, what an app needs to qualify, and the apps looked at that are not cards yet.",
+                  body)
 
     def md_page(self, source: str, path: str, fallback: str, title_tag: str, description: str) -> None:
         """A page from a Markdown file at the root of the cards repo, such as ABOUT.md."""
@@ -906,6 +941,7 @@ class Site:
 Why cards exist, and why they are shaped for sharing: {base}about/
 How to use cards with an AI agent, and the skill to install: {base}ai/
 How to run a card on your own server without Edgible: {base}run-without-edgible/
+Where apps for cards are found, and what an app needs to become one: {base}sources/
 
 Each card page has how to start, publish, check, and remove the card. Each need page says whether self-hosting suits that need, which questions decide it, and how to publish it safely. The source of every card is {REPO_URL}. An AI agent can do the whole flow with the edgible-cards skill: {SKILL_URL}
 
@@ -960,6 +996,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
         self.ai_page()
         self.ops_page()
         self.run_without_edgible_page()
+        self.sources_page()
         self.needs_index()
         for n in self.needs:
             self.need_page(n)
