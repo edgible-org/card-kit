@@ -475,9 +475,9 @@ class Site:
 <script>{MENU_JS}</script>
 <footer>
 <div class="wrap foot">
-<span>Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>. &copy; {self.built[:4]} Edgible and contributors. Keep your data close.</span>
+<div class="foot-legal">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
-<span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a> &middot; <a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span>
+<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">Playbooks</a></span><span><a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
@@ -1080,7 +1080,8 @@ dt{font-weight:600;margin-top:10px}dd{margin:2px 0 0 0}
 footer{background:var(--navy);color:rgba(255,255,255,.88);font-size:.88rem;padding:18px 0 28px}
 footer a{color:#ffa07a}
 footer .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px 20px}
-footer .foot-right{display:flex;align-items:center;gap:20px}
+footer .foot-right{display:flex;align-items:center;gap:20px;margin-left:auto}
+footer .foot-links{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
 footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
 """
 
