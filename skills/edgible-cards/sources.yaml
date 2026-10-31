@@ -15,7 +15,7 @@
 #   note        what to know before trusting it
 #
 # passed_over  apps looked at and not made into a card yet, so they are not looked at again
-#   name, repo, on (date), why, and revisit: when it would be worth another look (optional)
+#   name, repo, date, why, and revisit: when it would be worth another look (optional)
 
 sources:
   - name: awesome-selfhosted
@@ -81,8 +81,8 @@ sources:
 # third-party service, and has a licence a catalog can list.
 
 passed_over:
-  - {name: Flowise, repo: FlowiseAI/Flowise, on: 2026-10-31, why: "archived in August 2026", revisit: "if it is unarchived"}
-  - {name: Milvus, repo: milvus-io/milvus, on: 2026-10-31, why: "standalone mode needs etcd and MinIO beside it; kept as a last candidate for vector databases"}
-  - {name: LanceDB, repo: lancedb/lancedb, on: 2026-10-31, why: "an embedded library, not a server, so there is nothing to publish"}
-  - {name: ComfyUI, repo: Comfy-Org/ComfyUI, on: 2026-10-31, why: "no official Docker image and no login of its own", revisit: "if an official image appears"}
-  - {name: InvokeAI, repo: invoke-ai/InvokeAI, on: 2026-10-31, why: "image is amd64 only and wants an NVIDIA GPU; kept as a conditional candidate"}
+  - {name: Flowise, repo: FlowiseAI/Flowise, date: 2026-10-31, why: "archived in August 2026", revisit: "if it is unarchived"}
+  - {name: Milvus, repo: milvus-io/milvus, date: 2026-10-31, why: "standalone mode needs etcd and MinIO beside it; kept as a last candidate for vector databases"}
+  - {name: LanceDB, repo: lancedb/lancedb, date: 2026-10-31, why: "an embedded library, not a server, so there is nothing to publish"}
+  - {name: ComfyUI, repo: Comfy-Org/ComfyUI, date: 2026-10-31, why: "no official Docker image and no login of its own", revisit: "if an official image appears"}
+  - {name: InvokeAI, repo: invoke-ai/InvokeAI, date: 2026-10-31, why: "image is amd64 only and wants an NVIDIA GPU; kept as a conditional candidate"}
