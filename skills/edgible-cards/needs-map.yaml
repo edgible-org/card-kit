@@ -24,6 +24,11 @@
 #              then Edgible's own name. Leave it out for an awesome-selfhosted category.
 #   find       where to shortlist apps when awesome-selfhosted has few or none: required with
 #              source edgible
+#   candidates apps worth a card, for source edgible (awesome-selfhosted lists none for
+#              them): name, repo (owner/name on GitHub), why. A person curates this short list
+#              and keeps it current; pick-app offers it the way it offers awesome-selfhosted's
+#              apps. Only apps with a Docker image for amd64 and arm64, or a native macOS
+#              build, belong here.
 #   exposure.regulated  for regulated or confidential data: health records, legal privilege,
 #                       client files, financial records, children's data
 #   permissions         who sees what inside the app, beyond who reaches it
@@ -323,6 +328,11 @@
   builders: "a free, private vector store for a prototype RAG or agent app, moved to a bigger machine later without changing the code"
   machine: memory grows with the collection; fast disk
   cards: []
+  candidates:
+    - {name: Qdrant, repo: qdrant/qdrant, why: "one container, a REST and gRPC API, an api-key setting, a built-in dashboard; the easiest to run small"}
+    - {name: Chroma, repo: chroma-core/chroma, why: "one container with a simple HTTP API, popular for prototypes and agent memory"}
+    - {name: Weaviate, repo: weaviate/weaviate, why: "one container, GraphQL and REST, built-in hybrid search; heavier than Qdrant"}
+    - {name: Milvus, repo: milvus-io/milvus, why: "standalone mode needs etcd and MinIO beside it; for large collections, so last"}
   find: "GitHub repositories tagged vector-database, most starred and recently updated (Weaviate, Qdrant, Milvus, Chroma), and Postgres with pgvector when the app already uses Postgres"
   ask: ["how many documents or vectors, roughly?", "what will call it, and from where?"]
 
@@ -339,7 +349,7 @@
   permissions: "a public bot answers anyone, so its knowledge base must hold only what anyone may see"
   machine: always on, so usually a small cloud server; a GPU only for a local model
   cards: [n8n]
-  find: "awesome-selfhosted's GenAI category, and GitHub repositories tagged chatbot or rag with a website widget or chat-platform integration (for example Dify, Flowise, Typebot)"
+  find: "awesome-selfhosted's GenAI category, and GitHub repositories tagged chatbot or rag with a website widget or chat-platform integration (for example Dify, Typebot)"
   ask: ["who will talk to it: customers, members, or your team?", "which model: a hosted API with a spending limit, or a local one?"]
 
 - category: AI app builders and agents
@@ -355,7 +365,7 @@
   builders: "a fast way to prototype an AI feature or product and let early users try it through an API"
   machine: modest; the model runs elsewhere unless it is local
   cards: [openclaw, n8n, litellm]
-  find: "GitHub repositories tagged ai-agents, llm-app, or low-code with a Docker image, most starred and recently updated (for example Dify, Flowise, Langflow)"
+  find: "GitHub repositories tagged ai-agents, llm-app, or low-code with a Docker image, most starred and recently updated (for example Dify, Langflow)"
   ask: ["what should the agent or app do, and for whom?", "which models: hosted APIs or local?", "which machine can the agent have to itself?"]
 
 - category: LLM observability and evaluation
@@ -370,6 +380,10 @@
     regulated: "prompt logs inherit the data's rules: if users send health or client data, the logs are that data"
   machine: a database that grows with traffic; disk for logs
   cards: []
+  candidates:
+    - {name: Arize Phoenix, repo: Arize-ai/phoenix, why: "one container with SQLite, OpenTelemetry traces, evals; the simplest to run"}
+    - {name: Langfuse, repo: langfuse/langfuse, why: "the most used; needs Postgres, ClickHouse, Redis and S3-style storage beside it"}
+    - {name: Opik, repo: comet-ml/opik, why: "traces and evals with a dashboard; several services behind one compose file"}
   find: "GitHub repositories tagged llmops or llm-observability, and tensorchord/Awesome-LLMOps (for example Langfuse, Arize Phoenix, Opik)"
   ask: ["roughly how many requests a day?", "do prompts contain users' personal data?"]
 
@@ -384,8 +398,33 @@
     sensitive: org only, or not published
   machine: a GPU with plenty of memory, or Apple Silicon; lots of disk for models
   cards: []
+  candidates:
+    - {name: Speaches, repo: speaches-ai/speaches, why: "an OpenAI-compatible API for transcription (faster-whisper) and speech (Kokoro, Piper) in one container; runs on CPU"}
+    - {name: Kokoro-FastAPI, repo: remsky/Kokoro-FastAPI, why: "text to speech with an OpenAI-compatible API; a CPU image, good voices for its size"}
+    - {name: InvokeAI, repo: invoke-ai/InvokeAI, why: "image generation with a web UI; the Docker image is amd64 only and wants an NVIDIA GPU, so conditional"}
   find: "awesome-selfhosted's GenAI and Media Management categories, and GitHub repositories tagged comfyui, stable-diffusion, whisper, or text-to-speech"
   ask: ["what GPU or Mac do you have?", "images, transcription, or voice?"]
+
+- category: Experimental AI for early adopters
+  source: edgible
+  jobs: [try the newest AI tools before they are mainstream, run a big model on my own Mac, an AI coding agent on a machine I own, an autonomous agent in a sandbox, a local OpenAI-compatible server for anything]
+  replaces: [hosted coding agents, hosted model APIs, being on a waitlist]
+  drivers: [control, privacy, cost, local]
+  fit: {rating: conditional, why: "young projects change weekly and some act on a machine as its user; they fit a spare machine and a person who likes to tinker, not a team that depends on them"}
+  exposure:
+    default: "org for any control panel; an API for other apps on api-key; never none, because these tools run code or models for whoever reaches them"
+    sensitive: "org only, on a machine with nothing else on it"
+  permissions: "an agent that runs code or a shell acts on its machine as whoever runs it: give it a spare machine and only the keys it needs, as with OpenClaw"
+  machine: "varies; Edge0 needs an Apple Silicon Mac (M3 or later); agents want a machine they can have to themselves"
+  cards: []
+  candidates:
+    - {name: Edge0, repo: Edge0-AI/Edge0, why: "runs large mixture-of-experts models (35B) on a laptop by streaming experts from SSD, behind a local OpenAI-compatible server on port 8000; macOS 14+ on Apple Silicon, so a native card like ollama-osx, not Docker"}
+    - {name: Agent Zero, repo: agent0ai/agent-zero, why: "an autonomous agent with its own Linux desktop inside one Docker image; a v3 preview is out, so expect change"}
+    - {name: OpenHands, repo: OpenHands/OpenHands, why: "a coding agent with a web control panel; each session runs in a Docker sandbox, so it needs the Docker socket and a spare machine"}
+    - {name: LocalAI, repo: mudler/LocalAI, why: "one OpenAI-compatible server for language, image and audio models; runs on CPU, faster with a GPU"}
+    - {name: Open WebUI, repo: open-webui/open-webui, why: "the usual chat front end for Ollama and OpenAI-compatible servers, with documents and accounts; not a gap in itself, but a natural partner for ollama-osx and Edge0"}
+  find: "GitHub repositories tagged local-llm, ai-agents, or mcp that gained stars quickly in the last few months and have a Docker image or a macOS build; trendshift.io and the Hacker News front page show what is new"
+  ask: ["which machine can it have to itself?", "do you want to tinker, or to depend on it?"]
 
 - category: Software Development - Project Management
   jobs: [host my own Git repositories, a private GitHub, code review for my team]
