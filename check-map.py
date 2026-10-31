@@ -29,7 +29,7 @@ import yaml
 MAP = Path(__file__).resolve().parent / "skills" / "edgible-cards" / "needs-map.yaml"
 TAGS = "https://github.com/awesome-selfhosted/awesome-selfhosted-data/archive/refs/heads/master.tar.gz"
 FIELDS = {"category", "jobs", "replaces", "drivers", "fit", "exposure", "machine", "cards", "ask"}
-OPTIONAL = {"permissions", "builders", "source", "find"}
+OPTIONAL = {"permissions", "builders", "source", "find", "candidates"}
 SOURCES = {"edgible"}
 EXPOSURE = {"default", "sensitive", "regulated"}
 FITS = {"good", "conditional", "poor", "refused"}
@@ -74,6 +74,11 @@ def main() -> int:
             problems.append(f"{c}: is an awesome-selfhosted category, so drop source: edgible")
         if source == "edgible" and not e.get("find"):
             problems.append(f"{c}: source edgible needs find")
+        if e.get("candidates") and source != "edgible":
+            problems.append(f"{c}: candidates are for source edgible; awesome-selfhosted supplies the rest")
+        for cand in e.get("candidates", []):
+            if not {"name", "repo", "why"} <= set(cand) or "/" not in str(cand.get("repo", "")):
+                problems.append(f"{c}: a candidate needs name, repo (owner/name) and why: {cand}")
         if e.get("fit", {}).get("rating") not in FITS:
             problems.append(f"{c}: fit rating must be one of {', '.join(sorted(FITS))}")
         if not {"default", "sensitive"} <= set(e.get("exposure", {})):
