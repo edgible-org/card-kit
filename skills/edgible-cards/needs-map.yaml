@@ -252,7 +252,7 @@
     default: org for the web interface; the companion phone apps cannot pass an Edgible sign-in, so they need the app's own login on a hostname without one
     sensitive: org only, and the phone apps at home
   machine: always on, at home, on the devices' network (host networking for discovery)
-  cards: [domoticz]
+  cards: [domoticz, home-assistant]
   ask: ["which devices or brands do you have?", "control from outside the home, or only at home?"]
 
 - category: Video Surveillance
