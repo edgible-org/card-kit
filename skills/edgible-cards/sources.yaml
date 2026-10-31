@@ -1,0 +1,88 @@
+# Where Edgible finds apps worth a card, and what it looked at and passed over.
+#
+# Add to this file whenever a new source proves useful or an app is ruled out, so the next
+# search starts from what is already known. Keep it short: a primary source earns a row by
+# having produced a card, a candidate, or a correction.
+#
+# sources    one row per place we look
+#   name        what people call it
+#   url         where it is
+#   good_for    the kind of app it surfaces
+#   read_by     how it is read: code (pick-app or check-map read it), agent (the grow agent or the
+#               skill follow a find hint), person (Stefano or a maintainer browses it)
+#   used_for    the needs-map categories whose find hint names it, or "all"
+#   reviewed    the date someone last checked it still works and is worth keeping
+#   note        what to know before trusting it
+#
+# passed_over  apps looked at and not made into a card yet, so they are not looked at again
+#   name, repo, on (date), why, and revisit: when it would be worth another look (optional)
+
+sources:
+  - name: awesome-selfhosted
+    url: https://github.com/awesome-selfhosted/awesome-selfhosted-data
+    good_for: established self-hosted apps in about 90 categories, with licence, stars, platforms and last update
+    read_by: code
+    used_for: all categories without source edgible
+    reviewed: 2026-11-01
+    note: "pick-app and check-map download its data tarball. Curated, so it lags new AI tools by months"
+  - name: Edgible needs map candidates
+    url: skills/edgible-cards/needs-map.yaml
+    good_for: apps a person has already shortlisted for the categories awesome-selfhosted does not cover
+    read_by: code
+    used_for: the source edgible categories
+    reviewed: 2026-11-01
+    note: "the candidates field; add an app here when it passes the check below, not before"
+  - name: MCP Registry
+    url: https://registry.modelcontextprotocol.io/v0/servers
+    good_for: MCP servers; ones with packages run on your own machine, ones with only remotes are already hosted
+    read_by: agent
+    used_for: AI tools for assistants (MCP servers)
+    reviewed: 2026-11-01
+  - name: GitHub topics
+    url: https://github.com/topics
+    good_for: "new and fast-growing projects: vector-database, llmops, llm-observability, local-llm, ai-agents, comfyui, whisper, text-to-speech, mcp-server"
+    read_by: agent
+    used_for: the source edgible AI categories
+    reviewed: 2026-11-01
+    note: "sort by recently updated; stars alone favour old projects"
+  - name: Awesome-LLMOps
+    url: https://github.com/tensorchord/Awesome-LLMOps
+    good_for: LLM observability, serving and evaluation tools
+    read_by: agent
+    used_for: LLM observability and evaluation
+    reviewed: 2026-11-01
+  - name: Trendshift
+    url: https://trendshift.io
+    good_for: GitHub repositories trending now; how Edge0 turned up
+    read_by: person
+    used_for: Experimental AI for early adopters
+    reviewed: 2026-11-01
+  - name: Hacker News
+    url: https://news.ycombinator.com
+    good_for: launches and Show HN posts for new self-hostable tools
+    read_by: person
+    used_for: Experimental AI for early adopters
+    reviewed: 2026-11-01
+  - name: OpenAlternative
+    url: https://openalternative.co
+    good_for: open-source alternatives to named commercial products, which matches how people phrase a need ("replaces")
+    read_by: person
+    used_for: all
+    reviewed: 2026-11-01
+  - name: selfh.st
+    url: https://selfh.st
+    good_for: a weekly newsletter of self-hosted releases and new projects; its icon library is what card-icon.py uses
+    read_by: person
+    used_for: all
+    reviewed: 2026-11-01
+
+# A candidate belongs in the needs map only if: it is not archived, was updated in the last six
+# months, has a Docker image for amd64 and arm64 (or a native macOS build, said so), needs no
+# third-party service, and has a licence a catalog can list.
+
+passed_over:
+  - {name: Flowise, repo: FlowiseAI/Flowise, on: 2026-10-31, why: "archived in August 2026", revisit: "if it is unarchived"}
+  - {name: Milvus, repo: milvus-io/milvus, on: 2026-10-31, why: "standalone mode needs etcd and MinIO beside it; kept as a last candidate for vector databases"}
+  - {name: LanceDB, repo: lancedb/lancedb, on: 2026-10-31, why: "an embedded library, not a server, so there is nothing to publish"}
+  - {name: ComfyUI, repo: Comfy-Org/ComfyUI, on: 2026-10-31, why: "no official Docker image and no login of its own", revisit: "if an official image appears"}
+  - {name: InvokeAI, repo: invoke-ai/InvokeAI, on: 2026-10-31, why: "image is amd64 only and wants an NVIDIA GPU; kept as a conditional candidate"}
