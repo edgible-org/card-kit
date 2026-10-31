@@ -488,9 +488,35 @@ class Site:
 """
         f = self.out / path / "index.html" if not path.endswith(".html") else self.out / path
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(doc)
+        f.write_text(self.external_links(doc))
         if not path.endswith(".html"):
             self.pages.append(path)
+
+    def external_links(self, doc: str) -> str:
+        """Open links to other sites in a new tab, so the catalog stays where it was, and
+        mark them with a small icon and a note for screen readers. A link that holds only
+        an image gets the new tab but no icon. Links to this site, mailto: links and
+        anchors are left alone."""
+        own = self.base + "/" if self.base else None
+
+        def fix(m: re.Match) -> str:
+            tag, inner = m.group(1), m.group(2)
+            href = re.search(r'\shref="([^"]*)"', tag)
+            if not href or not re.match(r"https?://", href.group(1)) or "target=" in tag:
+                return m.group(0)
+            if own and (href.group(1) + "/").startswith(own):
+                return m.group(0)
+            tag = re.sub(r'\srel="[^"]*"', "", tag)
+            note = ""
+            if not re.search(r"<(img|svg)\b", inner):
+                note = '<span class="sr-only"> (opens in a new tab)</span>'
+                if re.search(r'\sclass="', tag):
+                    tag = re.sub(r'\sclass="([^"]*)"', r' class="\1 ext"', tag, count=1)
+                else:
+                    tag = tag.replace("<a", '<a class="ext"', 1)
+            return f'{tag} target="_blank" rel="noopener noreferrer">{inner}{note}</a>'
+
+        return re.sub(r"(<a\s[^>]*?)>(.*?)</a>", fix, doc, flags=re.S)
 
     def icon(self, c: dict, up: str, size: int) -> str:
         """The card's icon, copied beside its page, or the Edgible placeholder."""
@@ -957,6 +983,8 @@ navy bands at the top and bottom, orange links. */
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Jost",system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;min-height:100vh}
 a{color:var(--link)}
+a.ext::after{content:"";display:inline-block;width:.7em;height:.7em;margin-left:.25em;background:currentColor;opacity:.7;-webkit-mask:var(--ext) center/contain no-repeat;mask:var(--ext) center/contain no-repeat}
+:root{--ext:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M9 1h6v6h-2V4.4L7.7 9.7 6.3 8.3 11.6 3H9zM2 3h4v2H4v7h7v-2h2v4H2z'/%3E%3C/svg%3E")}
 .wrap{max-width:1040px;margin:0 auto;padding:0 16px}
 .top{background:var(--navy);color:#fff}
 .top .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
