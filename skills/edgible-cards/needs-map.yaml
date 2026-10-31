@@ -23,7 +23,8 @@
 #              it yet, mostly AI tools, which move faster than a curated list. category is
 #              then Edgible's own name. Leave it out for an awesome-selfhosted category.
 #   find       where to shortlist apps when awesome-selfhosted has few or none: required with
-#              source edgible
+#              source edgible. Name the places listed in sources.yaml, next to this file, which
+#              records every place we look and the apps we passed over
 #   candidates apps worth a card, for source edgible (awesome-selfhosted lists none for
 #              them): name, repo (owner/name on GitHub), why. A person curates this short list
 #              and keeps it current; pick-app offers it the way it offers awesome-selfhosted's
