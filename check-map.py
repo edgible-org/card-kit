@@ -95,7 +95,7 @@ def main() -> int:
         if src.get("read_by") not in READ_BY:
             problems.append(f"sources.yaml: {src.get('name', '?')}: read_by must be one of {', '.join(sorted(READ_BY))}")
     for item in listed.get("passed_over", []):
-        for k in ("name", "repo", "on", "why"):
+        for k in ("name", "repo", "date", "why"):
             if not item.get(k):
                 problems.append(f"sources.yaml: passed over {item.get('name', '?')}: no {k}")
     for p in problems:
