@@ -271,8 +271,13 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
     for (const name of seeds) maker.environment[name] = `\${${name}:?the first-use value from Edgible}`;
   }
   // The host port Edgible forwards to: the one the card's app port is published on.
-  const hostPort = Object.values(out.services || {}).flatMap((s) => s.ports || [])
-    .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).find((m) => m && Number(m[2]) === Number(port));
+  // card.yml's port is the host port, the <APP>_PORT line in card.env, which the choices may move.
+  // Some cards map it to another port inside (otter-wiki: 8080 to 80), so match the host side.
+  const portKey = Object.keys(values).find((k) => /_PORT$/.test(k) && Number(values[k]) === Number(port));
+  const wantHost = Number(portKey && changes[portKey] ? changes[portKey] : port);
+  const mapped = Object.values(out.services || {}).flatMap((s) => s.ports || [])
+    .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
+  const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
   if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
   return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]) };
 }
@@ -427,6 +432,17 @@ async function moveCard({ app, to, confirm = [] }) {
   const target = await findDevice(to);
   if (notAllowed(target.name, ...appDevices(current))) return refused(notAllowed(target.name, ...appDevices(current)));
   if (target.status !== 'online') return refused(`device ${target.name} is ${target.status}`);
+  // `edgible app move` carries only storage Edgible manages. A card's volumes are host-bind
+  // storage, so the app would start empty on the new device and its data stay on the old one.
+  let storage;
+  try { storage = await edgibleJson(['app', 'storage', 'list', '--app', app, '--json']); } catch (err) {
+    return refused(`could not tell whether ${app} keeps data on its device, so it is not moved: ${err.message}`);
+  }
+  const left = [...new Set((Array.isArray(storage) ? storage : []).filter((s) => s.source === 'host-bind').map((s) => s.hostPath || s.storageName))];
+  if (left.length) {
+    const from = appDevices(current).join(', ') || 'its device';
+    return refused(`${app} keeps its data in volumes on ${from} (${left.join(', ')}). Edgible's move would start it empty on ${target.name} and leave that data behind on ${from}, so these tools do not move it. To move it with its data, back it up and restore it on ${target.name}, then publish it there: the Edgible skill's "Move to another machine" has the steps.`);
+  }
   if (!confirm.includes('move')) {
     return needs([{ token: 'move', reason: `Moving ${app} to ${target.name}: Edgible starts it there, switches traffic over, then stops the old copy. Expect up to half a minute when it does not answer.` }]);
   }
@@ -1130,7 +1146,7 @@ export function registerWriteTools(server) {
   }, wrap(deployCard));
   server.registerTool('move_card', {
     title: 'Move an app to another device',
-    description: 'Move a managed app to another online device with `edgible app move`: Edgible starts it there, switches traffic, then stops the old copy, with up to half a minute of downtime. Always returns "needs confirmation" first.',
+    description: 'Move a managed app to another online device with `edgible app move`: Edgible starts it there, switches traffic, then stops the old copy, with up to half a minute of downtime. Refuses an app that keeps data in volumes on its device, because Edgible\'s move would leave that data behind and start the app empty; the refusal says how to move it with its data instead. Always returns "needs confirmation" first.',
     inputSchema: {
       app: z.string().describe('The app to move'),
       to: z.string().describe('The device to move it to, by name'),
