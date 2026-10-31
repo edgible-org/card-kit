@@ -20,8 +20,9 @@ needs-map category it belongs to: the first of its awesome-selfhosted categories
 the map, preferring one no card covers yet. So a card made for a named app still lands in
 its category. An app it cannot find, or one in no mapped category, gets category null.
 
-Categories Edgible adds (source: edgible, mostly AI tools) have no awesome-selfhosted data,
-so they are listed under "unlisted_gaps" for a person or a later version to handle.
+Categories Edgible adds (source: edgible, mostly AI tools) have no awesome-selfhosted data.
+Their entry lists its own candidates (name, repo, why), curated by a person, and those are
+offered in map order like any other. One with no candidates is listed under "unlisted_gaps".
 It reads awesome-selfhosted's data over the network, and exits 1 when there is no gap left.
 """
 from __future__ import annotations
@@ -74,6 +75,14 @@ def candidate(app: dict) -> dict:
     }
 
 
+def listed_candidate(c: dict) -> dict:
+    """A candidate from a source: edgible entry, shaped like one from awesome-selfhosted."""
+    repo = c["repo"]
+    return {"name": c["name"], "card": slug(c["name"]), "description": c["why"],
+            "website": f"https://github.com/{repo}", "source": f"https://github.com/{repo}",
+            "licenses": [], "stars": None, "updated": ""}
+
+
 def named(name: str) -> int:
     """The app someone asked for, with the needs-map category it belongs to."""
     entries = yaml.safe_load(MAP.read_text())
@@ -109,13 +118,22 @@ def main(argv: list[str]) -> int:
     cards = {p.parent.name for p in Path.cwd().glob("*/card.yml")}
     excluded = {slug(n) for n in args.exclude} | cards
     gaps = [e for e in entries if not e.get("cards") and e["fit"]["rating"] in ("good", "conditional")]
-    unlisted = [e["category"] for e in gaps if e.get("source") == "edgible"]
-    listed = [e for e in gaps if e.get("source") != "edgible"]
+    unlisted = [e["category"] for e in gaps if e.get("source") == "edgible" and not e.get("candidates")]
     software = apps()
 
     skip = {c.strip().lower() for c in args.exclude_category}
-    for entry in listed:
+    for entry in gaps:
         if entry["category"].lower() in skip:
+            continue
+        if entry.get("source") == "edgible":
+            # The entry's own list, in the order a person put it: the first is the best bet.
+            candidates = [listed_candidate(c) for c in entry.get("candidates", [])
+                          if slug(c["name"]) not in excluded]
+            if candidates:
+                print(json.dumps({"category": entry["category"], "entry": entry,
+                                  "candidates": candidates[:args.count], "unlisted_gaps": unlisted},
+                                 indent=2, default=str))
+                return 0
             continue
         candidates = []
         for app in software:
