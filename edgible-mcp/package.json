@@ -1,6 +1,6 @@
 {
   "name": "edgible-mcp",
-  "version": "0.7.22",
+  "version": "0.7.23",
   "private": true,
   "description": "MCP server for Edgible cards and running apps: read-only by default, write tools with --allow-write, over stdio or HTTP",
   "type": "module",
