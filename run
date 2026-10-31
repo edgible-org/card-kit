@@ -49,6 +49,7 @@ esac
 exec docker run --rm \
   --user "$(id -u):$(id -g)" \
   --env HOME=/tmp \
+  --env GITHUB_TOKEN \
   --volume "$repo:/repo" \
   --volume "$kit:/kit:ro" \
   --workdir "/repo$here" \
