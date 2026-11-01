@@ -395,6 +395,8 @@ python3 backup-card.py "$dir"               # writes $dir-backups/<stamp>/, with
 
 Tell the person what the dry run says will stop before the real run. The backup holds the card's files and `card.env`, so keep it private.
 
+**Where the backup lives is the person's to choose, and moving it is theirs to do.** By default it goes beside the card, in `$dir-backups/<stamp>/`; `--to <folder>` puts it in any folder this machine can write to (an external drive, a mounted network drive). Ask where they want it, and tell them the full path of the folder you wrote, which is what they need to know. Edgible does not copy it between machines or to storage services: that is for the person, or their assistant if they ask, to arrange. `restore-card` reads a backup from any folder this machine can read. It needs the whole folder, the one that holds `backup.json`, because it checks every file against it first and stops on a damaged one. So before a restore, say where the backup folder must be, and let them bring it there.
+
 **Restore** replaces the current data. Ask first. `restore-card` checks every file of the backup, backs the card up as it is, restores, and runs `verify-card`, which passes only when the data's fingerprint matches the backup's:
 
 ```bash
@@ -416,7 +418,7 @@ cp "$dir/card.env" "$backups/card.env-$stamp"; chmod 600 "$backups/card.env-$sta
 $C start
 ```
 
-A copy on the same machine does not survive the loss of that machine. Suggest the person also copies `$backups` somewhere else.
+A copy on the same machine does not survive the loss of that machine. Say so, and that a copy somewhere else, such as an external drive or another storage service, is a good idea and the person's to arrange. Give them the path of `$backups`, and remind them it holds `card.env` and the secrets volume, so wherever it goes it should stay private.
 
 To restore one of these by hand, ask first, and make a fresh backup first unless the data is already lost. Use the `card.env` that was saved with the copy:
 
@@ -476,7 +478,7 @@ If the change would help others, offer a pull request to the app's repository, a
 Ask first. A move is a copy, then a switch, then retiring the old copy, and the old copy keeps serving until the switch. The app is down only from deleting it on the old machine to answering on the new one, about a minute or two.
 
 1. **The new machine** is a serving device that `edgible device list` shows online, with Docker, and room for the card: compare the card's `places:` with what the machine has free. A machine that runs something else that matters needs the margin, not just the total.
-2. **Copy.** With a `data:` section: run `backup-card` on the old machine, copy its backup directory to the new one (`rsync -a`, which keeps `card.env` private), fetch the tools there as in [Back up and restore](#back-up-and-restore), and run `restore-card <backup> <new dir>`. Into a new directory it restores the card under its own name, and ends with `verify-card`: the copy must pass before the switch. Without a `data:` section: [back up](#back-up-and-restore) by hand, copy `$dir` with its `card.env` and the backups, run `$C create` on the new machine, restore each volume, `$C up -d --wait`, and check it on `127.0.0.1`.
+2. **Copy.** With a `data:` section: run `backup-card` on the old machine, make its backup directory visible to the new one (how is the person's choice: a drive, a network share, `rsync` over SSH if they have it; Edgible does not move it, but tell them the full path and that it holds `card.env`, so it should stay private), fetch the tools there as in [Back up and restore](#back-up-and-restore), and run `restore-card <backup> <new dir>`. Into a new directory it restores the card under its own name, and ends with `verify-card`: the copy must pass before the switch. Without a `data:` section: [back up](#back-up-and-restore) by hand, copy `$dir` with its `card.env` and the backups, run `$C create` on the new machine, restore each volume, `$C up -d --wait`, and check it on `127.0.0.1`.
 3. **Changes after the copy.** Anything written on the old machine after the backup is not in it. For an app people change all day, take a second backup just before the switch and restore it over the copy (`restore-card <second backup> <new dir> --yes --no-backup`): it is quick, because little has changed.
 4. **Switch the hostnames:** `edgible app delete <app> --yes`, then publish again as in the README, with the new device's id. The generated hostname stays the same.
 5. Run [Is it working](#is-it-working) through the hostname. Then, on the old machine, `$C down`, and keep its volumes and the backup until the person is satisfied.
