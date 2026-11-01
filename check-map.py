@@ -31,7 +31,7 @@ SOURCES_FILE = MAP.with_name("sources.yaml")
 READ_BY = {"code", "agent", "person"}
 TAGS = "https://github.com/awesome-selfhosted/awesome-selfhosted-data/archive/refs/heads/master.tar.gz"
 FIELDS = {"category", "jobs", "replaces", "drivers", "fit", "exposure", "machine", "cards", "ask"}
-OPTIONAL = {"permissions", "builders", "source", "find", "candidates"}
+OPTIONAL = {"permissions", "builders", "source", "find", "candidates", "cards_wanted"}
 SOURCES = {"edgible"}
 EXPOSURE = {"default", "sensitive", "regulated"}
 FITS = {"good", "conditional", "poor", "refused"}
@@ -76,6 +76,8 @@ def main() -> int:
             problems.append(f"{c}: is an awesome-selfhosted category, so drop source: edgible")
         if source == "edgible" and not e.get("find"):
             problems.append(f"{c}: source edgible needs find")
+        if "cards_wanted" in e and not (isinstance(e["cards_wanted"], int) and e["cards_wanted"] >= 1):
+            problems.append(f"{c}: cards_wanted must be a whole number, 1 or more")
         if e.get("candidates") and source != "edgible":
             problems.append(f"{c}: candidates are for source edgible; awesome-selfhosted supplies the rest")
         for cand in e.get("candidates", []):
