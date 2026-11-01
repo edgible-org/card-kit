@@ -192,6 +192,29 @@ Edgible's own walk-through is [Start here](https://guides.edgible.com/) on guide
    It takes under a minute and ends with `Agent is online`. Use `--yes`: `--non-interactive`, in older guides, is deprecated. A machine that was a device before reconnects to it, apps included. `edgible install --help` lists the choices for that, such as `--device` and `--new-device`.
 6. **Check:** `edgible agent status` shows it running and online, and `edgible device list` shows the device `online`. Then [Keep it running](#keep-it-running) applies to it too.
 
+### Which host?
+
+Say what has been tried, so the person picks with their eyes open. Edgible has been run and apps published on:
+
+| Host | Status | What to know |
+|---|---|---|
+| **Ubuntu 24.04 or 26.04**, on a spare computer, a server, or a cloud instance | Tested | The reference target. Node 20 or later (see step 2 of [Set up Edgible](#set-up-edgible)). A cloud instance is the same Ubuntu, and the always-on choice for apps other people rely on. |
+| **Ubuntu 24.04 or 26.04 in a virtual machine** (Multipass; VirtualBox or Hyper-V on Windows) | Tested | Isolated and easy to delete. Runs only while the computer is on and awake, and needs a task to start it after a restart. |
+| **macOS** | Tested | Docker Desktop for container cards. Keep it from sleeping if the app must stay up. |
+| **Windows with WSL2 and Ubuntu 26.04** | Tested; recommended on Windows | No extra tools, and lighter than a VM. The distro stops 15 to 25 seconds after its last session ends, so it needs a keep-alive task; see [WSL2 on Windows](#wsl2-on-windows). Shares one network and one memory cap with every other distro. |
+| **Other Linux** (Debian, Fedora, and so on), **Windows Home or 10 with WSL2**, **WSL1** | Not tried | May work. Say it has not been tried, and be ready to read the errors. |
+
+**Native (macOS, or WSL2) or a virtual machine?** Native means Edgible and Docker run on the person's own system; a VM puts them in a separate Ubuntu. Plus and minus:
+
+- **Native, plus:** lighter (WSL2 with the agent and two small containers used about 1.5 GB); nothing extra to install on Windows (WSL2) or Mac beyond Docker; files and ports are easy to reach from the host; no VM to start, size or update.
+- **Native, minus:** it shares the machine with everything else. WSL2 distros share one network and one memory cap, so another distro's Docker once blocked Compose's network (seen once, not after a restart). A card's volumes and containers sit beside the person's own. Removing it cleanly takes more care than deleting a VM. macOS cannot run the Ubuntu-only steps in this skill, and apps that need Linux behave as Docker Desktop's VM allows.
+- **VM, plus:** isolated, so a mistake or a bad card stays inside it; the same Ubuntu on any host; its own memory and disk; deleted or moved in one step.
+- **VM, minus:** more to install (Multipass, and VirtualBox or Hyper-V on Windows); heavier, with memory reserved while it runs; its clock falls behind when the computer sleeps and needs the fix in [Make a machine](#make-a-machine); it does not start again after a restart without a task.
+
+On Windows, recommend WSL2 first. Choose a VM when the person wants to keep experiments away from their own system, or already runs other Docker or WSL setups; choose native when they want the lightest setup. Say which you would pick and why, and let them decide.
+
+Whatever the host, sleep stops it: a laptop that sleeps, or a VM or WSL on a computer that sleeps, is not always-on (see [Is the machine always-on?](#is-the-machine-always-on)). For a first try or for learning, any tested host will do. For an app other people use, point them to a machine that stays on.
+
 ### Make a machine
 
 Someone with no spare computer, or who doesn't want to change theirs, can try Edgible in a virtual machine on the computer they have: nothing to buy, nothing on their own system to break, and deleted in one step when they are done. Use Multipass (Canonical's, on macOS, Windows and Linux; on macOS `brew install --cask multipass`, with their yes), and ask before making one:
@@ -200,7 +223,7 @@ Someone with no spare computer, or who doesn't want to change theirs, can try Ed
 multipass launch 26.04 --name edgible-vm --cpus 2 --memory 8G --disk 30G
 ```
 
-**On Windows, steer them to VirtualBox with Multipass and Ubuntu 26.04**, unless they already use Hyper-V or know what it is: then let them use Multipass's Hyper-V driver (Windows Pro or Enterprise), which is native and faster. VirtualBox works on every edition, Home included. Do these in order, in PowerShell (or `multipass.exe` and `powershell.exe` from inside WSL), and say what you find before you change anything:
+**On Windows, recommend WSL2 with Ubuntu 26.04** (see [WSL2 on Windows](#wsl2-on-windows)): it is the lightest and needed no extra tools when tested. Offer a virtual machine instead when they already run Docker Desktop or other WSL distros, want their experiments kept apart from their own system, or are on Windows Home or 10, which has not been tried with WSL2. For a VM, steer them to VirtualBox with Multipass and Ubuntu 26.04, unless they already use Hyper-V or know what it is: then let them use Multipass's Hyper-V driver (Windows Pro or Enterprise), which is native and faster. VirtualBox works on every edition, Home included. The steps below are for the VM. Do these in order, in PowerShell (or `multipass.exe` and `powershell.exe` from inside WSL), and say what you find before you change anything:
 
 1. **Check the machine.** `(Get-CimInstance Win32_OperatingSystem).Caption` is the edition. `(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB` is the memory in GB; they need at least 8 GB, more if they run other things, and 4 GB is too little. `(Get-PSDrive C).Free / 1GB` is the free disk in GB; they need about 40. Hardware virtualization must be on: `(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled`, or `(Get-CimInstance Win32_ComputerSystem).HypervisorPresent`, should be `True`. If neither is, it is off in the BIOS or UEFI setup: tell them how to find it for their make (often "Intel VT-x", "SVM Mode" or "Virtualization Technology") and stop until they have turned it on, because you cannot do that for them.
 2. **Install the two tools, with their yes.** `winget install Oracle.VirtualBox` and `winget install Canonical.Multipass`. Both need administrator rights and show a Windows prompt; say so first. Then `multipass set local.driver=virtualbox`. If they chose Hyper-V, skip VirtualBox and use `multipass set local.driver=hyperv` (the Hyper-V feature must be on, which needs an elevated PowerShell and a restart). VirtualBox runs alongside Hyper-V, which WSL2 and Docker Desktop also turn on, only more slowly.
