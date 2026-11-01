@@ -120,6 +120,11 @@ class Compose:
         return [s for s in out.split() if s]
 
 
+def compose_files(card: Path) -> list[Path]:
+    """The card's Compose files. Skips macOS ._ metadata files, which a backup packed on a Mac carries."""
+    return sorted(f for f in card.glob("*compose*.yml") if not f.name.startswith("._"))
+
+
 def volume_exists(name: str) -> bool:
     return sh(f"docker volume inspect {shlex.quote(name)}", check=False).returncode == 0
 
@@ -151,7 +156,7 @@ def main(argv: list[str]) -> int:
         print(f"{card} has no card.yml and card.env: give the directory the card runs from", file=sys.stderr)
         return 2
     declared = read_volumes(card / "card.yml")
-    composes = [Compose(card, f) for f in sorted(card.glob("*compose*.yml"))]
+    composes = [Compose(card, f) for f in compose_files(card)]
     if not declared and any(c.volumes for c in composes):
         print(f"{card / 'card.yml'} has no data: section, so backup-card cannot tell what its volumes hold. "
               "Declare them first (see card-kit's README, Data).", file=sys.stderr)
