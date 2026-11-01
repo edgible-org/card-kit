@@ -25,8 +25,8 @@
 #   find       where to shortlist apps when awesome-selfhosted has few or none: required with
 #              source edgible. Name the places listed in sources.yaml, next to this file, which
 #              records every place we look and the apps we passed over
-#   cards_wanted how many cards the category should have before the nightly grow stops making
-#              them for it; 1 if left out. Raise it where several apps suit different people
+#   cards_wanted the most cards the nightly grow makes for the category; 5 if left out. Lower it
+#              where a person judges fewer are needed, raise it where more are
 #   candidates apps worth a card, for source edgible (awesome-selfhosted lists none for
 #              them): name, repo (owner/name on GitHub), why. A person curates this short list
 #              and keeps it current; pick-app offers it the way it offers awesome-selfhosted's
@@ -321,7 +321,6 @@
 
 - category: Vector databases and AI search
   source: edgible
-  cards_wanted: 3
   jobs: [a vector database for my RAG app, semantic search over our documents, store embeddings without paying per query, memory for my AI agent]
   replaces: [Pinecone, Weaviate Cloud, Zilliz Cloud, Qdrant Cloud]
   drivers: [cost, privacy, control]
@@ -374,7 +373,6 @@
 
 - category: LLM observability and evaluation
   source: edgible
-  cards_wanted: 3
   jobs: [see what my AI app is doing, trace prompts and responses, track LLM costs per user, evaluate prompts and models, keep prompt logs private]
   replaces: [LangSmith, Helicone, Braintrust, Weights & Biases Weave]
   drivers: [privacy, cost, compliance]
@@ -394,7 +392,6 @@
 
 - category: Image, audio, and speech AI
   source: edgible
-  cards_wanted: 2
   jobs: [generate images on my own GPU, transcribe meetings privately, text to speech without a subscription, use my gaming PC's GPU from my laptop, run Stable Diffusion or ComfyUI from anywhere]
   replaces: [Midjourney, Otter.ai, ElevenLabs, Descript transcription]
   drivers: [cost, privacy, control]
@@ -413,7 +410,6 @@
 
 - category: Experimental AI for early adopters
   source: edgible
-  cards_wanted: 3
   jobs: [try the newest AI tools before they are mainstream, run a big model on my own Mac, an AI coding agent on a machine I own, an autonomous agent in a sandbox, a local OpenAI-compatible server for anything]
   replaces: [hosted coding agents, hosted model APIs, being on a waitlist]
   drivers: [control, privacy, cost, local]
