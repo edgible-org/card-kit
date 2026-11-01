@@ -27,6 +27,7 @@ In order:
             update makes a fresh one too, then runs its update command in its service, which reads
             the new value from /run/card-secrets, so the data takes it. A move then rotates every
             secret the data does not need. Without --move, every secret is restored as it was.
+  --device  a move or a copy: writes DEVICE=NAME in the new card.env, so Publish uses the new machine
   start     up --wait
   verify    verify-card against the backup: running, answering, and the same fingerprint
 
@@ -132,10 +133,37 @@ def secrets_volume(composes: list) -> tuple[object, str, str] | None:
     return None
 
 
+def env_value(env: Path, key: str) -> str:
+    m = re.search(rf"(?m)^{re.escape(key)}=(.*)$", env.read_text())
+    return m.group(1).strip() if m else ""
+
+
+def set_env(env: Path, key: str, value: str) -> None:
+    """Set KEY=value in a card.env, adding the line when it is not there."""
+    text = env.read_text()
+    if re.search(rf"(?m)^{re.escape(key)}=", text):
+        text = re.sub(rf"(?m)^{re.escape(key)}=.*$", f"{key}={value}", text)
+    else:
+        text = text.rstrip("\n") + f"\n{key}={value}\n"
+    env.write_text(text)
+
+
+def give_to_invoking_user(target: Path) -> None:
+    """Run under sudo, the new directory would belong to root and the person could not read card.env."""
+    import os, pwd
+    user = os.environ.get("SUDO_USER")
+    if os.geteuid() != 0 or not user:
+        return
+    pw = pwd.getpwnam(user)
+    for p in [target, *target.rglob("*")]:
+        os.chown(p, pw.pw_uid, pw.pw_gid, follow_symlinks=False)
+    print(f"gave {target} to {user}")
+
+
 def make_copy(card: Path, name: str, original: str) -> list[str]:
     """Name the copy's projects and containers after NAME, and move each taken *_PORT."""
     changes = []
-    for f in sorted(card.glob("*compose*.yml")):
+    for f in backup_card.compose_files(card):
         text = f.read_text()
         def project(m):
             changes.append(f"{f.name}: project {m.group(2)} -> {renamed(m.group(2), original, name)}")
@@ -174,6 +202,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-backup", action="store_true", help="in place: skip the backup of the card first")
     ap.add_argument("--move", action="store_true",
                     help="the target of a move: each secret follows its on-move rule in card.yml")
+    ap.add_argument("--device", help="the device the card will be published from, written to DEVICE in card.env "
+                    "(a move: the new machine's name; only with --as or a new directory)")
     ap.add_argument("--dry-run", action="store_true", help="check the files, say what it would do, change nothing")
     args = ap.parse_args(argv)
 
@@ -230,6 +260,14 @@ def main(argv: list[str]) -> int:
         print("  first: " + ("no backup of the card (--no-backup)" if args.no_backup else "backup-card of the card as it is"))
     print("  then: start, and verify-card against the backup" +
           (f" (fingerprint {json.dumps(manifest['fingerprint'])})" if manifest.get("fingerprint") else ""))
+    if args.device:
+        if not re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*$", args.device):
+            print("--device takes a device name: letters, digits and hyphens", file=sys.stderr)
+            return 2
+        if not args.name and not fresh:
+            print("--device is for a copy (--as) or a new directory, not for restoring over the card", file=sys.stderr)
+            return 2
+        print(f"  DEVICE in card.env: {args.device}")
     secrets = read_secrets(backup / "card" / "card.yml") if args.move else {}
     if args.move and not args.name and not fresh:
         print("--move is for the target of a move: with --as, or into a new directory", file=sys.stderr)
@@ -251,9 +289,10 @@ def main(argv: list[str]) -> int:
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if args.name or fresh:
-        shutil.copytree(backup / "card", target, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(backup / "card", target, symlinks=True, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("._*", ".DS_Store"))
         if fresh:
-            taken = [n for f in sorted(target.glob("*compose*.yml"))
+            taken = [n for f in backup_card.compose_files(target)
                      for n in backup_card.Compose(target, f).volumes.values() if backup_card.volume_exists(n)]
             if taken:
                 shutil.rmtree(target)
@@ -268,16 +307,25 @@ def main(argv: list[str]) -> int:
                 print("the backup of the card failed, so nothing was restored. If its data is already lost, "
                       "run again with --no-backup.", file=sys.stderr)
                 return 1
-        for c in [backup_card.Compose(target, f) for f in sorted(target.glob("*compose*.yml"))]:
+        for c in [backup_card.Compose(target, f) for f in backup_card.compose_files(target)]:
             sh(f"{c.cmd} down", timeout=600)
             for key, name in c.volumes.items():
                 if key in manifest["volumes"] and manifest["volumes"][key]["method"] != "elsewhere":
                     sh(f"docker volume rm {shlex.quote(name)}", check=False)
         shutil.copy2(target / "card.env", target / f"card.env.before-restore-{stamp}")
-        shutil.copytree(backup / "card", target, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(backup / "card", target, symlinks=True, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("._*", ".DS_Store"))
     (target / "card.env").chmod(0o600)
+    if args.device:
+        set_env(target / "card.env", "DEVICE", args.device)
+    elif args.name or fresh:
+        old = env_value(target / "card.env", "DEVICE")
+        if old:
+            print(f"note: card.env still says DEVICE={old}: publish from that device, or run again with --device NAME")
+    if args.name or fresh:
+        give_to_invoking_user(target)
 
-    composes = [backup_card.Compose(target, f) for f in sorted(target.glob("*compose*.yml"))]
+    composes = [backup_card.Compose(target, f) for f in backup_card.compose_files(target)]
     here = [c for c in composes
             if not c.volumes or any(manifest["volumes"].get(k, {}).get("method") != "elsewhere" for k in c.volumes)]
     try:

@@ -83,7 +83,7 @@ def main(argv: list[str]) -> int:
         print(f"{card} has no card.yml", file=sys.stderr)
         return 2
     manifest = json.loads((args.against.expanduser().resolve() / "backup.json").read_text()) if args.against else None
-    composes = [backup_card.Compose(card, f) for f in sorted(card.glob("*compose*.yml"))]
+    composes = [backup_card.Compose(card, f) for f in backup_card.compose_files(card)]
     failed = False
 
     here = [c for c in composes if services_state(c)]
