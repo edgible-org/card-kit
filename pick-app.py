@@ -7,8 +7,10 @@
     ../card-kit/run pick-app --app ownCloud           # a named app, and its category
 
 A gap is a needs-map category that people ask about (its fit is good or conditional) and
-that has fewer cards than it wants: one, unless the entry says cards_wanted. A category
-with several good answers (vector databases, say) asks for more than one. The map's order is its priority. For the first gap with any
+that has fewer cards than its cap: DEFAULT_CAP, unless the entry sets cards_wanted. Gaps are
+taken fewest cards first, ties in the map's order, so every category gets its first card
+before any gets a second, then its second before any gets a third, and so on. A category
+runs out sooner when it has fewer candidates than its cap. The map's order is its priority. For the first gap with any
 candidate, it lists the apps awesome-selfhosted has in that category that a card can be
 made from: a Docker image, not archived, updated in the last six months, no third-party
 service needed, not already a card, and not excluded (such as an app already proposed).
@@ -41,6 +43,7 @@ from pathlib import Path
 import yaml
 
 MAP = Path(__file__).resolve().parent / "skills" / "edgible-cards" / "needs-map.yaml"
+DEFAULT_CAP = 5   # cards a category grows to, unless its entry sets cards_wanted
 DATA = "https://github.com/awesome-selfhosted/awesome-selfhosted-data/archive/refs/heads/master.tar.gz"
 
 
@@ -127,7 +130,9 @@ def main(argv: list[str]) -> int:
     cards = {p.parent.name for p in Path.cwd().glob("*/card.yml")}
     excluded = {slug(n) for n in args.exclude} | cards
     gaps = [e for e in entries
-            if len(e.get("cards") or []) < e.get("cards_wanted", 1) and e["fit"]["rating"] in ("good", "conditional")]
+            if len(e.get("cards") or []) < e.get("cards_wanted", DEFAULT_CAP) and e["fit"]["rating"] in ("good", "conditional")]
+    # Fewest cards first; sorted() is stable, so ties stay in the map's order.
+    gaps.sort(key=lambda e: len(e.get("cards") or []))
     unlisted = [e["category"] for e in gaps if e.get("source") == "edgible" and not e.get("candidates")]
     software = apps()
 
