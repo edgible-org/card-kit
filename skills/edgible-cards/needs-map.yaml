@@ -382,7 +382,7 @@
     sensitive: the same, with a retention limit on stored prompts
     regulated: "prompt logs inherit the data's rules: if users send health or client data, the logs are that data"
   machine: a database that grows with traffic; disk for logs
-  cards: []
+  cards: [arize-phoenix]
   candidates:
     - {name: Arize Phoenix, repo: Arize-ai/phoenix, why: "one container with SQLite, OpenTelemetry traces, evals; the simplest to run"}
     - {name: Langfuse, repo: langfuse/langfuse, why: "the most used; needs Postgres, ClickHouse, Redis and S3-style storage beside it"}
