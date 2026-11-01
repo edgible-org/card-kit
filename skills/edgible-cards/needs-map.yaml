@@ -25,6 +25,8 @@
 #   find       where to shortlist apps when awesome-selfhosted has few or none: required with
 #              source edgible. Name the places listed in sources.yaml, next to this file, which
 #              records every place we look and the apps we passed over
+#   cards_wanted the most cards the nightly grow makes for the category; 5 if left out. Lower it
+#              where a person judges fewer are needed, raise it where more are
 #   candidates apps worth a card, for source edgible (awesome-selfhosted lists none for
 #              them): name, repo (owner/name on GitHub), why. A person curates this short list
 #              and keeps it current; pick-app offers it the way it offers awesome-selfhosted's
