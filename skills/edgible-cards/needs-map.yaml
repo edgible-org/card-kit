@@ -330,7 +330,7 @@
     sensitive: not published, or api-key only; embeddings can reveal the text they came from, so treat them like the documents
   builders: "a free, private vector store for a prototype RAG or agent app, moved to a bigger machine later without changing the code"
   machine: memory grows with the collection; fast disk
-  cards: []
+  cards: [qdrant]
   candidates:
     - {name: Qdrant, repo: qdrant/qdrant, why: "one container, a REST and gRPC API, an api-key setting, a built-in dashboard; the easiest to run small"}
     - {name: Chroma, repo: chroma-core/chroma, why: "one container with a simple HTTP API, popular for prototypes and agent memory"}
