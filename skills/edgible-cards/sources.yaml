@@ -14,8 +14,10 @@
 #   reviewed    the date someone last checked it still works and is worth keeping
 #   note        what to know before trusting it
 #
-# passed_over  apps looked at and not made into a card yet, so they are not looked at again
-#   name, repo, date, why, and revisit: when it would be worth another look (optional)
+# passed_over  apps looked at and not yet made into a card, so they are not looked at twice.
+#              The site shows this list, so write each reason as a plain fact about the app, never
+#              a verdict on it. name, repo, date, why, and revisit: what would make it worth another
+#              look (optional)
 
 sources:
   - name: awesome-selfhosted
@@ -24,7 +26,7 @@ sources:
     read_by: code
     used_for: all categories without source edgible
     reviewed: 2026-11-01
-    note: "pick-app and check-map download its data tarball. Curated, so it lags new AI tools by months"
+    note: "our tools read its data directly. It is curated, so new AI tools reach it after a delay"
   - name: Edgible needs map candidates
     url: skills/edgible-cards/needs-map.yaml
     good_for: apps a person has already shortlisted for the categories awesome-selfhosted does not cover
@@ -71,18 +73,21 @@ sources:
     reviewed: 2026-11-01
   - name: selfh.st
     url: https://selfh.st
-    good_for: a weekly newsletter of self-hosted releases and new projects; its icon library is what card-icon.py uses
+    good_for: a weekly newsletter of self-hosted releases and new projects; its icon library supplies the cards' icons
     read_by: person
     used_for: all
     reviewed: 2026-11-01
 
-# A candidate belongs in the needs map only if: it is not archived, was updated in the last six
-# months, has a Docker image for amd64 and arm64 (or a native macOS build, said so), needs no
-# third-party service, and has a licence a catalog can list.
+# What an app needs before it goes on the needs map as a candidate. The site shows these.
+bar:
+  - not archived, and updated in the last six months
+  - a Docker image for amd64 and arm64, or a native macOS build (said so in its entry)
+  - needs no third-party service to run
+  - has a licence a catalog can list
 
 passed_over:
-  - {name: Flowise, repo: FlowiseAI/Flowise, date: 2026-10-31, why: "archived in August 2026", revisit: "if it is unarchived"}
-  - {name: Milvus, repo: milvus-io/milvus, date: 2026-10-31, why: "standalone mode needs etcd and MinIO beside it; kept as a last candidate for vector databases"}
-  - {name: LanceDB, repo: lancedb/lancedb, date: 2026-10-31, why: "an embedded library, not a server, so there is nothing to publish"}
-  - {name: ComfyUI, repo: Comfy-Org/ComfyUI, date: 2026-10-31, why: "no official Docker image and no login of its own", revisit: "if an official image appears"}
-  - {name: InvokeAI, repo: invoke-ai/InvokeAI, date: 2026-10-31, why: "image is amd64 only and wants an NVIDIA GPU; kept as a conditional candidate"}
+  - {name: Flowise, repo: FlowiseAI/Flowise, date: 2026-10-31, why: "archived by its maintainers in August 2026", revisit: "it is unarchived"}
+  - {name: Milvus, repo: milvus-io/milvus, date: 2026-10-31, why: "standalone mode runs with etcd and MinIO beside it, a larger setup than the other vector databases; kept as a later candidate"}
+  - {name: LanceDB, repo: lancedb/lancedb, date: 2026-10-31, why: "an embedded library rather than a server, so there is nothing to publish"}
+  - {name: ComfyUI, repo: Comfy-Org/ComfyUI, date: 2026-10-31, why: "no official Docker image yet, and it has no sign-in of its own", revisit: "an official image is published"}
+  - {name: InvokeAI, repo: invoke-ai/InvokeAI, date: 2026-10-31, why: "the published image is amd64 only and uses an NVIDIA GPU; kept as a conditional candidate"}
