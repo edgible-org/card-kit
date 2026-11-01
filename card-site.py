@@ -598,7 +598,7 @@ class Site:
 <h2 id="pattern-cards">Pattern cards</h2>
 <p>Several apps wired together for a purpose, built from app cards.</p>
 <ul class="tiles">{"".join(self.card_tile(c, "") for c in patterns)}</ul>
-<p class="no-match" hidden>No card matches. Try fewer words, clear a filter, or <a href="needs/">start from a need</a>.</p>
+<p class="no-match" hidden>No card matches. Try fewer words, <a href="#" class="clear-all">clear all</a>, or <a href="needs/">start from a need</a>.</p>
 <script>{FINDER_JS}</script>
 <h2>Start from a need</h2>
 <p>What people want to self-host, whether it suits a machine of your own, and how to publish it safely. <a href="needs/">All {len(self.needs)} needs</a>.</p>
@@ -621,7 +621,7 @@ class Site:
         options = "".join(f'<option value="{slug(cat)}">{esc(cat)} ({count[cat]})</option>' for cat in cats)
         return f"""<form class="finder" role="search" hidden>
 <div class="find-row"><label class="find-q"><span class="sr-only">Search cards</span><input type="search" name="q" placeholder="Search: an app, a need, or a service you are leaving" autocomplete="off"></label>
-<button type="submit">Search</button></div>
+<button type="submit">Search</button><button type="button" class="clear-all" hidden>Clear all</button></div>
 <div class="find-opts">
 <label><span class="sr-only">Category</span><select name="cat"><option value="">All categories</option>{options}</select></label>
 <label><span class="sr-only">Type</span><select name="type"><option value="">Apps and patterns</option><option value="app">App cards</option><option value="pattern">Pattern cards</option></select></label>
@@ -1104,7 +1104,8 @@ dt{font-weight:600;margin-top:10px}dd{margin:2px 0 0 0}
 .finder input[type=search]:focus,.finder select:focus{outline:2px solid var(--navy-mid);outline-offset:1px}
 .find-row{display:flex;gap:8px}.find-q{display:block;flex:1;min-width:0}
 .finder button{font:inherit;font-weight:600;color:#fff;background:var(--navy-mid);border:0;border-radius:8px;padding:8px 18px;cursor:pointer}
-.finder button:hover{background:var(--navy)}.finder button:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.finder button.clear-all{color:var(--link);background:none;padding:8px 6px;font-weight:500;text-decoration:underline}
+.finder button:hover{background:var(--navy)}.finder button.clear-all:hover{background:none;color:var(--navy)}.finder button:focus-visible{outline:2px solid var(--link);outline-offset:2px}
 .find-opts{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:10px}
 .find-opts label{min-width:0;max-width:100%}.find-opts select{max-width:100%}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--edge);border-radius:999px;padding:4px 12px;font-size:.92rem;cursor:pointer;user-select:none}
@@ -1157,6 +1158,7 @@ function apply(push) {
   }
   none.hidden = shown > 0;
   const on = s.q || s.cat || s.type || s.public || s.arm || s.small || s.pass;
+  f.querySelector("button.clear-all").hidden = !on;
   f.querySelector(".find-count").textContent = on ? `${shown} of ${total} cards` : "";
   if (push) {
     const u = new URLSearchParams();
@@ -1173,6 +1175,13 @@ f.addEventListener("submit", e => {
   const first = [...document.querySelectorAll("#app-cards, #pattern-cards, .no-match")].find(el => !el.hidden);
   if (first) first.scrollIntoView({behavior: "smooth", block: "start"});
 });
+// Clear all: the button, and the link in the no-match note, empty the box and every filter.
+const clear = e => {
+  e.preventDefault(); f.reset(); f.q.value = ""; apply(true); f.q.focus();
+  f.scrollIntoView({behavior: "smooth", block: "nearest"});
+};
+f.querySelector("button.clear-all").addEventListener("click", clear);
+none.querySelector("a.clear-all").addEventListener("click", clear);
 f.addEventListener("input", () => apply(true)); f.addEventListener("change", () => apply(true));
 f.hidden = false; apply(false);
 })();"""
