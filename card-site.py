@@ -84,7 +84,7 @@ NEED_ICONS = {
     'Communication - Email - Complete Solutions': 'mail',
     'DNS': 'globe',
 }
-ADD_YOUR_APP = "https://www.edgible.ai/add-your-app/"
+
 PLAYBOOKS = "https://www.edgible.ai/playbooks/"
 SKILL_URL = "https://github.com/edgible-org/card-kit/tree/main/skills/edgible-cards"
 AWESOME = "https://awesome-selfhosted.net/tags/{slug}.html"
@@ -105,8 +105,8 @@ DRIVER_WORDS = {
     "shut-down": "a service that shut down or got worse", "compliance": "compliance",
     "local": "it has to run at home",
 }
-SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible"}
-RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible", "ADD-YOUR-APP.md": "add-your-app"}
+RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -468,7 +468,7 @@ class Site:
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
-<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{PLAYBOOKS}">AI Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{ADD_YOUR_APP}">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{PLAYBOOKS}">AI Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{up}add-your-app/">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
@@ -478,7 +478,7 @@ class Site:
 <div class="wrap foot">
 <div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
-<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{ADD_YOUR_APP}">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
+<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
@@ -586,7 +586,7 @@ class Site:
 <li><strong>The same steps every time</strong><span>Check, Start, Publish, Verify, Tear down. Learn one card and you know them all, and so does an AI agent.</span></li>
 <li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result and its date on every card. Rechecked on a rolling schedule, when an app's image changes, and on request; images are scanned every night.</span></li>
 </ul>
-<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="{ADD_YOUR_APP}">share it back</a>. Built an app yourself? <a href="{ADD_YOUR_APP}">Add it</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
+<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="add-your-app/">share it back</a>. Built an app yourself? <a href="add-your-app/">Add it</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 {recent_html}
 <p class="stats">{len(apps)} app cards, {len(patterns)} pattern cards, {tested} passing their latest test, {len(self.needs)} needs mapped.</p>
 <p class="star-ask">Found one that helps? <a href="{REPO_URL}">Star edgible-org/cards on GitHub</a>, so other people find it too.</p>
@@ -658,6 +658,13 @@ class Site:
                      "Install the edgible-cards skill, describe what you need in your own words, and your AI "
                      "agent finds a card, runs it on your machine, and builds and shares a new one when none fits.")
 
+    def add_your_app_page(self) -> None:
+        """/add-your-app/, from ADD-YOUR-APP.md: how to share an app you built as a card."""
+        self.md_page("ADD-YOUR-APP.md", "add-your-app", "Add your app",
+                     "Add your app to the Edgible cards",
+                     "Built an app, maybe with an AI? Check what a card needs, test it on your own Edgible, "
+                     "open a pull request, and list it so anyone can run it with one prompt.")
+
     def run_without_edgible_page(self) -> None:
         """/run-without-edgible/, from RUN-WITHOUT-EDGIBLE.md: running a card on your own server."""
         self.md_page("RUN-WITHOUT-EDGIBLE.md", "run-without-edgible", "Run a card without Edgible",
@@ -693,7 +700,7 @@ class Site:
 <h2>Looked at, not yet a card</h2>
 <p>Listed so the same app is not researched twice. A reason describes the app as it was on that date, and any of these can become a card.</p>
 <div class="scroll"><table><thead><tr><th>App</th><th>Notes</th><th>Looked at</th></tr></thead><tbody>{later}</tbody></table></div>
-<p>Know a source or an app we have missed? <a href="{REPO_URL}/issues/new">Tell us</a>, or <a href="{ADD_YOUR_APP}">add your own app</a>.</p>
+<p>Know a source or an app we have missed? <a href="{REPO_URL}/issues/new">Tell us</a>, or <a href="../add-your-app/">add your own app</a>.</p>
 """
         self.page("sources/", "Where we find apps | Edgible cards",
                   "The sources Edgible looks at when choosing apps for cards, what an app needs to qualify, and the apps looked at that are not cards yet.",
@@ -996,6 +1003,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
         self.ai_page()
         self.ops_page()
         self.run_without_edgible_page()
+        self.add_your_app_page()
         self.sources_page()
         self.needs_index()
         for n in self.needs:
