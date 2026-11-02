@@ -52,7 +52,7 @@
     default: web interface on org; browser extensions and phone apps cannot pass an Edgible sign-in, so their hostname is none with the app's own login, or api-key if the app's clients can send a header
     sensitive: org only, and save from the browser at home
   machine: little; page archiving needs disk
-  cards: [linkding]
+  cards: [linkding, linkwarden]
   ask: ["read later with saved page copies, or just links?", "do you save from a phone?"]
 
 - category: Photo Galleries
@@ -67,7 +67,7 @@
   permissions: "albums and partner sharing decide which family members see which photos; check sharing defaults before inviting people"
   builders: "a photo store with face and place search, for a product prototype that works with people's photos"
   machine: lots of disk (library plus about 20% for thumbnails); 6 GB memory for Immich; a GPU helps face search but is optional
-  cards: [immich]
+  cards: [immich, photoprism]
   ask: ["how sensitive are they, and do you need them away from home?", "how much space does your library take?"]
 
 - category: File Transfer & Synchronization
@@ -81,7 +81,7 @@
     regulated: "client or patient files need the firm's or practice's rules on where data may be held; a machine you control can suit, with access rules, backups, and advice; a cloud server in the firm's own account and an allowed region often suits better than an office PC"
   permissions: "shared folders and groups decide who sees which files; set them per team or client"
   machine: disk for every synced file, and a backup
-  cards: [owncloud]
+  cards: [owncloud, sync-in]
   ask: ["sync to desktop and phone, or a web folder is enough?", "who shares it?"]
 
 - category: Password Managers
@@ -93,7 +93,7 @@
     default: none with the app's own login and two-factor, because browser extensions and phone apps cannot pass an Edgible sign-in (the vaultwarden card)
     sensitive: the same, with registration closed, two-factor required, and tested backups
   machine: little; an always-on machine and a backup are essential
-  cards: [vaultwarden]
+  cards: [vaultwarden, passbolt]
   ask: ["who will check that backups work?"]
 
 - category: Booking and Scheduling
@@ -198,7 +198,7 @@
   permissions: "need-to-know rules, such as a law firm's ethical walls, are set in the app's groups; Edgible's org only decides who is in the team"
   builders: "a knowledge base behind a product's help or onboarding"
   machine: disk for the library; memory for search, and much more when a local AI model answers questions (see the GenAI entry)
-  cards: [assistant]
+  cards: [assistant, notediscovery]
   ask: ["roughly how much material, and in what formats?", "must some people be kept from some material?"]
 
 - category: Note-taking & Editors
