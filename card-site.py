@@ -37,6 +37,7 @@ import math
 
 import markdown
 import yaml
+from markdown_it import MarkdownIt
 
 KIT = Path(__file__).resolve().parent
 NEEDS_MAP = KIT / "skills" / "edgible-cards" / "needs-map.yaml"
@@ -85,7 +86,6 @@ NEED_ICONS = {
     'DNS': 'globe',
 }
 
-PLAYBOOKS = "https://www.edgible.ai/playbooks/"
 SKILL_URL = "https://github.com/edgible-org/card-kit/tree/main/skills/edgible-cards"
 AWESOME = "https://awesome-selfhosted.net/tags/{slug}.html"
 # The star count shows from this many on; below it, a small number puts people off more
@@ -106,7 +106,7 @@ DRIVER_WORDS = {
     "local": "it has to run at home",
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible", "ADD-YOUR-APP.md": "add-your-app"}
-RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "playbooks", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -439,8 +439,9 @@ class Site:
 
     # Pages ----------------------------------------------------------------
 
-    def page(self, path: str, title: str, description: str, body: str) -> None:
-        """Write one page. path is its folder under the site ("" for the root, "umami/")."""
+    def page(self, path: str, title: str, description: str, body: str, head: str = "") -> None:
+        """Write one page. path is its folder under the site ("" for the root, "umami/"). head is
+        extra lines for its <head>, such as a link to the page's Markdown."""
         depth = path.count("/")
         up = "../" * depth
         canonical = f'<link rel="canonical" href="{esc(self.base + "/" + path)}">' if self.base else ""
@@ -463,12 +464,12 @@ class Site:
 <link rel="icon" type="image/png" href="{up}assets/images/favicon.png">
 <script>document.documentElement.className+=" js"</script>
 <link rel="stylesheet" href="{up}style.css?v={STYLE_VERSION}">
-</head>
+{head}</head>
 <body>
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
-<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{PLAYBOOKS}">AI Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{up}add-your-app/">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{up}add-your-app/">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
@@ -478,7 +479,7 @@ class Site:
 <div class="wrap foot">
 <div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
-<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{PLAYBOOKS}">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
+<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{up}playbooks/">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
@@ -664,6 +665,72 @@ class Site:
                      "Add your app to the Edgible cards",
                      "Built an app, maybe with an AI? Check what a card needs, test it on your own Edgible, "
                      "open a pull request, and list it so anyone can run it with one prompt.")
+
+    def playbooks(self) -> None:
+        """/playbooks/, the AI Playbooks, from the cards repo's playbooks/ folder: each Markdown
+        chapter but README.md as a page, its Markdown published beside it for AI assistants, and
+        the icons the chapters draw (icons.svg). A chapter starts with a front matter block:
+        title, and optionally description, icon (a symbol in icons.svg, drawn beside the title),
+        and prev and next (the chapters before and after it, by file name without .md), which
+        become Previous and Next at its end. The chapters are CommonMark with raw HTML, as on
+        GitHub, so Markdown inside a <details> block or an indented list reads as it does there."""
+        src = self.root / "playbooks"
+        if not src.is_dir():
+            return
+        chapters: dict[str, tuple[dict, str, str]] = {}
+        for f in sorted(src.glob("*.md")):
+            if f.name == "README.md":
+                continue
+            text = f.read_text()
+            m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+            if not m:
+                sys.exit(f"playbooks/{f.name}: starts without its --- title: --- block")
+            meta = {k.strip(): v.strip() for k, _, v in (line.partition(":") for line in m.group(1).splitlines()) if v}
+            if not meta.get("title"):
+                sys.exit(f"playbooks/{f.name}: has no title")
+            chapters[f.stem] = (meta, text[m.end():], text)
+        render = MarkdownIt("commonmark", {"html": True}).enable("table").render
+        out = self.out / "playbooks"
+        out.mkdir(parents=True, exist_ok=True)
+        if (src / "icons.svg").is_file():
+            shutil.copy(src / "icons.svg", out / "icons.svg")
+
+        def heading_id(m: re.Match) -> str:
+            # A heading gets the id GitHub would give it, so a link to #its-words works here too.
+            words = re.sub(r"<[^>]+>", "", html.unescape(m.group(3)))
+            hid = re.sub(r"[^\w\- ]", "", words.strip().lower()).replace(" ", "-")
+            return f'<h{m.group(1)}{m.group(2)} id="{esc(hid)}">{m.group(3)}</h{m.group(1)}>'
+
+        for stem, (meta, body, text) in chapters.items():
+            index = stem == "index"
+            here = "" if index else "../"
+            page = render(body)
+            # A link to this site, such as a card's page, stays on it.
+            page = page.replace('href="https://cards.edgible.org/', f'href="{here}../')
+            page = re.sub(r"<h([23])((?:(?!\bid=)[^>])*)>(.*?)</h\1>", heading_id, page, flags=re.S)
+            if meta.get("icon"):
+                ico = (f'<span class="page-ico" aria-hidden="true"><svg><use href="{here}icons.svg#{esc(meta["icon"])}"/>'
+                       '</svg></span>')
+                page = re.sub(r"<h1>(.*?)</h1>", lambda m: f'<h1 class="with-ico">{ico}<span>{m.group(1)}</span></h1>',
+                              page, count=1, flags=re.S)
+            links = []
+            for key, label in (("prev", "&larr; Previous"), ("next", "Next &rarr;")):
+                target = meta.get(key)
+                if not target or index:
+                    continue
+                if target not in chapters:
+                    sys.exit(f"playbooks/{stem}.md: {key} names {target}, which is not a chapter")
+                links.append(f'<a class="{key}" href="../{target}/"><span>{label}</span>{esc(chapters[target][0]["title"])}</a>')
+            nav = f'<nav class="chapters">{"".join(links)}</nav>' if links else ""
+            crumbs = ('<p class="crumbs"><a href="../">Cards</a> / playbooks</p>' if index else
+                      f'<p class="crumbs"><a href="../../">Cards</a> / <a href="../">playbooks</a> / {esc(stem)}</p>')
+            md = f"{here}{stem}.md"
+            self.page("playbooks/" if index else f"playbooks/{stem}/",
+                      f"{meta['title']} | Edgible cards", meta.get("description", ""),
+                      f'{crumbs}\n<article class="playbook">\n{page}{nav}\n</article>\n'
+                      f'<p class="md-source"><a href="{md}">This page as Markdown</a>, for your AI assistant</p>\n',
+                      head=f'<link rel="alternate" type="text/markdown" title="This page as Markdown" href="{md}">\n')
+            (out / f"{stem}.md").write_text(text)
 
     def run_without_edgible_page(self) -> None:
         """/run-without-edgible/, from RUN-WITHOUT-EDGIBLE.md: running a card on your own server."""
@@ -948,6 +1015,7 @@ class Site:
 Why cards exist, and why they are shaped for sharing: {base}about/
 How to use cards with an AI agent, and the skill to install: {base}ai/
 How to run a card on your own server without Edgible: {base}run-without-edgible/
+AI Playbooks, step-by-step guides your AI assistant follows, each chapter also as Markdown (add .md to its name): {base}playbooks/
 Where apps for cards are found, and what an app needs to become one: {base}sources/
 
 Each card page has how to start, publish, check, and remove the card. Each need page says whether self-hosting suits that need, which questions decide it, and how to publish it safely. The source of every card is {REPO_URL}. An AI agent can do the whole flow with the edgible-cards skill: {SKILL_URL}
@@ -1004,6 +1072,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
         self.ops_page()
         self.run_without_edgible_page()
         self.add_your_app_page()
+        self.playbooks()
         self.sources_page()
         self.needs_index()
         for n in self.needs:
@@ -1131,6 +1200,70 @@ footer .foot-links{display:flex;flex-direction:column;align-items:flex-end;gap:4
 footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
 /* On a phone the footer is one short line and the symbol: the menu has the links. */
 @media (max-width:640px){footer .foot{flex-wrap:nowrap}footer .foot-lic,footer .foot-links{display:none}}
+/* The AI Playbooks: a chapter reads at a narrower width; a quote is something to say to your AI, or a box such as
+What you need; Previous and Next end each chapter. Icons are drawn light on a navy tile. */
+:root{--yellow:#ffd21f;--prompt:#fff8d6}
+@media (prefers-color-scheme:dark){:root{--prompt:#2a2714}}
+.playbook{max-width:760px}
+.playbook p,.playbook li{max-width:70ch}
+.playbook h1{font-size:2.3rem}.playbook h2{font-size:1.5rem;margin-top:2.2em}.playbook h3{margin-top:1.8em}
+.playbook blockquote{margin:20px 0;padding:14px 20px;background:var(--prompt);border-left:4px solid var(--yellow);border-radius:0 12px 12px 0}
+.playbook blockquote p{margin:0}.playbook blockquote p+p,.playbook blockquote ul{margin-top:10px}
+.playbook details{margin:24px 0;padding:12px 18px;background:var(--panel);border:1px solid var(--edge);border-radius:12px}
+.playbook summary{cursor:pointer;font-weight:600}
+.playbook hr{border:0;border-top:1px solid var(--edge);margin:40px 0}
+.playbook pre{white-space:pre;max-width:100%}
+.page-ico{display:inline-flex;align-items:center;justify-content:center;flex:none;width:48px;height:48px;border-radius:12px;background:var(--navy);color:#fff}
+.page-ico svg{width:36px;height:36px}
+h1.with-ico{display:flex;align-items:center;gap:16px}
+.playbook .ico.sm{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:var(--navy);margin-right:10px;vertical-align:middle}
+.playbook .ico.sm svg{width:22px;height:22px}
+.playbook .ico,.playbook .flow use{color:#fff}
+@media (prefers-color-scheme:dark){.page-ico,.playbook .ico.sm,.playbook h2 .ico{background:var(--navy-mid)}}
+.playbook li:has(.ico.sm){list-style:none;position:relative;padding-left:54px;margin:18px 0;min-height:34px}
+.playbook li .ico.sm{position:absolute;left:0;top:-2px;width:36px;height:36px;margin:0}
+.playbook li .ico.sm svg{width:26px;height:26px}
+.playbook ul:has(.ico.sm),.playbook ol:has(.ico.sm){padding-left:0}
+.playbook li:has(.ico.sm)>p{margin:0}
+.playbook li>ol:has(.ico.sm){margin:14px 0 0}.playbook li>ol>li:has(.ico.sm){margin:12px 0}
+.playbook h2 .ico{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:var(--navy);margin-right:12px;flex:none}
+.playbook h2 .ico svg{width:30px;height:30px}
+.playbook h2:has(.ico){display:flex;align-items:center}
+nav.chapters{display:flex;gap:14px;margin-top:56px;flex-wrap:wrap}
+nav.chapters a{flex:1 1 240px;display:block;padding:16px 20px;border:1px solid var(--edge);border-radius:12px;background:var(--panel);text-decoration:none;color:var(--ink);font-weight:600}
+nav.chapters a:hover{border-color:var(--navy-mid)}
+nav.chapters a span{display:block;font-size:.85rem;font-weight:500;color:var(--muted);margin-bottom:4px}
+nav.chapters a.next{text-align:right;margin-left:auto}
+.md-source{color:var(--muted);font-size:.9rem;margin-top:32px}
+.paths{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:28px 0 8px}
+.path{display:block;padding:20px 22px 18px;border:1.5px solid var(--edge);border-radius:12px;background:var(--panel);color:var(--ink);text-decoration:none}
+a.path:hover,a.path:focus{border-color:var(--navy-mid)}
+.path h2{margin:14px 0 6px;font-size:1.25rem}
+.path p{margin:0 0 12px}
+.path .go{font-weight:600;color:var(--link);font-size:.9rem}
+.path.soon{background:transparent;border-style:dashed}.path.soon h2,.path.soon p,.path.soon .go{color:var(--muted)}
+.path svg{width:100%;max-width:220px;height:auto;display:block}
+.path .mf{fill:var(--none-bg);stroke:var(--edge);stroke-width:1.5}
+.path .md{fill:var(--yellow)}
+.path .rb{fill:none;stroke:#8a6a00;stroke-width:1.5;stroke-linecap:round}
+.path .eye{fill:#000033}
+.path .og{fill:none;stroke:#000033;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.path .og.soon{stroke:var(--muted)}
+.path .dash{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3}
+@media (max-width:640px){.paths{grid-template-columns:1fr}}
+figure.flow{margin:28px auto;max-width:460px}
+figure.flow svg{width:100%;height:auto;display:block;font-family:inherit}
+.flow a{cursor:pointer}
+.flow .frame{fill:var(--none-bg);stroke:var(--edge);stroke-width:1.5}
+.flow .box{fill:var(--panel);stroke:var(--edge);stroke-width:1.5}
+.flow .box.opt{stroke-dasharray:5 4;stroke:var(--muted)}
+.flow a:hover .box,.flow a:focus .box{stroke:var(--navy-mid)}
+.flow .num{fill:var(--yellow)}
+.flow .numt{fill:#000033;font-weight:800;font-size:14px}
+.flow .t{fill:var(--ink);font-weight:700;font-size:17px}.flow .t.b{font-size:15px}
+.flow .s{fill:var(--muted);font-size:13.5px}
+.flow .s2{fill:var(--ink);font-weight:700;font-size:14px}
+.flow .arr{fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 """
 
 
