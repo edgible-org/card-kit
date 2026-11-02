@@ -224,7 +224,7 @@
     regulated: "documents with client, patient, or financial data: org, with the app's per-user or per-group permissions, encrypted backups, and the person's professional rules on retention"
   permissions: "owners, groups, and per-document permissions decide who sees which documents"
   machine: disk for the documents; OCR uses memory
-  cards: [stirling-pdf]
+  cards: [stirling-pdf, paperless-ngx]
   ask: ["archive documents, or work on PDFs?"]
 
 - category: Feed Readers
@@ -236,7 +236,7 @@
     default: org for the web; reader apps use the app's API and cannot pass an Edgible sign-in, so their hostname is none with the app's login
     sensitive: org only
   machine: little
-  cards: [miniflux]
+  cards: [miniflux, freshrss]
   ask: ["do you read on a phone app?"]
 
 - category: Media Streaming - Multimedia Streaming
