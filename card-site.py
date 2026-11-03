@@ -804,7 +804,11 @@ class Site:
         engines treat as a doorway page."""
         items = "".join(f'<li><a href="{up}needs/{slug(ns[0]["category"])}/">{esc(r)}</a></li>'
                         for r, ns in sorted(self.leaving.items(), key=lambda kv: kv[0].lower()))
-        return f'<p class="leaving-label">Leaving a hosted service?</p><ul class="leaving">{items}</ul>'
+        # The list is long, so it shows two rows and a button for the rest. Without JavaScript it shows whole.
+        n = len(self.leaving)
+        return (f'<p class="leaving-label">Leaving a hosted service?</p><ul class="leaving">{items}</ul>'
+                f'<button type="button" class="leaving-more" aria-expanded="false" data-more="Show all {n}" hidden>Show all {n}</button>'
+                f'<script>{LEAVING_JS}</script>')
 
     def card_page(self, c: dict) -> None:
         name, card = c["name"], c["card"]
@@ -1081,6 +1085,15 @@ Each card page has how to start, publish, check, and remove the card. Each need 
         self.robots()
 
 
+LEAVING_JS = """(()=>{const u=document.querySelector("ul.leaving"),b=u&&u.nextElementSibling;if(!b)return;
+const clamp=()=>{if(u.dataset.open)return;const li=[...u.children];li.forEach(l=>l.hidden=false);
+const tops=[...new Set(li.map(l=>l.offsetTop))].sort((x,y)=>x-y),cut=tops[2];let n=0;
+if(cut!==undefined)li.forEach(l=>{if(l.offsetTop>=cut){l.hidden=true;n++}});b.hidden=!n};
+b.addEventListener("click",()=>{const open=!u.dataset.open;if(open){u.dataset.open="1";[...u.children].forEach(l=>l.hidden=false)}
+else{delete u.dataset.open;clamp()}b.textContent=open?"Show fewer":b.dataset.more;b.setAttribute("aria-expanded",String(open))});
+clamp();addEventListener("resize",clamp)})();"""
+
+
 STYLE = """/* Edgible's brand, as on guides.edgible.com: Jost (standing in for the licensed brand face), Iosevka for code,
 navy bands at the top and bottom, orange links. */
 @font-face{font-family:"Jost";src:url("assets/fonts/Jost-var.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
@@ -1160,6 +1173,8 @@ img.icon{background:#fff;padding:5px;border:1px solid var(--edge)}
 .fit.poor,.fit.refused{background:var(--fail-bg);color:var(--fail)}
 .leaving-label{font-weight:600;margin-bottom:4px}
 .leaving{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:0}
+.leaving:has(+.leaving-more:not([hidden])){margin-bottom:6px}
+.leaving-more{font:inherit;color:var(--link);background:none;border:0;padding:0;margin:0 0 1em;cursor:pointer;text-decoration:underline}
 .card-image img{max-width:100%;height:auto;display:block;margin:16px 0}
 .scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%;background:var(--panel);font-size:.95rem;border-radius:8px;overflow:hidden}
