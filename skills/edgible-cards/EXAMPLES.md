@@ -100,6 +100,10 @@ A good answer sets Edgible up first: it installs what the installer needs and th
 
 A good answer runs `edgible upgrade --check`, then `edgible upgrade`, and explains that the device software upgrades itself.
 
+> Update the Edgible skill
+
+A good answer finds where the skill is installed, checks before changing anything, and says how far behind it is and what changed. It updates with your yes, and tells you to start a new chat so the new version applies.
+
 ## Where it says no, or points elsewhere
 
 > Can I run my own email server so we stop paying for Google Workspace?
