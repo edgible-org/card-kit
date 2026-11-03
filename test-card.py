@@ -402,14 +402,32 @@ def volume_bytes(project: str) -> float:
     return total
 
 
-def image_archs(image: str) -> set[str]:
-    out = sh(f"docker buildx imagetools inspect {image} --format '{{{{json .Manifest}}}}'", check=False).stdout
-    try:
-        manifests = json.loads(out).get("manifests", [])
-    except json.JSONDecodeError:
-        return set()
-    return {ARCH.get(m["platform"]["architecture"], m["platform"]["architecture"])
-            for m in manifests if m.get("platform", {}).get("architecture") not in (None, "unknown")}
+def image_archs(image: str) -> set[str] | None:
+    """The CPUs the registry has builds of image for, or None when the lookup fails. A failed
+    lookup is not "no builds": recording it as that left cards with archs: [] (passbolt, gitea).
+    An image with a single build has no list of builds; its own config names the CPU."""
+    for attempt in range(3):
+        if attempt:
+            time.sleep(5 * attempt)
+        p = sh(f"docker buildx imagetools inspect {image} --format '{{{{json .Manifest}}}}'", check=False)
+        try:
+            manifest = json.loads(p.stdout) if p.returncode == 0 else None
+        except json.JSONDecodeError:
+            manifest = None
+        if not manifest:
+            continue
+        if "manifests" in manifest:
+            archs = {m.get("platform", {}).get("architecture") for m in manifest["manifests"]} - {None, "unknown"}
+        else:
+            p = sh(f"docker buildx imagetools inspect {image} --format '{{{{json .Image}}}}'", check=False)
+            try:
+                archs = {json.loads(p.stdout).get("architecture")} - {None, "unknown"}
+            except (json.JSONDecodeError, AttributeError):
+                archs = set()
+        if archs:
+            return {ARCH.get(a, a) for a in archs}
+    print(f"warning: could not read the CPUs {image} has builds for", file=sys.stderr)
+    return None
 
 
 def image_facts(images: list[str], pull: bool = False) -> dict[str, dict]:
@@ -424,14 +442,18 @@ def image_facts(images: list[str], pull: bool = False) -> dict[str, dict]:
         if not cfg:
             continue
         test = (cfg.get("Healthcheck") or {}).get("Test") or []
-        out[image] = {"user": cfg.get("User") or "root", "archs": sorted(image_archs(image)),
+        archs = image_archs(image)
+        out[image] = {"user": cfg.get("User") or "root", "archs": None if archs is None else sorted(archs),
                       "healthcheck": bool(test) and test[0] != "NONE"}
     return out
 
 
 def facts_yaml(facts: dict[str, dict]) -> list[str]:
-    return ["image_facts:", *[f"  {i}: {{user: {json.dumps(f['user'])}, archs: [{', '.join(json.dumps(x) for x in f['archs'])}], "
-                              f"healthcheck: {str(f['healthcheck']).lower()}}}" for i, f in sorted(facts.items())]]
+    # An image whose builds could not be read gets no archs: at all, so card-fit waits rather
+    # than reporting "no builds".
+    return ["image_facts:", *[f"  {i}: {{user: {json.dumps(f['user'])}, "
+                              + ("" if f['archs'] is None else f"archs: [{', '.join(json.dumps(x) for x in f['archs'])}], ")
+                              + f"healthcheck: {str(f['healthcheck']).lower()}}}" for i, f in sorted(facts.items())]]
 
 
 def write_image_facts(src: Path) -> int:
@@ -445,6 +467,10 @@ def write_image_facts(src: Path) -> int:
         print(f"{src.name} runs natively: no images to read")
         return 0
     facts = image_facts(sorted({a["from"] for a in read_apps(src / "card.yml") if a.get("from")}), pull=True)
+    if unread := sorted(i for i, f in facts.items() if f["archs"] is None):
+        print(f"Could not read the builds of {', '.join(unread)}: test.yml left as it was. Try again later.",
+              file=sys.stderr)
+        return 1
     text = re.sub(r"^image_facts:\n(?:  .*\n?)*", "", test_yml.read_text(), flags=re.M)
     text = re.sub(r"^(images:\n(?:  - .*\n)+)", lambda m: m.group(1) + "\n".join(facts_yaml(facts)) + "\n", text,
                   count=1, flags=re.M)
@@ -797,7 +823,8 @@ def main(argv: list[str]) -> int:
     for f in composes:
         config = json.loads(sh(dc(f, "config --format json"), check=False).stdout or "{}")
         place = (file_places(apps, f, places) or [apps[0]["place"]])[0]
-        entry = per_place.setdefault(place, {"memory": 0.0, "images": 0.0, "data": 0.0, "archs": None})
+        entry = per_place.setdefault(place, {"memory": 0.0, "images": 0.0, "data": 0.0, "archs": None,
+                                              "archs_unread": False})
         entry["memory"] += sampler.peak.get(projects[f], 0.0)
         entry["data"] += data.get(f, 0.0)
         for service in config.get("services", {}).values():
@@ -810,7 +837,10 @@ def main(argv: list[str]) -> int:
             entry["images"] += float(sh(f"docker image inspect {image} --format '{{{{.Size}}}}'",
                                         check=False).stdout.strip() or 0)
             archs = image_archs(image)
-            entry["archs"] = archs if entry["archs"] is None else entry["archs"] & archs
+            if archs is None:
+                entry["archs_unread"] = True
+            else:
+                entry["archs"] = archs if entry["archs"] is None else entry["archs"] & archs
     if installed:
         images = sorted({a["from"] for a in apps})
         per_place[apps[0]["place"]] = {"memory": sampler.peak, "images": installed_bytes, "data": native_data,
@@ -827,7 +857,9 @@ def main(argv: list[str]) -> int:
     if started_compose or installed:
         suggestion = {p: {**({"runs": places[p]["runs"]} if places.get(p, {}).get("runs") else {}),
                           **({"native": native} if native else {}),
-                          **suggest(m["memory"], m["images"] + m["data"], m["archs"] or set(), args.gpu)}
+                          **suggest(m["memory"], m["images"] + m["data"], m["archs"] or set(), args.gpu),
+                          # Builds that could not be read keep the arch: the card already had.
+                          **({"arch": list(places.get(p, {}).get("arch") or [])} if m.get("archs_unread") else {})}
                       for p, m in per_place.items()}
         print("\nsuggested " + places_yaml(suggestion), end="")
         if args.write_places and result == "pass":
