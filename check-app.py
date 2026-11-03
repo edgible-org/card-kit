@@ -110,8 +110,10 @@ def check(root: Path, image: str, steward: str) -> dict:
     # image
     if not image:
         required.append(item("image", "A public image with a version tag", False,
-                             "no --image given", "Publish the app as a container image on a public registry such as GitHub "
-                             "Container Registry or Docker Hub, tag it with a version, and run this again with --image <name:tag>."))
+                             "no --image given", "Publish the app as a container image with a version tag. On GitHub, copy card-kit's "
+                             "skills/edgible-cards/publish-image.yml to .github/workflows/ in the app's repository, push a tag "
+                             "such as v1.0.0, check the package is public, and run this again with "
+                             "--image ghcr.io/<owner>/<repo>:1.0.0."))
         required.append(item("arch", "The image runs on amd64 and arm64", None, "not checked without --image"))
     else:
         tag = image.rsplit("/", 1)[-1].partition(":")[2].split("@")[0]
