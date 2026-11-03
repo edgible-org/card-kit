@@ -577,27 +577,24 @@ class Site:
         patterns = [c for c in self.cards.values() if c["type"] != "app"]
         tested = sum(1 for c in self.cards if self.status.get(c, {}).get("result") == "pass")
         recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
-        recent_html = ("<p class=\"stats\">Recently added: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent) + ".</p>") if recent else ""
+        recent_html = (" &middot; New: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3])) if recent else ""
         body = f"""<section class="hero">
 <h1>Self-hosted setups you can copy or share</h1>
-<p class="lead">A card is a working self-hosted setup in a form made to be shared: plain files that anyone can read, run on a machine they control, change, and share back. One app, or several wired together.</p>
+<p class="lead">A card is a working self-hosted setup, made to be shared: plain files anyone can run on their own machine, change, and share back.</p>
 <ul class="pillars">
-<li><strong>Made to share</strong><span>Nothing personal is in it: no device names, hostnames or passwords. You fill in your own. It is plain files in git, so you can fork it and share your version back.</span></li>
-<li><strong>The whole setup</strong><span>The apps, images and ports, which machine runs what, and who gets in to each hostname: anyone, your organization's sign-in, or an API key. Edgible publishes them, with TLS.</span></li>
-<li><strong>The same steps every time</strong><span>Check, Start, Publish, Verify, Tear down. Learn one card and you know them all, and so does an AI agent.</span></li>
-<li><strong>Proof it works</strong><span>Tested end to end on a real Edgible serving device, with the latest result and its date on every card. Rechecked on a rolling schedule, when an app's image changes, and on request; images are scanned every night.</span></li>
+<li><a href="about/#shaped-for-sharing"><strong>Made to share</strong><span>Nothing personal in it. You fill in your own.</span></a></li>
+<li><a href="about/#whats-in-a-card"><strong>The whole setup</strong><span>Apps, ports, and who can sign in, published with TLS.</span></a></li>
+<li><a href="about/#same-shape-every-time"><strong>The same steps every time</strong><span>Check, start, publish, verify, tear down.</span></a></li>
+<li><a href="about/#whats-in-a-card"><strong>Proof it works</strong><span>Tested on a real device, with the date on every card.</span></a></li>
 </ul>
-<p>Not an app store: each card is someone's record of what worked for them. Run it as it is, or make it yours and <a href="add-your-app/">share it back</a>. Built an app yourself? <a href="add-your-app/">Add it</a>. <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
-{recent_html}
-<p class="stats">{len(apps)} app cards, {len(patterns)} pattern cards, {tested} passing their latest test, {len(self.needs)} needs mapped.</p>
-<p class="star-ask">Found one that helps? <a href="{REPO_URL}">Star edgible-org/cards on GitHub</a>, so other people find it too.</p>
+<p class="stats">{len(apps)} app cards &middot; {len(patterns)} patterns &middot; {tested} passing their latest test{recent_html} &middot; <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 </section>
 {self.finder()}
 <h2 id="app-cards">App cards</h2>
-<p>One app each, ready on its own or as a building block. Every app card is tested end to end, and again when it changes or Edgible releases a new version.</p>
+<p>One app each, tested end to end.</p>
 <ul class="tiles">{"".join(self.card_tile(c, "") for c in apps)}</ul>
 <h2 id="pattern-cards">Pattern cards</h2>
-<p>Several apps wired together for a purpose, built from app cards.</p>
+<p>Several apps wired together, built from app cards.</p>
 <ul class="tiles">{"".join(self.card_tile(c, "") for c in patterns)}</ul>
 <p class="no-match" hidden>No card matches. Try fewer words, <a href="#" class="clear-all">clear all</a>, or <a href="needs/">start from a need</a>.</p>
 <script>{FINDER_JS}</script>
@@ -1107,7 +1104,7 @@ a.ext::after{content:"";display:inline-block;width:.7em;height:.7em;margin-left:
 .brand span{border-left:1px solid rgba(255,255,255,.4);padding-left:12px}
 nav{display:flex;flex-wrap:wrap;gap:18px;align-items:center}nav a{text-decoration:none;color:rgba(255,255,255,.85)}nav a:hover{color:#fff}
 nav a.star{border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:1px 12px;color:#fff}nav a.star:hover{background:rgba(255,255,255,.12)}
-.star-ask{color:var(--muted)}
+
 .menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:44px;margin-right:-10px;padding:0;border:0;border-radius:10px;background:none;cursor:pointer}
 .menu-btn:hover{background:rgba(255,255,255,.1)}.menu-btn:focus-visible{outline:2px solid #ffd21f;outline-offset:2px}
 .menu-btn span,.menu-btn span::before,.menu-btn span::after{display:block;width:22px;height:2px;border-radius:2px;background:#fff;transition:transform .15s,background .15s}
@@ -1132,7 +1129,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .stats{font-weight:600}
 .pillars{list-style:none;padding:0;margin:24px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .pillars li{background:var(--panel);border:1px solid var(--edge);border-top:3px solid var(--navy-mid);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
-.pillars strong{font-size:1.05rem}.pillars span{color:var(--muted);font-size:.95rem;line-height:1.5}
+.pillars a{display:flex;flex-direction:column;gap:6px;color:inherit;text-decoration:none}.pillars li:hover{border-color:var(--navy-mid)}.pillars strong{font-size:1.05rem}.pillars span{color:var(--muted);font-size:.95rem;line-height:1.5}
 .prose{max-width:70ch}
 .art{margin:28px 0}.art svg{display:block;width:100%;height:auto;max-width:820px;margin:0 auto}
 .crumbs{color:var(--muted);font-size:.9rem;margin:0}
