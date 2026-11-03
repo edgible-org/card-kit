@@ -96,9 +96,12 @@ def fit(card_dir: Path) -> dict | None:
                   f"starts as root ({', '.join(sorted(root))})" if root
                   else f"starts as {', '.join(sorted(set(users.values())))}")
             archs = [{str(x) for x in v.get("archs") or []} for v in facts.values()]
-            both = all({"amd64", "arm64"} <= a for a in archs)
-            check("arm-and-x86", "Builds for arm64 and amd64", both,
-                  ", ".join(sorted(set().union(*archs))) or "no builds listed")
+            if not all(archs):
+                # No archs, or an empty list, means the builds were not read: every image has one.
+                check("arm-and-x86", "Builds for arm64 and amd64", None, "waiting for test-card to read the image's builds")
+            else:
+                check("arm-and-x86", "Builds for arm64 and amd64", all({"amd64", "arm64"} <= a for a in archs),
+                      ", ".join(sorted(set().union(*archs))))
         else:
             check("non-root", "Starts as a non-root user", None, "waiting for test-card to read the image")
             check("arm-and-x86", "Builds for arm64 and amd64", None, "waiting for test-card to read the image")
