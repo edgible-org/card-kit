@@ -814,6 +814,96 @@ class Site:
                 f'<button type="button" class="leaving-more" aria-expanded="false" data-more="Show all {n}" hidden>Show all {n}</button>'
                 f'<script>{LEAVING_JS}</script>')
 
+    def card_number(self, name: str) -> tuple[int, int]:
+        """A card's place in the set, by the date it was added (then its name), and the set's size."""
+        if not hasattr(self, "_numbers"):
+            order = sorted(self.cards.values(), key=lambda c: (str(c.get("added") or "9999"), c["name"]))
+            self._numbers = {c["name"]: i + 1 for i, c in enumerate(order)}
+        return self._numbers.get(name, 0), len(self._numbers)
+
+    def trading_card(self, c: dict, st: dict | None, kind: str) -> str:
+        """The top of a card's page drawn as a trading card: its name and type, its icon in the art
+        window, what it can do (who gets in, what it keeps, its secrets), its one line, the machine
+        it needs, and who answers for it, with its place in the set. Everything is from the card;
+        the full tables follow below it."""
+        name, card = c["name"], c["card"]
+        apps = card.get("applications") or []
+        f = c.get("fit")
+        fit = (f'<span class="tc-fit" title="Self-hosting fit: {f["passed"]} of {f["known"]} checks passed">'
+               f'{fit_ring(f, 18)}Fit {f["passed"]}/{f["known"]}</span>') if f and f.get("checks") else ""
+        needs = self.needs_of.get(name, [])
+        if not st:
+            result = "not tested yet"
+        else:
+            try:
+                d = date.fromisoformat(str(st.get("tested", "")))
+                when = f"{d.day} {d.strftime('%b %Y')}"
+            except ValueError:
+                when = str(st.get("tested", ""))
+            result = ("passed " if st.get("result") == "pass" else "failed ") + when
+        banner = " · ".join([esc(needs[0]["category"])] if needs else []) + (" · " if needs else "") + esc(result)
+
+        abilities = []
+        modes = [m for a in apps for m in (a.get("authModes") or [])]
+        door = {"none": ("Open door", "Anyone can reach it, behind the app's own sign-in."),
+                "org": ("Members only", "Only people in your organisation get in."),
+                "api-key": ("Key holders", "Apps and scripts get in with an API key.")}
+        if len(set(modes)) > 1 and len([a for a in apps if a.get("published", True)]) > 1:
+            abilities.append(("Two doors", "Each hostname has its own rule: "
+                              + ", ".join(dict.fromkeys(AUTH_WORDS.get(m, m) for m in modes)) + "."))
+        elif modes:
+            abilities.append(door.get(modes[0], (AUTH_WORDS.get(modes[0], modes[0]).capitalize(), "")))
+        vols = (card.get("data") or {}).get("volumes") or {}
+        kept = [v for v, d in vols.items() if (d or {}).get("class") == "irreplaceable"]
+        if kept:
+            checked = " and checked after a move" if (card.get("data") or {}).get("fingerprint") else ""
+            abilities.append(("Keeps it safe", f"{len(kept)} volume{'s' if len(kept) != 1 else ''} of your data, backed up{checked}."))
+        secrets = card.get("secrets") or {}
+        if any((v or {}).get("kind") in ("internal", "shared") for v in secrets.values()):
+            abilities.append(("Keeps secrets", "Its passwords are made on your machine, seen by nobody."))
+        icons = {"Open door": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+                 "Members only": '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+                 "Key holders": '<circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v3"/>',
+                 "Two doors": '<rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/>',
+                 "Keeps it safe": '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+                 "Keeps secrets": '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'}
+        ab_html = "".join(
+            f'<li><span class="tc-ab-icon" aria-hidden="true"><svg viewBox="0 0 24 24">{icons.get(t, icons["Open door"])}</svg></span>'
+            f'<span><strong>{esc(t)}</strong> {esc(d)}</span></li>' for t, d in abilities[:3])
+
+        places = card.get("places") or {}
+        stats = ""
+        if places:
+            mems = [m for m in (memory_mb(p.get("memory")) for p in places.values()) if m is not None]
+            disks = [m for m in (memory_mb(p.get("disk")) for p in places.values()) if m is not None]
+            gb = lambda mb: (f"{mb / 1024:g} GB" if mb >= 1024 else f"{mb:g} MB")
+            archs = set.intersection(*[set(p.get("arch") or []) for p in places.values()]) if places else set()
+            native = next((p.get("native") for p in places.values() if p.get("native")), "")
+            runs = "Mac" if native == "macos" else " · ".join(w for a, w in (("amd64", "Intel"), ("arm64", "ARM")) if a in archs) or "?"
+            cells = []
+            if mems:
+                cells.append(("Memory" if len(places) == 1 else f"Memory, {len(places)} places", gb(max(mems))))
+            if disks:
+                cells.append(("Disk", gb(max(disks))))
+            cells.append(("Runs on", runs))
+            stats = '<dl class="tc-stats">' + "".join(f"<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>" for k, v in cells) + "</dl>"
+
+        who = c.get("steward")
+        steward = f"Stewarded by {esc(who)}" if who else "No steward yet"
+        lic = f" · {esc(c['license'])}" if c.get("license") else ""
+        n, total = self.card_number(name)
+        return f"""<article class="tc{' tc-failing' if failing(st) else ''}">
+<div class="tc-inner">
+<div class="tc-head"><div><span class="tc-kind">{esc(kind)}</span><h1>{esc(name)}</h1></div>{fit}</div>
+<div class="tc-art">{self.icon(c, "../", 72)}</div>
+<p class="tc-banner">{banner}</p>
+{f'<ul class="tc-abilities">{ab_html}</ul>' if ab_html else ''}
+<p class="tc-flavor">{esc(c["description"])}</p>
+{stats}
+<p class="tc-foot"><span>{steward}{lic}</span><span class="tc-set"><span class="tc-set-mark" aria-hidden="true"></span>Edgible cards {n}/{total}</span></p>
+</div>
+</article>"""
+
     def card_page(self, c: dict) -> None:
         name, card = c["name"], c["card"]
         st = self.status.get(name)
@@ -849,10 +939,13 @@ class Site:
         if native:
             kind += f", runs natively on {NATIVE_WORDS.get(native, native)}"
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {esc(name)}</p>
-<h1 class="with-icon">{self.icon(c, "../", 56)}<span>{esc(name)}</span></h1>
-<p class="lead">{esc(c["description"])}</p>
-{deprecated_banner(c)}{failing_banner(name, st)}<p class="meta"><span class="kind">{kind}</span>{status_pill(st)}{fit_pill(c["fit"])}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
+{deprecated_banner(c)}{failing_banner(name, st)}<div class="card-hero">
+{self.trading_card(c, st, kind)}
+<div class="card-hero-side">
+<p class="meta">{status_pill(st)}{added_html(c)}{license_html(c)}{lifecycle_html(c)}{steward_html(c)}{homepage_html(c)}<a href="{REPO_URL}/tree/main/{esc(name)}">Source on GitHub</a></p>
 {picture}
+</div>
+</div>
 <h2>Apps</h2>
 <div class="scroll"><table><thead><tr><th>App</th><th>What</th><th>Who can reach it</th><th>Place</th></tr></thead><tbody>{rows}</tbody></table></div>
 <h2>Machine</h2>
@@ -1254,6 +1347,38 @@ nav.chapters a{flex:1 1 240px;display:block;padding:16px 20px;border:1px solid v
 nav.chapters a:hover{border-color:var(--navy-mid)}
 nav.chapters a span{display:block;font-size:.85rem;font-weight:500;color:var(--muted);margin-bottom:4px}
 nav.chapters a.next{text-align:right;margin-left:auto}
+/* A card's page opens with the card drawn as a trading card, in Edgible's colours: a navy frame,
+a yellow edge, the icon in an art window, abilities, a stats bar and its place in the set. It keeps its
+light face in dark mode, as a printed card would. The page's tables follow, in full. */
+.card-hero{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:32px;align-items:start;margin:16px 0 8px}
+@media (max-width:760px){.card-hero{grid-template-columns:minmax(0,1fr)}.tc{max-width:380px}}
+.card-hero-side .meta{flex-direction:column;align-items:flex-start;gap:8px;margin-top:0}
+.card-hero-side .card-image{margin-top:16px}
+.tc{background:#000033;border-radius:20px;padding:10px;box-shadow:0 10px 28px rgba(0,0,51,.22);color:#000033}
+.tc-inner{background:#fbfaf5;border:2px solid #ffd21f;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.tc-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tc-kind{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#2e4a9e}
+.tc h1{margin:0;font-size:1.65rem;font-weight:700;line-height:1.1;color:#000033;overflow-wrap:anywhere}
+.tc-fit{display:inline-flex;align-items:center;gap:6px;background:#000033;color:#fff;border-radius:999px;padding:4px 12px 4px 6px;font-size:.85rem;font-weight:600;white-space:nowrap}
+.tc-fit .ring{color:#ffd21f}
+.tc-art{height:140px;border-radius:10px;border:2px solid #000033;background:#2e4a9e radial-gradient(circle at 50% 50%,transparent 38px,rgba(255,255,255,.08) 39px,transparent 40px,transparent 60px,rgba(255,255,255,.08) 61px,transparent 62px,transparent 82px,rgba(255,255,255,.08) 83px,transparent 84px,transparent 104px,rgba(255,255,255,.08) 105px,transparent 106px);display:flex;align-items:center;justify-content:center}
+.tc-art .icon{width:88px;height:88px;padding:12px;box-sizing:border-box;background:#fff;border-radius:20px;object-fit:contain}
+.tc-art .icon.placeholder{background:#000033 url("assets/images/edgible-symbol-white.png") center/58% no-repeat}
+.tc-banner{margin:0;background:#000033;color:#fff;border-radius:6px;padding:4px 10px;font-size:.78rem;font-weight:500;text-align:center}
+.tc-abilities{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:.85rem;line-height:1.35;color:#4a4f66}
+.tc-abilities li{display:flex;gap:10px;align-items:flex-start}
+.tc-abilities strong{display:block;color:#000033;font-weight:600;font-size:.9rem}
+.tc-ab-icon{flex:none;width:26px;height:26px;border-radius:50%;background:#ffd21f;display:inline-flex;align-items:center;justify-content:center}
+.tc-ab-icon svg{width:15px;height:15px;fill:none;stroke:#000033;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.tc-flavor{margin:0;font-size:.85rem;font-style:italic;line-height:1.45;color:#4a4f66}
+.tc-stats{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));border:2px solid #000033;border-radius:8px;overflow:hidden}
+.tc-stats div{padding:6px 8px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.tc-stats div+div{border-left:1px solid #d6dae6}
+.tc-stats dt{font-size:.7rem;color:#4a4f66}.tc-stats dd{margin:0;font-weight:600;font-size:.95rem}
+.tc-foot{margin:0;display:flex;justify-content:space-between;gap:8px;font-size:.72rem;color:#4a4f66}
+.tc-set{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.tc-set-mark{width:10px;height:10px;border-radius:2.5px;background:#000033}
+.tc-failing{filter:grayscale(.7);opacity:.75}
 .by-hand{margin:32px 0 0;padding:10px 14px;border-left:4px solid var(--navy-mid);background:var(--panel);border-radius:0 8px 8px 0;color:var(--muted)}
 .md-source{color:var(--muted);font-size:.9rem;margin-top:32px}
 .paths{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:28px 0 8px}
