@@ -469,7 +469,7 @@ class Site:
 <header class="top"><div class="wrap">
 <a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
-<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}#app-cards">Apps</a><a href="{up}#pattern-cards">Patterns</a><a href="{up}needs/">Needs</a><a href="{up}add-your-app/">Add your app</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}needs/">Needs</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
