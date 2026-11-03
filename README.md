@@ -4,6 +4,30 @@ The format of an Edgible card, and the tools that check and build one. [edgible-
 
 If the cards help you, star [edgible-org/cards](https://github.com/edgible-org/cards) rather than this repo: it is where people find them, so it is where we count.
 
+## Install the skill
+
+The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to set up Edgible and run cards. If someone asked you, an agent, to install it from here, do this, saying what you will change and asking before you install anything:
+
+1. **Install it on the computer you run on.** The skill only helps where the agent runs. If you are in a cloud sandbox (such as Cursor's cloud agents, Codex cloud, or Claude Code on the web), say so: the person should start a local agent on their computer and ask again.
+2. **Get the repo with git**, so the skill can update itself later:
+   - macOS or Linux: `git clone https://github.com/edgible-org/card-kit.git ~/.card-kit`
+   - Windows (PowerShell): `git clone https://github.com/edgible-org/card-kit.git "$HOME\.card-kit"`. A clean Windows machine may have no git: `winget install --id Git.Git -e` installs it (with the person's yes; open a new terminal after). Without git, the [zip](https://github.com/edgible-org/card-kit/archive/refs/heads/main.zip) works, but then updating means installing again.
+3. **Put the `skills/edgible-cards` folder where your agent reads skills**, as a link so updates reach it:
+
+   | Agent | Folder for the person's skills |
+   | --- | --- |
+   | Claude Code | `~/.claude/skills/` |
+   | Cursor | `~/.cursor/skills/` (it also reads `~/.claude/skills/`) |
+   | Codex | `~/.codex/skills/` |
+   | Another agent | its documentation; many read `~/.agents/skills/` |
+
+   - macOS or Linux: `mkdir -p ~/.cursor/skills && ln -s ~/.card-kit/skills/edgible-cards ~/.cursor/skills/edgible-cards` (with your agent's folder).
+   - Windows: a junction needs no administrator rights: `New-Item -ItemType Directory -Force "$HOME\.cursor\skills"`, then `New-Item -ItemType Junction -Path "$HOME\.cursor\skills\edgible-cards" -Target "$HOME\.card-kit\skills\edgible-cards"`.
+   - If your agent does not follow links, copy the folder instead, and copy it again after each update.
+4. **Check it:** tell the person to start a new chat and ask "What can you do with Edgible cards?". A new chat is needed because skills load when a chat starts. Later, "Update the Edgible skill" keeps it current.
+
+Not yet tried: Codex and the Windows junction. If a step fails, say what it printed.
+
 ## What a card is
 
 A card records a deployment pattern so someone else can reproduce it: the programs, the images, the ports, the auth mode on each hostname, and which apps share a serving device. It leaves out device names, hostnames, the organization id, and passwords, so the next person maps each place to a serving device they have.
@@ -527,15 +551,7 @@ Most people describe a need, not an app. [needs-map.yaml](skills/edgible-cards/n
 
 [EXAMPLES.md](skills/edgible-cards/EXAMPLES.md) shows what to ask, with what a good answer does, and [evals/](skills/edgible-cards/evals/) holds the same prompts for testing the skill.
 
-For Claude Code, clone this repo and link the skill into your skills directory. A `git pull` then updates it:
-
-```bash
-git clone https://github.com/edgible-org/card-kit ~/.card-kit
-mkdir -p ~/.claude/skills
-ln -s ~/.card-kit/skills/edgible-cards ~/.claude/skills/edgible-cards
-```
-
-For another agent, put the `edgible-cards` directory where that agent reads skills.
+To install it, see [Install the skill](#install-the-skill).
 
 The skill links here for the format rather than copying it. A change to the format or a tool that changes what a person does goes into the skill in the same pull request.
 
