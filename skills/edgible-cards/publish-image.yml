@@ -6,9 +6,10 @@
 # publishes ghcr.io/<owner>/<repo>:1.0.0 and :1.0. It needs no secrets: GitHub's own token can
 # publish to the repository owner's namespace.
 #
-# The first time, the image is private. Make it public once: on GitHub, open the repository's
-# Packages, the package, Package settings, Change visibility, Public. A public image cannot be
-# made private again. An Edgible card needs it public, so anyone can pull it.
+# An Edgible card needs the image public, so anyone can pull it. Published from a public
+# repository, it is public already. If it is private (from a private repository, say), make it
+# public on GitHub: the repository's Packages, the package, Package settings, Change visibility,
+# Public. A public image cannot be made private again.
 #
 # The Dockerfile is expected at the repository's root; change `context` and add `file:` below if
 # it lives elsewhere. From edgible-org/card-kit (skills/edgible-cards/publish-image.yml).
