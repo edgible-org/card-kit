@@ -701,7 +701,7 @@ class Site:
         for stem, (meta, body, text) in chapters.items():
             index = stem == "index"
             here = "" if index else "../"
-            page = render(body)
+            page = render(self.inline_pictures(body, src))
             # A link to this site, such as a card's page, stays on it.
             page = page.replace('href="https://cards.edgible.org/', f'href="{here}../')
             page = re.sub(r"<h([23])((?:(?!\bid=)[^>])*)>(.*?)</h\1>", heading_id, page, flags=re.S)
@@ -770,6 +770,18 @@ class Site:
                   "The sources Edgible looks at when choosing apps for cards, what an app needs to qualify, and the apps looked at that are not cards yet.",
                   body)
 
+    def inline_pictures(self, text: str, base: Path) -> str:
+        """A picture in the repo on a line of its own, such as ![The cards loop](about/loop.svg), is
+        drawn into the page itself, so it takes the site's fonts and dark mode; GitHub shows it as an
+        image. base is the folder the Markdown is in."""
+        def inline(m: re.Match) -> str:
+            svg = (base / m.group(2)).resolve()
+            if svg.suffix != ".svg" or not svg.is_file() or not svg.is_relative_to(self.root.resolve()):
+                return m.group(0)
+            body = "\n".join(line for line in svg.read_text().splitlines() if line.strip())
+            return f'<figure class="art">{body}</figure>'
+        return re.sub(r"^!\[([^\]]*)\]\(([^)\s]+)\)[ \t]*$", inline, text, flags=re.M)
+
     def md_page(self, source: str, path: str, fallback: str, title_tag: str, description: str) -> None:
         """A page from a Markdown file at the root of the cards repo, such as ABOUT.md."""
         f = self.root / source
@@ -777,15 +789,7 @@ class Site:
             return
         text = f.read_text()
 
-        # A picture in the repo, such as ![The cards loop](about/loop.svg), is drawn into the
-        # page itself, so it takes the site's fonts and dark mode; GitHub shows it as an image.
-        def inline(m: re.Match) -> str:
-            svg = self.root / m.group(2)
-            if svg.suffix != ".svg" or not svg.is_file() or not svg.resolve().is_relative_to(self.root.resolve()):
-                return m.group(0)
-            body = "\n".join(line for line in svg.read_text().splitlines() if line.strip())
-            return f'<figure class="art">{body}</figure>'
-        text = re.sub(r"^!\[([^\]]*)\]\(([^)\s]+)\)\s*$", inline, text, flags=re.M)
+        text = self.inline_pictures(text, self.root)
         m = re.match(r"\A# ([^\n]*)\n", text)
         title = m.group(1) if m else fallback
         body = f"""<p class="crumbs"><a href="../">Cards</a> / {path}</p>
@@ -892,6 +896,9 @@ class Site:
             # The repo's own pages, such as ABOUT.md, have a page here.
             elif rel.as_posix() in SITE_PAGES:
                 new = f"../{SITE_PAGES[rel.as_posix()]}/" + (f"#{frag}" if frag else "")
+            # A playbook chapter, such as playbooks/edgible-for-contributors.md, has a page here too.
+            elif len(parts) == 2 and parts[0] == "playbooks" and rel.suffix == ".md" and rel.name != "README.md":
+                new = "../playbooks/" + ("" if rel.stem == "index" else f"{rel.stem}/") + (f"#{frag}" if frag else "")
             else:
                 kind = "tree" if target.is_dir() else "blob"
                 new = f"{REPO_URL}/{kind}/main/{rel.as_posix()}" + (f"#{frag}" if frag else "")
