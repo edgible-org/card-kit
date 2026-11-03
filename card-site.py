@@ -864,6 +864,7 @@ class Site:
 {fit_section(c["fit"])}
 {upstream_section(UPSTREAM.for_card(self.upstream, name))}
 {needs_html}
+<p class="by-hand">Setting it up by hand? Install Edgible from <a href="https://edgible.com/">edgible.com</a>, then follow the steps below.</p>
 <article class="readme">
 {self.readme_html(c)}
 </article>
@@ -1253,6 +1254,7 @@ nav.chapters a{flex:1 1 240px;display:block;padding:16px 20px;border:1px solid v
 nav.chapters a:hover{border-color:var(--navy-mid)}
 nav.chapters a span{display:block;font-size:.85rem;font-weight:500;color:var(--muted);margin-bottom:4px}
 nav.chapters a.next{text-align:right;margin-left:auto}
+.by-hand{margin:32px 0 0;padding:10px 14px;border-left:4px solid var(--navy-mid);background:var(--panel);border-radius:0 8px 8px 0;color:var(--muted)}
 .md-source{color:var(--muted);font-size:.9rem;margin-top:32px}
 .paths{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:28px 0 8px}
 .path{display:block;padding:20px 22px 18px;border:1.5px solid var(--edge);border-radius:12px;background:var(--panel);color:var(--ink);text-decoration:none}
