@@ -221,6 +221,7 @@ The person's version of these steps is the [Get Edgible running](https://cards.e
 
    It takes under a minute and ends with `Agent is online`. Use `--yes`: `--non-interactive`, in older guides, is deprecated. A machine that was a device before reconnects to it, apps included. `edgible install --help` lists the choices for that, such as `--device` and `--new-device`.
 6. **Check:** `edgible agent status` shows it running and online, and `edgible device list` shows the device `online`. Then [Keep it running](#keep-it-running) applies to it too.
+7. **What next, in their terms.** When setup was the whole request, don't end on "tell me what app you want to run": most people don't know app names. Say in a line what they now have (this computer can run apps that they and others reach on the web), then ask what they would like it to do, with three or four everyday examples drawn from the [needs map](needs-map.yaml) and what you know of them, such as a website, a shared family calendar, passwords for the household, or a wiki for notes. Add that naming an app they already know works too. If the machine is not always-on, say once that it suits trying things out, before they pick something others will rely on.
 
 ### Which host?
 
