@@ -45,6 +45,6 @@ A tool counts as **tested** when prompts 1 to 7 pass with no stepping in. Fixes 
 | 2026-11-03 | Cursor (local agent), Grok 4.7 | Old Windows laptop, WSL2 | 1–6 pass after skill fixes; 7 not yet run | subscription | Cloud agent first ran on Cursor's server; skill fixes card-kit #193–#200. App: Memos. |
 | | Codex | Mac | to do | | |
 | | OpenCode, hosted open model (DeepSeek or Qwen 3.x) | | to do | | |
-| | OpenCode, local Qwen 3.x on a GPU machine | | to do | The model can run on another machine, published with Edgible (the "A private model for your agent" playbook). |
+| | OpenCode, local Qwen 3.x on a GPU machine | | to do | | The model can run on another machine, published with Edgible (the "A private model for your agent" playbook). |
 | | GitHub Copilot in VS Code (agent mode) | Windows | to do | | |
 | | Gemini CLI | Linux or Raspberry Pi | to do | | |
