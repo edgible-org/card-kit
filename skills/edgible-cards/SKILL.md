@@ -42,6 +42,8 @@ This skill changes often, as cards are tested and agents tried. Check it is curr
 3. **Update with their yes:** `git -C <repo> pull --ff-only`. If the folder is not a git repository (some agents copy a skill rather than link it), or the pull does not fast-forward, say so and offer to install it again from a fresh `git clone https://github.com/edgible-org/card-kit.git`, linked where this agent reads skills. Never discard local changes to do it.
 4. **Then say to start a new chat.** This conversation still works from the text you loaded before the update; the new version applies in a fresh one. For a check at the start of a task, finish the task on this version unless a change in the log bears on it.
 
+**Which version.** The skill's version is its last commit: `git -C <repo> log -1 --format='%h %cs'`. Say it as a date and the short hash, such as "the version from 3 November 2026 (a1b2c3d)", when the person asks which version they have and after an update. A copy that is not a git repository has no version to show: say so.
+
 With no shell on the person's machine, give them the commands for steps 2 and 3 instead.
 
 ## Edgible's MCP servers
