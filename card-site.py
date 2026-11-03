@@ -106,7 +106,7 @@ DRIVER_WORDS = {
     "local": "it has to run at home",
 }
 SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible", "ADD-YOUR-APP.md": "add-your-app"}
-RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "playbooks", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "404.html", "index.html"}
+RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "playbooks", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "stats.json", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -572,11 +572,22 @@ class Site:
                 f'<strong>{esc(c["name"])}</strong></a>'
                 f'<span>{esc(c["description"])}</span>{pills}{lifecycle_html(c)}</li>')
 
+    def stats(self, apps: list, patterns: list, passing: int) -> None:
+        """stats.json: the homepage's numbers, for other sites to show (edgible.ai's Proof page reads
+        it from the site branch on GitHub, which any page may fetch)."""
+        runs = [self.status[c] for c in self.cards if c in self.status]
+        (self.out / "stats.json").write_text(json.dumps({
+            "cards": len(apps) + len(patterns), "apps": len(apps), "patterns": len(patterns),
+            "tested": len(runs), "passing": passing,
+            "last_run": max((r.get("tested") or "" for r in runs), default="") or None,
+        }, indent=1) + "\n")
+
     def index(self) -> None:
         apps = [c for c in self.cards.values() if c["type"] == "app"]
         patterns = [c for c in self.cards.values() if c["type"] != "app"]
         tested = sum(1 for c in self.cards if self.status.get(c, {}).get("result") == "pass")
         recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
+        self.stats(apps, patterns, tested)
         recent_html = (" &middot; New: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3])) if recent else ""
         body = f"""<section class="hero">
 <h1>Self-hosted setups you can copy or share</h1>
