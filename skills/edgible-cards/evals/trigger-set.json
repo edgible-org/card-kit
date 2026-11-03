@@ -134,5 +134,9 @@
   {
     "query": "My app's repo has a .env with my Stripe key and an admin password in it. I want to turn it into a card and share it. Is that fine?",
     "should_trigger": true
+  },
+  {
+    "query": "Set up Edgible on this computer so I can run my own apps.",
+    "should_trigger": true
   }
 ]
