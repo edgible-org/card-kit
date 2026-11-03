@@ -8,4 +8,5 @@ FROM python:3.12-slim
 RUN pip install --no-cache-dir \
     pyyaml==6.0.3 \
     jsonschema==4.26.0 \
-    markdown==3.7
+    markdown==3.7 \
+    markdown-it-py==3.0.0
