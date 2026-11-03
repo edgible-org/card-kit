@@ -467,9 +467,9 @@ class Site:
 {head}</head>
 <body>
 <header class="top"><div class="wrap">
-<a class="brand" href="{up}"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"><span>Cards</span></a>
+<div class="brand"><a class="brand-logo" href="https://www.edgible.ai" target="_self"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"></a><a class="brand-cards" href="{up}">Cards</a></div>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
-<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">With AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}needs/">Needs</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
+<nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">Using AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}needs/">Needs</a><a href="{up}sources/">Sources</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
 <main class="wrap">
 {body}
@@ -479,7 +479,7 @@ class Site:
 <div class="wrap foot">
 <div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
 <div class="foot-right">
-<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">With AI</a> &middot; <a href="{up}playbooks/">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
+<div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">Using AI</a> &middot; <a href="{up}playbooks/">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
 </div>
 </div>
@@ -1104,7 +1104,7 @@ a.ext::after{content:"";display:inline-block;width:.7em;height:.7em;margin-left:
 .top .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
 .brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;font-size:20px;font-weight:500;letter-spacing:.02em}
 .brand img{height:24px;width:auto;display:block}
-.brand span{border-left:1px solid rgba(255,255,255,.4);padding-left:12px}
+.brand a{color:#fff;text-decoration:none;display:block}.brand-cards{border-left:1px solid rgba(255,255,255,.4);padding-left:12px}
 nav{display:flex;flex-wrap:wrap;gap:18px;align-items:center}nav a{text-decoration:none;color:rgba(255,255,255,.85)}nav a:hover{color:#fff}
 nav a.star{border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:1px 12px;color:#fff}nav a.star:hover{background:rgba(255,255,255,.12)}
 .star-ask{color:var(--muted)}
