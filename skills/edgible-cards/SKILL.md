@@ -21,6 +21,17 @@ Check this first, because it decides how you act on anything below.
 
 Say which of these you are working in when it changes what the person has to do.
 
+### Keep this skill current
+
+This skill changes often, as cards are tested and agents tried. Check it is current when the person asks ("update the Edgible skill"), at the start of [Set up Edgible](#set-up-edgible), and when a command or its output does not match what this skill says. It works the same in any agent with a shell:
+
+1. **Find the copy you loaded.** Take the folder this `SKILL.md` was read from, follow links to the real folder (`realpath`; `readlink -f` on Linux), and find its repository with `git -C <folder> rev-parse --show-toplevel`, usually `~/.card-kit`. On Windows it may be in WSL or on the Windows side: use the path you read it from.
+2. **Check, changing nothing.** `git -C <repo> fetch -q`, then `git -C <repo> rev-list --count HEAD..@{u}`. If it is behind, say how far and what changed, one line each, from `git -C <repo> log --oneline --no-merges HEAD..@{u}`. If it is current, say so in a few words and carry on.
+3. **Update with their yes:** `git -C <repo> pull --ff-only`. If the folder is not a git repository (some agents copy a skill rather than link it), or the pull does not fast-forward, say so and offer to install it again from a fresh `git clone https://github.com/edgible-org/card-kit.git`, linked where this agent reads skills. Never discard local changes to do it.
+4. **Then say to start a new chat.** This conversation still works from the text you loaded before the update; the new version applies in a fresh one. For a check at the start of a task, finish the task on this version unless a change in the log bears on it.
+
+With no shell on the person's machine, give them the commands for steps 2 and 3 instead.
+
 ## Edgible's MCP servers
 
 Edgible has MCP servers, so an AI app can see and look after a person's Edgible apps itself. Answer "does Edgible have an MCP?" or "can I use Edgible from Claude, or Cursor?" with this:
@@ -163,7 +174,7 @@ Before anything starts, put the card's open choices to the person in one message
 
 ## Set up Edgible
 
-The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. When both are there, skip to [Deploy](#3-deploy).
+Check this skill is current first ([Keep this skill current](#keep-this-skill-current)). The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. When both are there, skip to [Deploy](#3-deploy).
 
 **First, say what the machine really is.** A Linux shell may be WSL on a Windows computer: `grep -qi microsoft /proc/version` succeeds there. Then the person has a Windows laptop or PC, not an Ubuntu machine, and the Windows facts decide the advice. Before recommending anything, read them without changing anything, and say them in a sentence ("This is Windows 11 Pro; your AI tool's terminal is in Ubuntu 24.04 under WSL2"):
 - Windows edition and version: `powershell.exe -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).Caption"`, and the build with `cmd.exe /c ver`.
