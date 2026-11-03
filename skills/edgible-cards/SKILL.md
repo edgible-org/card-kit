@@ -165,6 +165,13 @@ Before anything starts, put the card's open choices to the person in one message
 
 The machine that runs a card needs the `edgible` CLI, logged in, and the machine set up as a serving device. Check first: `edgible whoami` says whether the CLI is logged in, and `edgible device list` marks this machine with `"isThisMachine": true` when it is a device. When both are there, skip to [Deploy](#3-deploy).
 
+**First, say what the machine really is.** A Linux shell may be WSL on a Windows computer: `grep -qi microsoft /proc/version` succeeds there. Then the person has a Windows laptop or PC, not an Ubuntu machine, and the Windows facts decide the advice. Before recommending anything, read them without changing anything, and say them in a sentence ("This is Windows 11 Pro; your AI tool's terminal is in Ubuntu 24.04 under WSL2"):
+- Windows edition and version: `powershell.exe -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).Caption"`, and the build with `cmd.exe /c ver`.
+- The distros: `wsl.exe -l -v | tr -d '\0'` (its output is UTF-16), and this one's release from `/etc/os-release`.
+- Docker Desktop or another distro already running Docker, which shares WSL's network (see [WSL2 on Windows](#wsl2-on-windows)).
+
+What was tested is a fresh Ubuntu 26.04 distro set up for Edgible. A distro the person already uses, or Ubuntu 24.04 in WSL, has not been tried: say so, and offer a new Ubuntu 26.04 distro beside it (`wsl.exe --install -d <name>`, with the name from `wsl.exe --list --online`; it needs their yes, and the first WSL install can need a restart), or a VM as in [Make a machine](#make-a-machine). Use their existing distro only if they choose it. The same holds the other way round: a PowerShell or Command Prompt shell on Windows means following [WSL2 on Windows](#wsl2-on-windows) from Windows, not installing Edgible there.
+
 The person's version of these steps is the [Get Edgible running](https://cards.edgible.org/playbooks/get-edgible-running/) playbook chapter. Ask before each step that uses `sudo`, and say what it installs.
 
 1. **An account, first.** Ask: "Do you already have an Edgible account?" Nothing else in this section works without one, and the login in step 4 only approves an account that exists, so settle this before installing anything. If not, the person signs up at [www.edgible.com](https://www.edgible.com) in their own browser (free during the beta, no credit card) and creates an organisation there. The console is [app.prod.edgible.com](https://app.prod.edgible.com/). Wait until they say it is done. If they have more than one Edgible account, ask which one this machine is for. Never ask for their password.
@@ -202,7 +209,7 @@ Say what has been tried, so the person picks with their eyes open. Edgible has b
 | **Ubuntu 24.04 or 26.04 in a virtual machine** (Multipass; VirtualBox or Hyper-V on Windows) | Tested | Isolated and easy to delete. Runs only while the computer is on and awake, and needs a task to start it after a restart. |
 | **macOS** | Tested | Docker Desktop for container cards. Keep it from sleeping if the app must stay up. |
 | **Windows with WSL2 and Ubuntu 26.04** | Tested; recommended on Windows | No extra tools, and lighter than a VM. The distro stops 15 to 25 seconds after its last session ends, so it needs a keep-alive task; see [WSL2 on Windows](#wsl2-on-windows). Shares one network and one memory cap with every other distro. |
-| **Other Linux** (Debian, Fedora, and so on), **Windows Home or 10 with WSL2**, **WSL1** | Not tried | May work. Say it has not been tried, and be ready to read the errors. |
+| **Other Linux** (Debian, Fedora, and so on), **Ubuntu 24.04 or an existing distro in WSL2**, **Windows Home or 10 with WSL2**, **WSL1** | Not tried | May work. Say it has not been tried, and be ready to read the errors. |
 
 **Native (macOS, or WSL2) or a virtual machine?** Native means Edgible and Docker run on the person's own system; a VM puts them in a separate Ubuntu. Plus and minus:
 
