@@ -14,6 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { UI_MIME, WHATS_RUNNING_HTML, WHATS_RUNNING_URI } from './views.mjs';
 
 const CATALOG_TTL = Number(process.env.EDGIBLE_MCP_CATALOG_TTL || 900) * 1000;
 const CACHE_DIR = process.env.EDGIBLE_MCP_CACHE_DIR || path.join(process.env.XDG_CACHE_HOME || path.join(homedir(), '.cache'), 'edgible-mcp');
@@ -448,6 +449,14 @@ async function whatsRunning({ app, device }) {
   const by = process.env.EDGIBLE_MCP_DEVICE ? `, answered by the Edgible connector on ${process.env.EDGIBLE_MCP_DEVICE}` : '';
   const out = [`# Apps in ${who.organization?.name} (signed in as ${who.account}${by})`, ''];
   const devs = running.devices.filter((d) => !device || d.name === device || d.id === device);
+  // The same answer as data, for the MCP Apps view (structuredContent); the text stays complete.
+  const view = {
+    organization: who.organization?.name || null, account: who.account || null,
+    connector: process.env.EDGIBLE_MCP_DEVICE || null, checkedAt: new Date().toISOString(),
+    filter: { ...(app ? { app } : {}), ...(device ? { device } : {}) },
+    devices: devs.map((d) => ({ name: d.name, status: d.status, agentVersion: d.agentVersion || null })),
+    apps: [], system: app ? 0 : system.length,
+  };
   out.push('## Devices', '', devs.map((d) => `- ${d.name}: ${d.status}${d.agentVersion ? `, agent ${d.agentVersion}` : ''}`).join('\n') || '- none', '');
   out.push('## Apps', '', '| App | Device | Port | Auth | Status | Works | Evidence |', '| --- | --- | --- | --- | --- | --- | --- |');
   for (const { a, modes, probes, certs, issues } of rows) {
@@ -463,6 +472,10 @@ async function whatsRunning({ app, device }) {
       ...(offline ? ['its device is offline'] : []),
       ...(a.protocol !== 'https' ? [`${a.protocol}, ${(a.hostnames || []).join(', ')}`] : []),
     ].join('; ');
+    view.apps.push({
+      name: a.name, device: devName, port: a.port, protocol: a.protocol, hostnames: a.hostnames || [],
+      auth: a.protocol !== 'https' ? ['none'] : modes, status: a.status, works, deviceOffline: offline, evidence,
+    });
     out.push(`| ${a.name} | ${devName} | ${a.port} | ${a.protocol !== 'https' ? `none (${a.protocol})` : modes.join(', ') || '?'} | ${a.status} | ${works} | ${evidence} |`);
   }
   if (system.length && !app) out.push('', `Also ${system.length} Edgible device-ingest apps, which Edgible runs for each device. They are not listed.`);
@@ -483,12 +496,12 @@ async function whatsRunning({ app, device }) {
     }
   }
   out.push('', 'Works means each hostname answered, with no credentials, the way its auth mode says. It does not prove the app does its job: check that end to end, such as signing in.');
-  return out.join('\n');
+  return { text: out.join('\n'), view };
 }
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.23';
+export const VERSION = '0.7.24';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
@@ -534,7 +547,22 @@ export function registerReadTools(server) {
       device: z.string().max(128).optional().describe('Only apps on this device name or id'),
     },
     annotations: { ...ro, openWorldHint: true },
-  }, text(whatsRunning));
+    // MCP Apps: hosts that support it show the view below beside the text answer.
+    _meta: { ui: { resourceUri: WHATS_RUNNING_URI } },
+  }, async (args) => {
+    try {
+      const r = await whatsRunning(args);
+      if (typeof r === 'string') return { content: [{ type: 'text', text: r }] };
+      return { content: [{ type: 'text', text: r.text }], structuredContent: r.view };
+    } catch (err) {
+      return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
+    }
+  });
+  server.registerResource('whats-running-view', WHATS_RUNNING_URI, {
+    title: 'What is running',
+    description: 'A panel of the apps and devices whats_running found, for hosts that support MCP Apps.',
+    mimeType: UI_MIME,
+  }, async () => ({ contents: [{ uri: WHATS_RUNNING_URI, mimeType: UI_MIME, text: WHATS_RUNNING_HTML }] }));
   return server;
 }
 
