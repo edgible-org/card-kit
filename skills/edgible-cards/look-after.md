@@ -24,6 +24,8 @@ The path `docker compose ls` prints leads to the card's directory, and `metadata
 
 Answer with a short table: each card, its directory, its apps with hostname and auth mode, and whether each is up.
 
+Then offer the picture: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing. Give its `file://` address from the last line it prints as a link too: some AI apps (the Codex app) open a link in a browser panel of their own, beside the chat. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
+
 ### Is it working
 
 To prove an app works, show evidence from each layer:
