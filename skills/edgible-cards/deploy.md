@@ -83,7 +83,7 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 Tell the person, briefly:
 
-- what runs where, with each hostname and its auth mode;
+- what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
 - how to sign in the first time: the admin's username or email (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`), and the command that shows the password (`show`, or its `card.env` line);
 - whether the machine is always-on, as in [Is the machine always-on?](setup.md#is-the-machine-always-on), and what you changed for it;
 - what is still theirs to decide or do, such as changing the admin password;
