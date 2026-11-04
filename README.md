@@ -18,7 +18,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    | --- | --- |
    | Claude Code | `~/.claude/skills/` |
    | Cursor | `~/.cursor/skills/` (it also reads `~/.claude/skills/`) |
-   | Codex | `~/.codex/skills/` |
+   | Codex | `~/.codex/skills/`. Codex's built-in skill installer copies the folder rather than cloning it, so the skill cannot say its version or update itself: clone and link as above instead (a Mac without git needs Apple's Command Line Tools, `xcode-select --install`) |
    | OpenCode | `~/.config/opencode/skills/`. OpenCode may say it can't install skills: run these steps in a terminal yourself, then start OpenCode again |
    | Another agent | its documentation; many read `~/.agents/skills/` |
 
