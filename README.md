@@ -8,6 +8,8 @@ If the cards help you, star [edgible-org/cards](https://github.com/edgible-org/c
 
 The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to set up Edgible and run cards. If someone asked you, an agent, to install it from here, do this, saying what you will change and asking before you install anything:
 
+**Before you start**, for a person: the skill sets up Edgible, but a computer needs a few common tools first, and they are quicker to install before you ask than halfway through. On a **Mac**: Apple's Command Line Tools (`xcode-select --install`), [Homebrew](https://brew.sh), and Docker Desktop (`brew install --cask docker`; open it once, and leave "Start Docker Desktop when you sign in" on). On **Windows**: WSL2 with Ubuntu 26.04 (`wsl --install -d Ubuntu-26.04`). On **Linux**: Docker (`sudo apt-get install -y docker.io docker-compose-v2` on Ubuntu) and Node.js 20 or later. Most developers' machines already have them; on a clean one they take about 20 minutes. Your agent checks for each anyway and asks before installing it.
+
 1. **Install it on the computer you run on.** The skill only helps where the agent runs. If you are in a cloud sandbox (such as Cursor's cloud agents, Codex cloud, or Claude Code on the web), say so: the person should start a local agent on their computer and ask again.
 2. **Get the repo with git**, so the skill can update itself later:
    - macOS or Linux: `git clone https://github.com/edgible-org/card-kit.git ~/.card-kit`
@@ -18,7 +20,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    | --- | --- |
    | Claude Code | `~/.claude/skills/` |
    | Cursor | `~/.cursor/skills/` (it also reads `~/.claude/skills/`) |
-   | Codex | `~/.codex/skills/`. Codex's built-in skill installer copies the folder rather than cloning it, so the skill cannot say its version or update itself: clone and link as above instead (a Mac without git needs Apple's Command Line Tools, `xcode-select --install`) |
+   | Codex | `~/.codex/skills/`. Codex's built-in skill installer copies the folder rather than cloning it, so the skill cannot say its version or update itself: clone and link as above instead (a Mac without git needs Apple's Command Line Tools, `xcode-select --install`). If it already copied it, "Update the Edgible skill" swaps the copy for a link. On a Mac, Codex is in the ChatGPT desktop app: choose Codex from the menu at the top left, next to Home |
    | OpenCode | `~/.config/opencode/skills/`. OpenCode may say it can't install skills: run these steps in a terminal yourself, then start OpenCode again |
    | Another agent | its documentation; many read `~/.agents/skills/` |
 
@@ -27,7 +29,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    - If your agent does not follow links, copy the folder instead, and copy it again after each update.
 4. **Check it:** tell the person to start a new chat and ask "What can you do with Edgible cards?". A new chat is needed because skills load when a chat starts. Later, "Update the Edgible skill" keeps it current.
 
-Not yet tried: Codex and the Windows junction. If a step fails, say what it printed.
+Not yet tried: the Windows junction. If a step fails, say what it printed.
 
 ## What a card is
 

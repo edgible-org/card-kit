@@ -52,6 +52,8 @@ Before anything starts, put the card's open choices to the person in one message
 
 Follow the card's README **How** section exactly: Fetch, Edit `card.env`, Check, Start (and `prepare.sh` when the card has one), Publish. Notes:
 
+- **Fetch into a lasting folder**, such as `~/<card>` in the person's home folder, and say where it is. Never fetch into the AI tool's own folder for this chat (the Codex app's `~/Documents/Codex/<date>/…`, a scratch or temporary directory): upgrades, backups and moves all start from the card's folder, long after the chat is gone.
+
 - **Docker with Compose comes first.** Most cards run in Docker (a native card, such as `ollama-osx`, does not), and Edgible itself does not need it, so a machine that is online as a device may have none. Check `docker compose version` on the machine that will run the card. If it fails, say what you will install and ask before using `sudo`, then:
   - **Ubuntu:** `sudo apt-get install -y docker.io docker-compose-v2`, then `sudo systemctl enable --now docker`, so it starts at boot. Add the person's user to the `docker` group with `sudo usermod -aG docker "$USER"`: it applies to a new login, so in the same session run Docker as `sg docker -c '...'`, or with `sudo`. Tested on Ubuntu 26.04 (Docker 29.1, Compose 2.40). Do not pipe an installer script from the internet into a shell, and open no ports.
   - **macOS:** first check `sysctl -n kern.hv_support` prints `1`. Docker Desktop runs containers in a Linux VM of its own, and a Mac that is itself a VM (`0` here; `kern.hv_vmm_present` is `1`) cannot start one, so it would install and never run: say so before installing anything, and offer a Linux VM on the person's real computer instead ([Make a machine](setup.md#make-a-machine)), or a native card. Otherwise Docker Desktop (`brew install --cask docker`, with their yes). It needs opening once, to accept its terms; then see [Keep it running](setup.md#keep-it-running).
@@ -81,7 +83,7 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 Tell the person, briefly:
 
-- what runs where, with each hostname and its auth mode;
+- what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
 - how to sign in the first time: the admin's username or email (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`), and the command that shows the password (`show`, or its `card.env` line);
 - whether the machine is always-on, as in [Is the machine always-on?](setup.md#is-the-machine-always-on), and what you changed for it;
 - what is still theirs to decide or do, such as changing the admin password;
