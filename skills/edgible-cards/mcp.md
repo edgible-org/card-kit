@@ -1,0 +1,37 @@
+# Edgible and MCP
+
+Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first.
+
+## Work through Edgible's MCP tools
+
+Use them for what they cover. Prefer them over the matching commands: `find` and `describe` instead of listing and reading the repos in [Find](deploy.md#1-find), and `whats_running` for [What is running](look-after.md#what-is-running) and the Edgible layers of [Is it working](look-after.md#is-it-working). `edgible mcp`'s tools (`list_applications`, `get_application_status`, `get_application_logs`, and the rest) answer the same questions from Edgible's side, and its write tools change an app only after the person agrees, as the [Rules](SKILL.md#rules) say. When `deploy_card` returns `firstUse`, a password a person needs, such as the admin's, give it to them in that reply, once, and tell them to sign in and change it now: it is not shown again, and the card made every other secret on the device, where nobody sees it. A card that needs a key the person brings, such as a model's API key, takes it from an Edgible organisation secret: `list_keys` shows which are stored, and `deploy_card` takes one by reference in `keys`. Never ask for the key itself in the conversation; if it is not stored yet, call `request_key` for a one-time link where they paste it themselves (from their phone too), or tell them the `edgible secret set` command to run on a computer. A setting that names Edgible accounts, such as openclaw's `OPENCLAW_USERS`, takes the email the person signs in to Edgible with: `whoami` gives it, so never guess it from another address. Asked about AI spending: as an agent (your own spend, budget, what is left), call `agent_spend`; through the owner's connector (everything, by app and model), call `gateway_spend`. Neither needs a key from you, and never try to read one. An agent cannot see other apps' spending: don't offer it; say the owner sees every app, by model, by asking Claude (or whichever assistant has their connector) for their AI spending. Deploying the `litellm` card with `deploy_card` makes it the person's AI gateway, wired to this server; `gateway_check` then sends one tiny question through it and says which provider answered, how fast, and at what cost ("does my AI gateway work?"). For an app that should use the person's shared AI gateway, `gateway_key` makes its key with a budget and stores it as a secret; deploy the app with that key by reference and the gateway's address. An Edgible account holds a limited number of apps (20 during the public beta, across its organisations; each published address is one, and a pattern may publish several). A deploy that fails with `QUOTA_EXCEEDED` needs room: say so plainly, list the apps, and let the person choose what to remove; never guess another cause. When an Edgible tool says its server is not signed in, `sign_in` gives a link and code: pass them to the person to approve with their Edgible login, and never approve it for them. They read upstream `main` and the person's own Edgible account. They find cards; they do not decide whether self-hosting fits. Understand the need first, and use them for the options you then offer.
+
+## Edgible's MCP servers
+
+Edgible has MCP servers, so an AI app can see and look after a person's Edgible apps itself. Answer "does Edgible have an MCP?" or "can I use Edgible from Claude, or Cursor?" with this:
+
+- **`edgible mcp`**, in the Edgible CLI. Tools: who is signed in, the apps and devices, an app's status and logs, and a preview of a change. With `--allow-write`, it also applies changes and redeploys. It runs on the person's machine, signed in as their CLI. Start read-only, and add `--allow-write` once they trust it. `edgible mcp --help` lists the tools.
+- **edgible-mcp**, from card-kit: `find` and `describe` cards, and `whats_running`, which checks each app answers the way its auth mode says. Its [README](https://github.com/edgible-org/card-kit/tree/main/edgible-mcp) says how to run it.
+- **From anywhere:** Claude's web and phone apps take only remote connectors. See [Use an MCP server from Claude anywhere](#use-an-mcp-server-from-claude-anywhere).
+
+A local server needs the CLI installed and logged in on that machine first ([Set up Edgible](setup.md#set-up-edgible)). Then add it:
+
+- **Claude Code:** `claude mcp add edgible -- edgible mcp`.
+- **Claude's desktop app:** Settings, Developer, Edit Config. In `claude_desktop_config.json`, add `"edgible": {"command": "<path>", "args": ["mcp"]}` under `mcpServers`, where `<path>` is what `command -v edgible` prints: the app does not read the shell's `PATH`. Quit and reopen the app, and the tools appear in a chat's tools menu.
+- **Cursor:** the same entry in `~/.cursor/mcp.json`. Settings, MCP, lists its tools.
+- **Another app:** the command `edgible` with the argument `mcp`, as that app's docs say.
+
+**Offer it** when you work in an app that takes MCP servers (Claude's desktop app, Cursor, Claude Code) without Edgible MCP tools, and the person wants to know what is running, why something broke, or an app's status or logs: once, in a sentence, say that with `edgible mcp` added you could check these yourself instead of asking them to paste output. Do not offer it again if they decline, or in Claude's web or phone app, which cannot run it.
+
+## Use an MCP server from Claude anywhere
+
+Claude's web, desktop, and phone apps use a remote MCP server as a custom connector, which Claude's own servers call with no browser. So the server needs a public address and OAuth: a sign-in page alone (auth mode `org`) or an API key will not do. The [mcp-signin](https://github.com/edgible-org/cards/tree/main/mcp-signin) card is that OAuth, with Edgible doing the signing in. The same works for Edgible's own tools, as edgible-mcp behind mcp-signin.
+
+1. **The server.** One that speaks HTTP, or a stdio server through the `mcp-bridge` card. Start it, but do not publish it.
+2. **mcp-signin in front.** Point `MCP_UPSTREAM_URL` at the server, in the same Compose project (`http://<service>:<port>/mcp`). Publish both its addresses as its README says, and set `MCP_SIGNIN_USERS` when not every member of the organisation should get in.
+3. **The connector.** In Claude on the web or desktop: Settings, Connectors, Add custom connector, with `https://<mcp-signin hostname>/mcp` and the OAuth fields empty. That is the hostname of the app published on `none`, never the `-login` one, which is the sign-in page people see behind Edgible's sign-in: given that address, Claude cannot check or register with the connector ("Couldn't check the server", "Couldn't register"), and its authorize page says not found. When you finish setting one up, end with that one address, complete with `/mcp`, labelled as the address to paste. It appears on the phone too: the phone cannot add one.
+4. **Connect.** Edgible's sign-in, then a page asking to allow Claude: Allow. The connector lists the server's tools.
+
+Before setting up Edgible's own connector (the edgible-connector card), check whether the organisation already has one (`edgible app list`: an `mcp-signin` app beside an `edgible-mcp`): say so, and offer to keep using it before making a second.
+
+Never also publish the server behind mcp-signin: mcp-signin tells it who signed in, and it must hear that from nowhere else. A client that sends a header, such as Claude Code, needs no mcp-signin: publish the server on `api-key` instead, with one key per person.
