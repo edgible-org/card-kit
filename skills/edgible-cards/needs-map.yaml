@@ -486,7 +486,7 @@
     default: tcp or udp with no auth mode, and the game's whitelist on (the minecraft card)
     sensitive: n/a
   machine: CPU and memory grow with players; always on while people play
-  cards: [minecraft]
+  cards: [minecraft, razzia]
   ask: ["which game, and Java or Bedrock players?", "how many players?"]
 
 - category: Communication - Email - Complete Solutions
