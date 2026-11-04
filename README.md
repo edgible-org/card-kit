@@ -19,6 +19,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    | Claude Code | `~/.claude/skills/` |
    | Cursor | `~/.cursor/skills/` (it also reads `~/.claude/skills/`) |
    | Codex | `~/.codex/skills/` |
+   | OpenCode | `~/.config/opencode/skills/`. OpenCode may say it can't install skills: run these steps in a terminal yourself, then start OpenCode again |
    | Another agent | its documentation; many read `~/.agents/skills/` |
 
    - macOS or Linux: `mkdir -p ~/.cursor/skills && ln -s ~/.card-kit/skills/edgible-cards ~/.cursor/skills/edgible-cards` (with your agent's folder).
