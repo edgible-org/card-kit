@@ -21,6 +21,7 @@ WORKDIR /opt/edgible-mcp
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY *.mjs ./
+COPY views ./views
 RUN chmod 755 edgible-mcp.mjs && ln -s /opt/edgible-mcp/edgible-mcp.mjs /usr/local/bin/edgible-mcp
 
 # HOME for the CLI's sign-in (the card's volume edgible-mcp-login), and the write tools' record
