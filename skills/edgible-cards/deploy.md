@@ -2,7 +2,16 @@
 
 Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules](SKILL.md#rules) apply to every step here. Steps 1 to 5 set an app up from a card.
 
-**Every reply that starts or finishes a step of the journey carries its checklist** (SKILL.md, [Where you are running](SKILL.md#where-you-are-running), "Show the journey"): in the message that decides the card (step 2, or your first message when the person named the app), when the images start downloading (step 3), and in the Report (step 5). Its "Your app" line links the card's page. This is not optional, and not only for first setups: a person who says "Deploy Memos" sees it too.
+**Every reply that starts or finishes a step of the journey carries its checklist** (SKILL.md, [Where you are running](SKILL.md#where-you-are-running), "Show the journey"): in the message that decides the card (step 2, or your first message when the person named the app), when the images start downloading (step 3), and in the Report (step 5). Its "Your app" line links the card's page. This is not optional, and not only for first setups: a person who says "Deploy Memos" sees it too. It is SKILL.md's nine steps of the whole journey, never this file's steps (Find, Decide, Deploy…), and it reads like this for a second app, one step per line:
+
+> **Goal: your notes in Memos, on this Mac, reachable from your phone. Step 6 of 9.**
+> - ✅ Computer, Edgible account and Edgible: ready
+> - ✅ Your app: [Memos](https://cards.edgible.org/memos/)
+> - ✅ Running here
+> - ⏳ Published at its address
+> - ◻️ Checked, and you're signed in
+> - ◻️ Backed up
+> - ◻️ Kept up to date
 
 ## 1. Find
 
@@ -54,7 +63,7 @@ Before anything starts, put the card's open choices to the person in one message
 
 Follow the card's README **How** section exactly: Fetch, Edit `card.env`, Check, Start (and `prepare.sh` when the card has one), Publish. Notes:
 
-- **Fetch into a lasting folder**, such as `~/<card>` in the person's home folder, and say where it is. Never fetch into the AI tool's own folder for this chat (the Codex app's `~/Documents/Codex/<date>/…`, a scratch or temporary directory): upgrades, backups and moves all start from the card's folder, long after the chat is gone.
+- **Fetch into a lasting folder**, such as `~/<card>` in the person's home folder, and say where it is. Never fetch into the AI tool's own folders (anything under the Codex app's `~/Documents/Codex/`, a scratch or temporary directory): upgrades, backups and moves all start from the card's folder, long after the chat is gone.
 
 - **Docker with Compose comes first.** Most cards run in Docker (a native card, such as `ollama-osx`, does not), and Edgible itself does not need it, so a machine that is online as a device may have none. Check `docker compose version` on the machine that will run the card. If it fails, say what you will install and ask before using `sudo`, then:
   - **Ubuntu:** `sudo apt-get install -y docker.io docker-compose-v2`, then `sudo systemctl enable --now docker`, so it starts at boot. Add the person's user to the `docker` group with `sudo usermod -aG docker "$USER"`: it applies to a new login, so in the same session run Docker as `sg docker -c '...'`, or with `sudo`. Tested on Ubuntu 26.04 (Docker 29.1, Compose 2.40). Do not pipe an installer script from the internet into a shell, and open no ports.
@@ -85,9 +94,12 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 Tell the person, briefly, under the journey checklist with what is now done ticked:
 
-- what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others, and offer the page of what is running ([What is running](look-after.md#what-is-running));
+- what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
+- the next journey steps, *Backed up* and *Kept up to date*: offer to set up the card's backup now, rather than only saying there is none;
 - how to sign in the first time: the admin's username or email (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`), and the command that shows the password (`show`, or its `card.env` line);
 - whether the machine is always-on, as in [Is the machine always-on?](setup.md#is-the-machine-always-on), and what you changed for it;
 - what is still theirs to decide or do, such as changing the admin password;
 - where the card's files are, and that its README's **Tear down** removes it;
 - once, when it all worked: that a star on [edgible-org/cards](https://github.com/edgible-org/cards) helps other people find the cards. Ask nothing more, do not raise it again in the same conversation, and star it for them (`gh api -X PUT user/starred/edgible-org/cards`) only if they say yes.
+
+End with the link to the page of what is running, as SKILL.md's "Show the picture" says (`status-page.py --no-open`, then its `file://` link; [What is running](look-after.md#what-is-running)).
