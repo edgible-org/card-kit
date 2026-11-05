@@ -12,6 +12,10 @@ Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules
 > - ◻️ Checked, and you're signed in
 > - ◻️ Backed up
 > - ◻️ Kept up to date
+>
+> Card: https://cards.edgible.org/memos/
+
+**The card line goes under the checklist, every time it shows:** `Card: https://cards.edgible.org/<card>/`, the address written out in full on its own line, not hidden behind a word. It is how the person sees the app's page (some AI apps, such as the Codex app, open it beside the chat), and a link on a word inside a list is easy to drop or miss.
 
 ## 1. Find
 
@@ -35,7 +39,7 @@ If nothing fits:
 
 ## 2. Decide with the person
 
-Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Start that message with the journey checklist, "Your app" linked to the card's page. Whenever you name a card to the person, here, when offering several, or when they named it themselves, link its page, `https://cards.edgible.org/<card>/` (SKILL.md, "Show the journey").
+Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Start that message with the journey checklist and its card line. Whenever you name a card to the person, here, when offering several, or when they named it themselves, give its page's address in full, `https://cards.edgible.org/<card>/`, on its own line under the card's name, never only as a link on a word. When offering several, every one gets its line, so the person can open each and compare.
 
 - **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in). With the Edgible MCP tools and no shell, `describe` has both: its Tested section carries the nightly test (date, Edgible version, result) and, once the server is recent enough, an `image scan:` line with last night's scan; `find` shows them in one line per card. Use those, and do not ask the person to run `curl`. Without an `image scan:` line, say the image scan is not available from here. With a shell, fetch it directly:
 
@@ -92,7 +96,7 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 ## 5. Report
 
-Tell the person, briefly, under the journey checklist with what is now done ticked:
+Tell the person, briefly, under the journey checklist (what is now done ticked) and its card line:
 
 - what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
 - the next journey steps, *Backed up* and *Kept up to date*: offer to set up the card's backup now, rather than only saying there is none;
