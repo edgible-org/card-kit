@@ -1,0 +1,122 @@
+# Keep Edgible's own images free of fixable HIGH and CRITICAL findings, without a person. Each night,
+# after the cards repo's image scan: if the published image has findings, update its dependencies
+# within their majors, rebuild it from a fresh base, and run its tests. Only when the new image starts
+# and has fewer findings does it raise the version, merge the change, and start mcp-image.yml, which
+# publishes it. Renovate in edgible-org/cards then bumps the cards' pins and tests them on a real
+# device, as for any image. Findings it cannot clear, such as inside the pinned Edgible CLI, stay; the
+# cards repo's Image health issue lists an image still flagged after a week.
+
+name: own-images-refresh
+
+on:
+  schedule:
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Merge and publish an image that improves (off, it only reports)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  TRIVY: ghcr.io/aquasecurity/trivy:0.76.1
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1   # one merge to main at a time
+      matrix:
+        include:
+          - name: edgible-mcp
+            run_env: ""
+          - name: mcp-signin
+            # What it must be given to start. Nothing here is reached by the check.
+            run_env: >-
+              -e MCP_UPSTREAM_URL=http://127.0.0.1:9 -e MCP_SIGNIN_PUBLIC_URL=https://signin.example
+              -e MCP_SIGNIN_LOGIN_URL=https://login.example -e EDGIBLE_ORGANIZATION_ID=check
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Findings in the published image
+        id: before
+        run: |
+          set -euo pipefail
+          count() { docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache "$TRIVY" image \
+                      --quiet --format json --severity HIGH,CRITICAL --ignore-unfixed --scanners vuln "$1" \
+                    | jq '[.Results[]?.Vulnerabilities[]?] | length'; }
+          declare -f count > "$RUNNER_TEMP/count.sh"
+          version=$(jq -r .version package.json)
+          n=$(count "ghcr.io/edgible-org/${{ matrix.name }}:$version")
+          echo "$version: $n findings"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Update the dependencies and run the tests
+        if: steps.before.outputs.n != '0'
+        run: |
+          set -euo pipefail
+          node ../.github/own-images-update.mjs
+          npm install --no-audit --no-fund
+          npm update --no-audit --no-fund
+          npm audit fix --no-fund || true
+          if compgen -G "*.test.mjs" >/dev/null; then node --test; fi
+          rm -rf node_modules
+
+      - name: Build it fresh, check it starts, and scan it
+        if: steps.before.outputs.n != '0'
+        id: after
+        run: |
+          set -euo pipefail
+          . "$RUNNER_TEMP/count.sh"
+          docker build -q --pull --no-cache -t refresh:test .
+          docker run -d --name refresh ${{ matrix.run_env }} refresh:test
+          healthy=false
+          for _ in $(seq 30); do
+            if docker exec refresh wget -qO- http://127.0.0.1:8000/healthz 2>/dev/null | grep -q ok; then healthy=true; break; fi
+            [ "$(docker inspect -f '{{.State.Running}}' refresh)" = true ] || break
+            sleep 2
+          done
+          [ "$healthy" = true ] || { echo "::error::the rebuilt image does not answer /healthz"; docker logs refresh | tail -20; exit 1; }
+          n=$(count refresh:test)
+          echo "rebuilt: $n findings, was ${{ steps.before.outputs.n }}"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Merge and publish it, if it is better
+        if: >-
+          steps.before.outputs.n != '0' &&
+          fromJSON(steps.after.outputs.n) < fromJSON(steps.before.outputs.n) &&
+          (github.event_name == 'schedule' || inputs.publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ steps.before.outputs.n }}
+          AFTER: ${{ steps.after.outputs.n }}
+        run: |
+          set -euo pipefail
+          version=$(node ../.github/own-images-version.mjs)
+          npm install --package-lock-only --no-audit --no-fund
+          rm -rf node_modules
+          branch="own-images/${{ matrix.name }}-$version"
+          git checkout -q -b "$branch"
+          git add .
+          git -c user.name="own images" -c user.email="actions@github.com" commit -q \
+            -m "${{ matrix.name }} $version: $BEFORE findings to $AFTER"
+          git push -q origin "$branch"
+          # A merge by this workflow's token does not start other workflows, so it starts mcp-image itself.
+          gh pr create --base main --head "$branch" --title "${{ matrix.name }} $version: $BEFORE findings to $AFTER" \
+            --body "Made and merged by the nightly refresh, which updated the dependencies within their majors, rebuilt from a fresh base, and checked the tests and the health endpoint. The image's fixable HIGH and CRITICAL findings went from $BEFORE to $AFTER. $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr merge "$branch" --squash --delete-branch
+          gh workflow run mcp-image.yml --ref main
