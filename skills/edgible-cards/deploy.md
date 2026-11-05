@@ -2,6 +2,8 @@
 
 Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules](SKILL.md#rules) apply to every step here. Steps 1 to 5 set an app up from a card.
 
+**Every reply that starts or finishes a step of the journey carries its checklist** (SKILL.md, [Where you are running](SKILL.md#where-you-are-running), "Show the journey"): in the message that decides the card (step 2, or your first message when the person named the app), when the images start downloading (step 3), and in the Report (step 5). Its "Your app" line links the card's page. This is not optional, and not only for first setups: a person who says "Deploy Memos" sees it too.
+
 ## 1. Find
 
 The person names an app ("self-host Miniflux") or describes a need ("something for bookmarks"). Either way, look for a card first. For a need, read each candidate's **Why** to see whether it meets that need.
@@ -24,7 +26,7 @@ If nothing fits:
 
 ## 2. Decide with the person
 
-Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Whenever you name a card to the person, here, when offering several, or when they named it themselves, link its page, `https://cards.edgible.org/<card>/` (SKILL.md, "Show the journey").
+Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Start that message with the journey checklist, "Your app" linked to the card's page. Whenever you name a card to the person, here, when offering several, or when they named it themselves, link its page, `https://cards.edgible.org/<card>/` (SKILL.md, "Show the journey").
 
 - **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in). With the Edgible MCP tools and no shell, `describe` has both: its Tested section carries the nightly test (date, Edgible version, result) and, once the server is recent enough, an `image scan:` line with last night's scan; `find` shows them in one line per card. Use those, and do not ask the person to run `curl`. Without an `image scan:` line, say the image scan is not available from here. With a shell, fetch it directly:
 
@@ -81,7 +83,7 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 ## 5. Report
 
-Tell the person, briefly:
+Tell the person, briefly, under the journey checklist with what is now done ticked:
 
 - what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others, and offer the page of what is running ([What is running](look-after.md#what-is-running));
 - how to sign in the first time: the admin's username or email (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`), and the command that shows the password (`show`, or its `card.env` line);
