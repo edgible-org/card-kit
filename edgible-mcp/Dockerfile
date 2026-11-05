@@ -12,14 +12,17 @@ LABEL org.opencontainers.image.licenses=MIT
 RUN apk add --no-cache bash curl tar docker-cli docker-cli-compose
 
 # The Edgible CLI, pinned. As root, the installer puts it in /opt/edgible-cli and /usr/local/bin.
-ARG EDGIBLE_CLI_VERSION=1.4.12
+ARG EDGIBLE_CLI_VERSION=1.4.29
 RUN curl -fsSL https://get.edgible.com/install.sh \
     | EDGIBLE_CLI_VERSION=$EDGIBLE_CLI_VERSION EDGIBLE_SKIP_NODE=1 bash -s -- --yes \
  && edgible --version
 
 WORKDIR /opt/edgible-mcp
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+# npm is only for this step. It is removed so the copy the Node image ships, and its dependencies,
+# are not in the published image.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY *.mjs ./
 COPY views ./views
 RUN chmod 755 edgible-mcp.mjs && ln -s /opt/edgible-mcp/edgible-mcp.mjs /usr/local/bin/edgible-mcp

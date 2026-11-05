@@ -1,6 +1,6 @@
 {
   "name": "mcp-signin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Sign in with Edgible in front of any MCP server, for Claude on the web and phone",
   "type": "module",
@@ -9,8 +9,8 @@
     "start": "node server.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
-    "express": "5.2.1"
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "express": "5.3.0"
   },
   "license": "MIT",
   "engines": {

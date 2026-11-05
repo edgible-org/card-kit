@@ -1,6 +1,6 @@
 {
   "name": "edgible-mcp",
-  "version": "0.7.26",
+  "version": "0.7.27",
   "private": true,
   "description": "MCP server for Edgible cards and running apps: read-only by default, write tools with --allow-write, over stdio or HTTP",
   "type": "module",
@@ -9,9 +9,9 @@
     "start": "node edgible-mcp.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "yaml": "2.9.1",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "license": "MIT",
   "bin": {
