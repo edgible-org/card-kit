@@ -24,7 +24,7 @@ If nothing fits:
 
 ## 2. Decide with the person
 
-Before anything starts, put the card's open choices to the person in one message, with your recommendation for each:
+Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Whenever you name a card to the person, here or when offering several, link its page, `https://cards.edgible.org/<card>/`: it shows what the app does, its record and its screenshots, and some AI apps (the Codex app) open it beside the chat.
 
 - **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in). With the Edgible MCP tools and no shell, `describe` has both: its Tested section carries the nightly test (date, Edgible version, result) and, once the server is recent enough, an `image scan:` line with last night's scan; `find` shows them in one line per card. Use those, and do not ask the person to run `curl`. Without an `image scan:` line, say the image scan is not available from here. With a shell, fetch it directly:
 
