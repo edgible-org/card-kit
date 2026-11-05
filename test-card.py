@@ -438,10 +438,12 @@ def image_archs(image: str) -> set[str] | None:
     """The CPUs the registry has builds of image for, or None when the lookup fails. A failed
     lookup is not "no builds": recording it as that left cards with archs: [] (passbolt, gitea).
     An image with a single build has no list of builds; its own config names the CPU."""
+    error = ""
     for attempt in range(3):
         if attempt:
             time.sleep(5 * attempt)
         p = sh(f"docker buildx imagetools inspect {image} --format '{{{{json .Manifest}}}}'", check=False)
+        error = (p.stderr.strip().splitlines() or [""])[-1][:200]
         try:
             manifest = json.loads(p.stdout) if p.returncode == 0 else None
         except json.JSONDecodeError:
@@ -458,7 +460,7 @@ def image_archs(image: str) -> set[str] | None:
                 archs = set()
         if archs:
             return {ARCH.get(a, a) for a in archs}
-    print(f"warning: could not read the CPUs {image} has builds for", file=sys.stderr)
+    print(f"warning: could not read the CPUs {image} has builds for: {error}", file=sys.stderr)
     return None
 
 
