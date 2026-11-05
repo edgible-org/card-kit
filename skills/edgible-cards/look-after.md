@@ -24,7 +24,7 @@ The path `docker compose ls` prints leads to the card's directory, and `metadata
 
 Answer with a short table: each card, its directory, its apps with hostname and auth mode, and whether each is up.
 
-Then offer the picture: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing. Give its `file://` address from the last line it prints as a link too: some AI apps (the Codex app) open a link in a browser panel of their own, beside the chat. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
+Then show the picture, without asking: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing, and needs the network (outside your tool's sandbox). End your answer with its `file://` address, from the last line it prints, as a link. In an AI app with a browser panel of its own (the Codex app, where a clicked link opens beside the chat), run it with `--no-open` and give the link only. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
 
 ### Is it working
 
@@ -169,6 +169,6 @@ Ask first. A move is a copy, then a switch, then retiring the old copy, and the 
 
 ### Remove
 
-Follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that any kept backup needs `card.env` and the `<card>-secrets.tgz` copy, which hold its passwords and keys. Remove only the apps, containers, and volumes this card made.
+First, say in one message what you will do and what stays, and wait for a yes, even when the person asked for it: "take it down" can mean stop it for now, unpublish it, or delete it with its data. Name the app and the device it is on, and say which steps you can do from here: an app on another device that runs as plain Docker Compose there (not one Edgible manages) can be unpublished from anywhere, but stopping its containers needs a shell on that device, so say who does that and how. Then follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that any kept backup needs `card.env` and the `<card>-secrets.tgz` copy, which hold its passwords and keys. Remove only the apps, containers, and volumes this card made.
 
 To take Edgible itself off a machine, once its apps are gone: `edgible uninstall` removes the device software and asks whether to delete the device from the account and remove the CLI. `--yes --delete-device --cli` does all three without asking. A device installed with `sudo` needs `sudo edgible uninstall`. Ask first: it is the machine's link to Edgible.
