@@ -100,6 +100,7 @@ def read_apps(card_yml: Path) -> list[dict]:
             "auth": [m.strip() for m in get("authModes").strip("[]").split(",")],
             "place": get("place"),
             "from": get("from"),
+            "verify_path": get("verifyPath") or "/",
         })
     return apps
 
@@ -267,6 +268,37 @@ def made_secrets(dc, composes: list[Path]) -> dict[str, str]:
     return out
 
 
+COMPOSE_PROGRESS = re.compile(r"\s*(Container|Volume|Network|Image)\s+\S+.*\s(Creating|Created|Starting|Started|Stopping|Stopped"
+                              r"|Removing|Removed|Waiting|Healthy|Running|Exited|Pulling|Pulled|Recreate|Recreated)\s*")
+LOG_SECRET = re.compile(r"(?i)((?:password|passwd|secret|token|api[_-]?key)[\"']?\s*[:=]\s*)\S+")
+
+
+def without_progress(text: str) -> str:
+    """Compose's progress lines fill the end of its output, where the error should be."""
+    return "\n".join(line for line in text.splitlines() if not COMPOSE_PROGRESS.fullmatch(line)).strip()
+
+
+def service_logs(dc, compose: Path, lines: int = 40) -> str:
+    """The logs of a Compose file's failing services, for a test that failed, before teardown removes
+    them. A service that is unhealthy, restarting, or exited with an error fails; when none does, as
+    when a step after Start failed, it is the logs of every running service. Each is kept short, and
+    anything that looks like a credential is masked, as a test's log may be public."""
+    out = sh(dc(compose, "ps -a --format json"), check=False).stdout.strip()
+    try:
+        rows = json.loads(out) if out.startswith("[") else [json.loads(line) for line in out.splitlines()]
+    except json.JSONDecodeError:
+        return ""
+    failing = [r for r in rows if r.get("Health") == "unhealthy" or r.get("State") in ("restarting", "dead")
+               or (r.get("State") == "exited" and r.get("ExitCode"))]
+    chosen = failing or [r for r in rows if r.get("State") == "running"]
+    parts = []
+    for service in sorted({r["Service"] for r in chosen if r.get("Service")}):
+        r = sh(dc(compose, f"logs --no-color --no-log-prefix --tail {lines} {service}"), check=False)
+        text = LOG_SECRET.sub(r"\1<secret>", (r.stdout + r.stderr).strip())[-3000:]
+        parts.append(f"logs of {service}:\n{text or '(no output)'}")
+    return "\n".join(parts)
+
+
 def org_label() -> str:
     """The org's hostname label, read off an app the org already has."""
     for app in json.loads(sh("edgible app list --json").stdout):
@@ -289,10 +321,10 @@ def authoritative_ip(host: str) -> str:
     return ""
 
 
-def https_get(ip: str, host: str) -> tuple[int, str]:
+def https_get(ip: str, host: str, path: str = "/") -> tuple[int, str]:
     with socket.create_connection((ip, 443), timeout=20) as raw:
         with ssl.create_default_context().wrap_socket(raw, server_hostname=host) as s:
-            s.sendall(f"GET / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: edgible-test-card\r\n"
+            s.sendall(f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: edgible-test-card\r\n"
                       f"Connection: close\r\n\r\n".encode())
             data = b""
             while b"\r\n\r\n" not in data:
@@ -319,7 +351,7 @@ def verify(app: dict, host: str) -> tuple[str, str]:
             except socket.timeout:
                 banner = ""
         return "pass", "tcp connected" + (f", banner {banner[:24]}" if banner else "")
-    code, location = https_get(ip, host)
+    code, location = https_get(ip, host, app.get("verify_path", "/"))
     mode = app["auth"][0]
     if mode == "org":
         ok = code in (301, 302, 303, 307) and "application-access" in location
@@ -438,7 +470,8 @@ def image_facts(images: list[str], pull: bool = False) -> dict[str, dict]:
     for image in images:
         if pull and sh(f"docker image inspect {image}", check=False).returncode != 0:
             sh(f"docker pull -q {image}", check=False, timeout=1800)
-        cfg = json.loads(sh(f"docker image inspect {image} --format '{{{{json .Config}}}}'", check=False).stdout or "null")
+        # An image that was never pulled, such as when a pull was refused, prints only a newline.
+        cfg = json.loads(sh(f"docker image inspect {image} --format '{{{{json .Config}}}}'", check=False).stdout.strip() or "null")
         if not cfg:
             continue
         test = (cfg.get("Healthcheck") or {}).get("Test") or []
@@ -617,7 +650,7 @@ def main(argv: list[str]) -> int:
             s = s.replace(secret, "<secret>")
         return s
     steps: dict = {"check-env": "fail", "start": "skip", "publish": "skip", "verify": {}, "teardown": "skip"}
-    notes, published, started_compose, installed = [], [], False, False
+    notes, published, started_compose, installed, stopped = [], [], False, False, False
     made: dict[str, str] = {}  # the card's secrets made on this machine, once it started
     fingerprint_spec, fingerprint = (None if native else read_fingerprint(card / "card.yml")), None
     sampler = NativeSampler(card) if native else Sampler(list(projects.values()))
@@ -703,8 +736,11 @@ def main(argv: list[str]) -> int:
             compose = (f"export COMPOSE='docker compose -p {projects[first[0]]} --env-file {env_file} -f {first[0]}' && "
                        if first else "")
             prepare = sh(f"{run_env} && {compose}{prepare_cmd}", check=False, timeout=900)
-            print("prepare:", "ok" if prepare.returncode == 0 else "FAILED",
-                  hide((prepare.stdout + prepare.stderr).strip()[-300:]))
+            output = without_progress(prepare.stdout + "\n" + prepare.stderr)
+            if prepare.returncode == 0:
+                print("prepare: ok", hide(output[-300:]))
+            else:
+                print(f"prepare: FAILED (exit {prepare.returncode})", hide(output[-1500:]) or "with no error message")
             if prepare.returncode != 0:
                 raise RuntimeError("prepare failed")
 
@@ -795,9 +831,22 @@ def main(argv: list[str]) -> int:
                 print(f"fingerprint: {steps['fingerprint']} "
                       f"({hide(json.dumps(value) if value is not None else problem + ': ' + (r.stdout + r.stderr).strip()[-200:])})")
     except Exception as exc:
-        print(hide(f"stopped: {exc}"))
+        stopped = True
+        print(hide(f"stopped: {without_progress(str(exc))}"))
     finally:
         sampler.stop.set()
+        # What the containers said, while they exist: without it, a failure here is only "unhealthy".
+        if started_compose and (stopped or "fail" in steps["verify"].values()
+                                or "fail" in steps.get("checks", {}).values() or steps.get("fingerprint") == "fail"):
+            if not made:  # Start failed before it read them, and they are still to be hidden.
+                try:
+                    made = made_secrets(dc, first)
+                except Exception:
+                    pass
+            for f in composes:
+                logs = service_logs(dc, f)
+                if logs:
+                    print(hide(logs))
         if started_compose:
             data = {f: volume_bytes(projects[f]) for f in composes}
         installed_bytes = dir_bytes(card / ".native") if installed else 0.0
