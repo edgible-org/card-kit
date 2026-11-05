@@ -182,6 +182,11 @@
           "maximum": 65535,
           "description": "Host port. Copied from the workload containerPort of the export."
         },
+        "verifyPath": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9._~/%?=&-]*$",
+          "description": "The path test-card asks for when it checks the published hostname, default /. For an app with no page at /, such as a backend that only serves an API."
+        },
         "protocol": {
           "enum": [
             "https",
