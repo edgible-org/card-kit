@@ -39,7 +39,7 @@ If nothing fits:
 
 ## 2. Decide with the person
 
-Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Start that message with the journey checklist and its card line. Whenever you name a card to the person, here, when offering several, or when they named it themselves, link its page, `https://cards.edgible.org/<card>/` (SKILL.md, "Show the journey").
+Before anything starts, put the card's open choices to the person in one message, with your recommendation for each. Start that message with the journey checklist and its card line. Whenever you name a card to the person, here, when offering several, or when they named it themselves, give its page's address in full, `https://cards.edgible.org/<card>/`, on its own line under the card's name, never only as a link on a word. When offering several, every one gets its line, so the person can open each and compare.
 
 - **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in). With the Edgible MCP tools and no shell, `describe` has both: its Tested section carries the nightly test (date, Edgible version, result) and, once the server is recent enough, an `image scan:` line with last night's scan; `find` shows them in one line per card. Use those, and do not ask the person to run `curl`. Without an `image scan:` line, say the image scan is not available from here. With a shell, fetch it directly:
 
