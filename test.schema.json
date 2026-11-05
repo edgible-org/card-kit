@@ -65,7 +65,6 @@
         "additionalProperties": false,
         "required": [
           "user",
-          "archs",
           "healthcheck"
         ],
         "properties": {

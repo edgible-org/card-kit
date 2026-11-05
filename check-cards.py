@@ -68,7 +68,8 @@ from jsonschema.exceptions import ValidationError
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "card.schema.json"
 TEST_SCHEMA_PATH = Path(__file__).resolve().parent / "test.schema.json"
-HOSTNAME = re.compile(r"[a-z0-9-]+\.[a-z0-9-]+\.edgible\.com|\b\d{1,3}(?:\.\d{1,3}){3}\b")
+# An address, but not an image's four-part version, such as clickhouse-server:26.3.62.3.
+HOSTNAME = re.compile(r"[a-z0-9-]+\.[a-z0-9-]+\.edgible\.com|(?<![:\w.-])\d{1,3}(?:\.\d{1,3}){3}\b")
 
 
 def files_hash(card_dir: Path) -> str:
