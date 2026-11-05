@@ -8,7 +8,10 @@ LABEL org.opencontainers.image.licenses=MIT
 
 WORKDIR /opt/mcp-signin
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+# npm is only for this step. It is removed so the copy the Node image ships, and its dependencies,
+# are not in the published image.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY server.mjs oauth.mjs ./
 
 # Tokens, kept hashed: the card's volume mcp-signin-data.

@@ -32,7 +32,7 @@ import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { edgibleProvider } from './oauth.mjs';
 
-const version = '0.2.0';
+const version = '0.2.1';
 const env = (k, d) => (process.env[k] ?? d ?? '').trim();
 const need = (k) => env(k) || (() => { throw new Error(`mcp-signin needs ${k}`); })();
 const trim = (u) => u.replace(/\/$/, '');
