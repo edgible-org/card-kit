@@ -106,4 +106,4 @@ Tell the person, briefly, under the journey checklist (what is now done ticked) 
 - where the card's files are, and that its README's **Tear down** removes it;
 - once, when it all worked: that a star on [edgible-org/cards](https://github.com/edgible-org/cards) helps other people find the cards. Ask nothing more, do not raise it again in the same conversation, and star it for them (`gh api -X PUT user/starred/edgible-org/cards`) only if they say yes.
 
-End with the link to the page of what is running, as SKILL.md's "Show the picture" says (`status-page.py --no-open`, then its `file://` link; [What is running](look-after.md#what-is-running)).
+End with the picture of what is running, as SKILL.md's "Show the picture" says: the MCP panel where you used Edgible's MCP tools, otherwise the page from `status-page.py` and its `file://` link where your tool can open it ([What is running](look-after.md#what-is-running)).
