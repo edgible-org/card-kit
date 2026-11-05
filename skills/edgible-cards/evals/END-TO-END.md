@@ -26,6 +26,19 @@ Each in a **new chat**, typed as written. Don't add hints such as "this is Windo
 
 Optional, once the above passes: "Connect Edgible to <this tool>" (the MCP connector), and removing the app ("Take the wiki down").
 
+### Claude's apps (Chat and Cowork)
+
+Chat and Cowork in Claude's apps (desktop, web, phone) run in Anthropic's cloud, with no shell on the person's computer: they reach Edgible through the Edgible connector, and the skill is an upload to the person's account. The same eight prompts, with these changes:
+
+- **Before you start:** a computer already set up as an Edgible device (prompt 4 needs a shell or an installer, not a chat), and the Edgible connector added to the Claude account. Record where the connector runs and which devices it may change.
+- **1:** the person uploads [edgible-cards.zip](https://github.com/edgible-org/card-kit/releases/download/skill/edgible-cards.zip) in Customize → Skills; a pass is that the chat says how when asked "Install the Edgible skill", and does not try git.
+- **3:** a pass is the date or commit the skill knows, or a plain "I can't tell; re-upload the zip to be sure".
+- **4:** a pass is saying the chat cannot set up a computer, pointing to the installer or a local agent, then reading the account and devices back through the connector.
+- **5 and 6:** through the connector's tools (find, describe, deploy_card, card_status, whats_running), with each change confirmed by the person, never by the chat. Note whether the MCP Apps panels show (cards for find, the apps for whats_running).
+- **8:** a pass is the zip link and the upload steps, not a git command.
+
+Run it in Chat and in Cowork separately, on the desktop app and once on the phone.
+
 ## What to record
 
 One row per run, in this file's [Results](#results) table, and the details in a pull request or issue:
@@ -50,5 +63,8 @@ A tool counts as **tested** when prompts 1 to 7 pass with no stepping in. Fixes 
 | 2026-11-05 | Codex in the ChatGPT desktop app, Luna model, free plan: rerun after card-kit #207–#209 | Same MacBook Air | 8 pass (3 behind, asked, pulled); 6 found the CLI and spotted Docker Desktop not set to start at sign-in, but needed one step-in ("failed to connect" not taken for its sandbox) and did not show the status page until asked; removal of Docmost unpublished it without confirming the scope, and said rightly that it could not stop the containers on another device | free plan | The status page opened in Chrome from the script, and inside Codex's own browser panel from the `file://` link in the reply. Fixes in the pull request with this row: run network commands outside the sandbox from the start, the page at the end of every what's-running answer (link only in Codex), and one confirmation before removing. |
 | | OpenCode, hosted open model (Qwen 3.x) | | to do | | |
 | | OpenCode, local Qwen 3.x on a GPU machine | | to do | | The model can run on another machine, published with Edgible (the "A private model for your agent" playbook). |
+| 2026-11-05 | Claude Desktop, Chat, with the Edgible connector (edgible-mcp 0.7.25 then 0.7.26 on edgible-vm), skill uploaded as a zip | MacBook (Stefano's), Edgible already set up | Not a full run: first look. whats_running showed its MCP Apps panel; find and describe showed the cards panel after reconnecting the connector; a family-notes question led with Apple Notes and Google Keep, then Memos with its card line; Memos deployed through deploy_card, and the chat asked whether user registration was off | subscription | The status page link from the skill would not open ("outside this session's folders"): fixed in card-kit #224. The uploaded skill was from 11 October until replaced by the zip (#226 now rebuilds it). deploy_card does not run a card's prepare.sh (J-15). Clicked links open in the external browser: Desktop has no side panel for links. |
+| | Claude's apps, Chat: the adapted prompts | Desktop app and phone | to do | | See "Claude's apps" above. |
+| | Claude's apps, Cowork: the adapted prompts | Desktop app | to do | | Cowork runs in the cloud by default and reaches remote connectors, not local MCP servers. |
 | | GitHub Copilot in VS Code (agent mode) | Windows | to do | | |
 | | Gemini CLI | Linux or Raspberry Pi | to do | | |
