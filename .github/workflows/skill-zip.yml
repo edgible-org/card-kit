@@ -1,4 +1,4 @@
-# The edgible-cards skill as a zip, for Claude's apps (Chat in Claude Desktop, claude.ai, the
+# The edgible-cards skill as a zip, for the Claude app (Chat or Cowork, on desktop, web or the
 # phone), which take a skill as an upload under Customize > Skills and cannot update it themselves.
 # On every change to the skill on main, the zip is rebuilt and replaces the asset of the "skill"
 # release, so one address always serves the current skill:
@@ -42,7 +42,7 @@ jobs:
         run: |
           short=$(git rev-parse --short HEAD)
           when=$(date -u +%Y-%m-%d)
-          notes="The edgible-cards skill as of $short ($when), for Claude's apps: in Customize > Skills, remove the old edgible-cards, then + > Create skill > Upload a skill, and choose edgible-cards.zip. Start a new chat after. Agents with a shell (Claude Code, Codex, Cursor, OpenCode) install it with git instead, and update it by asking: see the README."
+          notes="The edgible-cards skill as of $short ($when), for the Claude app: in Customize > Skills, remove the old edgible-cards, then + > Create skill > Upload a skill, and choose edgible-cards.zip. Start a new chat after. Agents with a shell (Claude Code, Codex, Cursor, OpenCode) install it with git instead, and update it by asking: see the README."
           git tag -f skill HEAD
           git push -f origin refs/tags/skill
           if gh release view skill > /dev/null 2>&1; then

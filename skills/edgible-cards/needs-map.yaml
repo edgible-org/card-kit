@@ -317,7 +317,7 @@
   machine: "next to the data or tools it reaches; always on if others use it. Most packaged servers speak stdio, so publishing one needs a bridge container that serves it over Streamable HTTP; a server that already speaks HTTP needs none"
   cards: [mcp-signin, mcp-bridge, edgible-mcp]
   find: "the official MCP Registry (https://registry.modelcontextprotocol.io/v0/servers?search=<word>): servers listed with packages run on your own machine and are the ones to publish, servers with only remotes are already hosted; also GitHub repositories tagged mcp-server"
-  ask: ["which assistant will connect to it: Claude Code, Claude's apps (desktop, web, phone), or something else?", "should it only read, or also change things?", "who besides you should get in?"]
+  ask: ["which assistant will connect to it: Claude Code, the Claude app (desktop, web, phone), or something else?", "should it only read, or also change things?", "who besides you should get in?"]
 
 - category: Vector databases and AI search
   source: edgible
