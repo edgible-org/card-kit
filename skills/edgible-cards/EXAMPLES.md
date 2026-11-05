@@ -56,7 +56,7 @@ A good answer leads with practice-management systems built for clinics, because 
 
 > I've built an MCP server that lets Claude query our company's inventory database. It runs on my laptop. How can the rest of the team use it from Claude when they're not in the office?
 
-A good answer moves it to a machine that stays on, next to the database, and publishes it with an API key per person, so one can be revoked. It asks which Claude the team uses, because Claude Code can send a key, while Claude's apps need OAuth: for them, the server stays unpublished behind mcp-signin, and each person signs in with their Edgible account. It suggests read-only tools first. If the server only speaks stdio, it adds a small bridge that serves it over HTTP.
+A good answer moves it to a machine that stays on, next to the database, and publishes it with an API key per person, so one can be revoked. It asks which Claude the team uses, because Claude Code can send a key, while the Claude app needs OAuth: for them, the server stays unpublished behind mcp-signin, and each person signs in with their Edgible account. It suggests read-only tools first. If the server only speaks stdio, it adds a small bridge that serves it over HTTP.
 
 > I've got an MCP server for my notes running on my home server. How can I use it from Claude on my phone?
 

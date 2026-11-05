@@ -29,7 +29,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    - If your agent does not follow links, copy the folder instead, and copy it again after each update.
 4. **Check it:** tell the person to start a new chat and ask "What can you do with Edgible cards?". A new chat is needed because skills load when a chat starts. Later, "Update the Edgible skill" keeps it current.
 
-**In Claude's apps** (Chat in Claude Desktop, claude.ai, the phone), a skill is an upload to your account, and a chat cannot install or update it. Download [edgible-cards.zip](https://github.com/edgible-org/card-kit/releases/download/skill/edgible-cards.zip), rebuilt on every change to the skill, and in **Customize → Skills** choose **+ → Create skill → Upload a skill**. To update it, remove the old edgible-cards there and upload the new zip. Claude Code, in a terminal or Desktop's Code tab, reads the linked folder instead, as above.
+**In the Claude app** (Chat or Cowork, on desktop, web or phone), a skill is an upload to your account, and a chat cannot install or update it. Download [edgible-cards.zip](https://github.com/edgible-org/card-kit/releases/download/skill/edgible-cards.zip), rebuilt on every change to the skill, and in **Customize → Skills** choose **+ → Create skill → Upload a skill**. To update it, remove the old edgible-cards there and upload the new zip. Claude Code, in a terminal or Desktop's Code tab, reads the linked folder instead, as above.
 
 Not yet tried: the Windows junction. If a step fails, say what it printed.
 
