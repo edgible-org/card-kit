@@ -35,7 +35,18 @@ fi
 tag="edgible-card-kit:$(cksum < "$kit/Dockerfile" | cut -d ' ' -f 1)"
 if ! docker image inspect "$tag" > /dev/null 2>&1; then
   echo "building $tag (first use)" >&2
-  docker build --quiet --tag "$tag" - < "$kit/Dockerfile" > /dev/null
+  # A build that hung on cards-hub (2026-11-04) left its pip-install step's container running
+  # for 28 hours, and the disk filled. --force-rm removes a build step's container even when
+  # the build fails or is stopped, and the build gives up after 10 minutes where `timeout`
+  # exists (Linux; on a Mac, coreutils' gtimeout).
+  limit=""
+  if command -v timeout > /dev/null 2>&1; then limit="timeout 600"
+  elif command -v gtimeout > /dev/null 2>&1; then limit="gtimeout 600"
+  fi
+  if ! $limit docker build --quiet --force-rm --tag "$tag" - < "$kit/Dockerfile" > /dev/null; then
+    echo "building $tag failed or took over 10 minutes: check the network, then run this again" >&2
+    exit 1
+  fi
 fi
 
 # Run from the same directory under the repo, so relative paths still work.
