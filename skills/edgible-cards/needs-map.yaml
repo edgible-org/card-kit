@@ -316,6 +316,9 @@
   builders: "the quickest way to let early users try an MCP server: publish it from the developer's machine or a small cloud server, without building hosting"
   machine: "next to the data or tools it reaches; always on if others use it. Most packaged servers speak stdio, so publishing one needs a bridge container that serves it over Streamable HTTP; a server that already speaks HTTP needs none"
   cards: [mcp-signin, mcp-bridge, edgible-mcp]
+  candidates:
+    - {name: Grafana MCP, repo: grafana/mcp-grafana, why: "reaches dashboards and metrics a person already runs, and can be read-only; has its own multi-architecture image and an HTTP mode; needs a Grafana to point at"}
+    - {name: GitHub MCP Server, repo: github/github-mcp-server, why: "GitHub's own server, with a multi-architecture image; a clear use, but needs a GitHub token the person supplies"}
   find: "the official MCP Registry (https://registry.modelcontextprotocol.io/v0/servers?search=<word>): servers listed with packages run on your own machine and are the ones to publish, servers with only remotes are already hosted; also GitHub repositories tagged mcp-server"
   ask: ["which assistant will connect to it: Claude Code, the Claude app (desktop, web, phone), or something else?", "should it only read, or also change things?", "who besides you should get in?"]
 
@@ -352,6 +355,9 @@
   permissions: "a public bot answers anyone, so its knowledge base must hold only what anyone may see"
   machine: always on, so usually a small cloud server; a GPU only for a local model
   cards: [n8n]
+  candidates:
+    - {name: Typebot, repo: baptisteArno/typebot.io, why: "a chatbot builder with a website widget: the public viewer and the admin builder are separate apps, which suits their different auth modes; needs Postgres"}
+    - {name: Chatwoot, repo: chatwoot/chatwoot, why: "a customer support inbox with website chat and AI replies; heavier, with Rails, Sidekiq, Postgres and Redis"}
   find: "awesome-selfhosted's GenAI category, and GitHub repositories tagged chatbot or rag with a website widget or chat-platform integration (for example Dify, Typebot)"
   ask: ["who will talk to it: customers, members, or your team?", "which model: a hosted API with a spending limit, or a local one?"]
 
@@ -368,6 +374,9 @@
   builders: "a fast way to prototype an AI feature or product and let early users try it through an API"
   machine: modest; the model runs elsewhere unless it is local
   cards: [openclaw, n8n, litellm]
+  candidates:
+    - {name: Langflow, repo: langflow-ai/langflow, why: "a visual builder for agents and RAG apps that publishes each flow as an API; one container to start"}
+    - {name: Dify, repo: langgenius/dify, why: "a full platform for building AI apps and chatbots; the most used, but many services behind one Compose file"}
   find: "GitHub repositories tagged ai-agents, llm-app, or low-code with a Docker image, most starred and recently updated (for example Dify, Langflow)"
   ask: ["what should the agent or app do, and for whom?", "which models: hosted APIs or local?", "which machine can the agent have to itself?"]
 
