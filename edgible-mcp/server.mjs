@@ -14,12 +14,16 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import YAML from 'yaml';
 import { z } from 'zod';
-import { UI_MIME, WHATS_RUNNING_HTML, WHATS_RUNNING_URI } from './views.mjs';
+import { CARDS_HTML, CARDS_URI, UI_MIME, VIEW_CSP, WHATS_RUNNING_HTML, WHATS_RUNNING_URI } from './views.mjs';
 
 const CATALOG_TTL = Number(process.env.EDGIBLE_MCP_CATALOG_TTL || 900) * 1000;
 const CACHE_DIR = process.env.EDGIBLE_MCP_CACHE_DIR || path.join(process.env.XDG_CACHE_HOME || path.join(homedir(), '.cache'), 'edgible-mcp');
 const RUNNING_TTL = 30 * 1000;
 const REPO = 'edgible-org/cards';
+// The cards site: a page per card, with its icon beside it (card-kit's card-site.py).
+const SITE = 'https://cards.edgible.org';
+// The catalog cache's shape: a cache in another shape is fetched afresh.
+const CACHE_SHAPE = 2;
 const KIT = 'edgible-org/card-kit';
 const STATUS_URL = `https://raw.githubusercontent.com/${REPO}/test-status/status.json`;
 const SCAN_URL = `https://raw.githubusercontent.com/${REPO}/scan-status/scan.json`;
@@ -62,6 +66,7 @@ async function loadItems(dir) {
     const yml = YAML.parse(card);
     const readme = await readText(path.join(dir, entry.name, 'README.md'));
     const test = await readText(path.join(dir, entry.name, 'test.yml'));
+    const images = await readdir(path.join(dir, entry.name, 'images')).catch(() => []);
     items.push({
       // app: one tested app; pattern: several apps wired together.
       type: yml?.metadata?.type || 'app', name: entry.name,
@@ -71,6 +76,7 @@ async function loadItems(dir) {
       places: yml?.places || {},
       sections: sections(readme),
       test: test ? YAML.parse(test) : null,
+      icon: ['icon.svg', 'icon.png'].find((f) => images.includes(f)) || null,
     });
   }
   return items;
@@ -107,7 +113,7 @@ const CACHE_FILE = path.join(CACHE_DIR, 'catalog.json');
 
 async function readCache() {
   // A cache in an older shape has no repo: fetch afresh.
-  try { const c = JSON.parse(await readFile(CACHE_FILE, 'utf8')); return c.repo === REPO ? c : null; } catch { return null; }
+  try { const c = JSON.parse(await readFile(CACHE_FILE, 'utf8')); return c.repo === REPO && c.shape === CACHE_SHAPE ? c : null; } catch { return null; }
 }
 
 async function writeCache(c) {
@@ -131,7 +137,7 @@ async function getCatalog() {
       const needs = YAML.parse(await readFile(path.join(kit, 'skills/edgible-cards/needs-map.yaml'), 'utf8')) || [];
       const items = await loadItems(cards);
       const [status, scan] = await Promise.all([loadStatus(), loadScan()]);
-      catalog = { at: Date.now(), repo: REPO, needs, items, status, scan };
+      catalog = { at: Date.now(), repo: REPO, shape: CACHE_SHAPE, needs, items, status, scan };
       await writeCache(catalog);
       return catalog;
     } finally {
@@ -202,6 +208,29 @@ function authLine(item) {
   return item.applications.map((a) => `${a.name} (${a.protocol}, ${(a.authModes || []).join('+')})`).join(', ');
 }
 
+const pageOf = (item) => `${SITE}/${item.name}/`;
+
+// One card as data, for the MCP Apps cards view (structuredContent): what its page's trading card
+// shows, from the same catalog the text answer uses.
+function cardView(cat, item) {
+  const s = cat.status[item.name];
+  const scan = cat.scan?.[item.name];
+  const places = Object.values(item.places || {});
+  const memory = places.map((p) => p.memory).filter(Boolean);
+  const archs = places.length ? places.map((p) => new Set(p.arch || [])).reduce((a, b) => new Set([...a].filter((x) => b.has(x)))) : new Set();
+  const native = places.find((p) => p.native)?.native || null;
+  return {
+    name: item.name, type: item.type, description: item.description, page: pageOf(item),
+    icon: item.icon ? `${SITE}/${item.name}/${item.icon}` : null,
+    tested: s && typeof s === 'object' ? { result: s.result, date: s.tested || null, edgible: s['edgible-cli'] || null }
+      : item.test ? { result: item.test.result, date: item.test.tested || null, edgible: item.test['edgible-cli'] || null } : null,
+    scan: scan ? { fixable: scan.fixable, critical: scan.critical, unscanned: scan.unscanned } : null,
+    apps: item.applications.map((a) => ({ name: a.name, what: a.what || '', protocol: a.protocol, auth: a.authModes || [] })),
+    machine: { memory: memory.join(' + ') || null, runs: native === 'macos' ? ['Mac'] : [...archs] },
+    needs: cat.needs.filter((n) => (n.cards || []).includes(item.name)).map((n) => n.category),
+  };
+}
+
 async function find({ need }) {
   const cat = await getCatalog();
   const needs = cat.needs
@@ -225,7 +254,8 @@ async function find({ need }) {
       out.push(`- **${i.name}** (${i.type}): ${i.description}`,
         `  - apps: ${authLine(i)}`,
         `  - status: ${statusOf(cat, i)}${scanOf(cat, i) ? `; ${scanOf(cat, i)}` : ''}`,
-        `  - ${i.url}`);
+        `  - page: ${pageOf(i)}`,
+        `  - source: ${i.url}`);
     }
     out.push('');
   }
@@ -243,8 +273,12 @@ async function find({ need }) {
     if (n.find) out.push(`- where to find apps: ${n.find}`);
     out.push('');
   }
-  out.push('Use describe for the full story of one card.');
-  return out.join('\n');
+  out.push('Use describe for the full story of one card. When you name a card to the person, give its page address in full.');
+  const view = {
+    kind: 'find', query: need, cards: items.map((i) => cardView(cat, i)),
+    needs: needs.map((n) => ({ category: n.category, fit: n.fit?.rating || null, why: n.fit?.why || null, cards: n.cards || [] })),
+  };
+  return { text: out.join('\n'), view };
 }
 
 async function describe({ name }) {
@@ -254,8 +288,8 @@ async function describe({ name }) {
     const near = cat.items.filter((i) => i.name.includes(name.toLowerCase()) || name.toLowerCase().includes(i.name)).map((i) => i.name);
     return `No card is called "${name}".${near.length ? ` Did you mean: ${near.join(', ')}?` : ''} Use find to search by need.`;
   }
-  return matches.map((i) => {
-    const out = [`# ${i.name} (${i.type})`, '', i.description, '', i.url, ''];
+  const text = matches.map((i) => {
+    const out = [`# ${i.name} (${i.type})`, '', i.description, '', `Page: ${pageOf(i)}`, `Source: ${i.url}`, ''];
     out.push('## Apps', '', '| App | What | Image | Port | Protocol | Auth | Place |', '| --- | --- | --- | --- | --- | --- | --- |');
     for (const a of i.applications) out.push(`| ${a.name} | ${a.what} | ${a.from} | ${a.port} | ${a.protocol} | ${(a.authModes || []).join(', ')} | ${a.place} |`);
     out.push('');
@@ -279,6 +313,7 @@ async function describe({ name }) {
     out.push(`How to run it: the README's How, Verify, and Tear down sections, at ${i.url}#how.`);
     return out.join('\n');
   }).join('\n\n---\n\n');
+  return { text, view: { kind: 'describe', query: name, cards: matches.map((i) => cardView(cat, i)), needs: [] } };
 }
 
 // ---------- What is running, and whether it works ----------
@@ -501,7 +536,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.7.25';
+export const VERSION = '0.7.26';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
@@ -513,12 +548,24 @@ export function registerReadTools(server) {
     }
   };
   const ro = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+  // A tool whose answer may carry a view: the text stays complete, structuredContent feeds the panel.
+  const viewed = (fn) => async (args) => {
+    try {
+      const r = await fn(args);
+      if (typeof r === 'string') return { content: [{ type: 'text', text: r }] };
+      return { content: [{ type: 'text', text: r.text }], structuredContent: r.view };
+    } catch (err) {
+      return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
+    }
+  };
+  const cardsUi = { ui: { resourceUri: CARDS_URI } };
   server.registerTool('find', {
     title: 'Find cards for a need',
     description: 'Search Edgible cards (type app: one app; type pattern: several apps wired together) for a need described in plain words ("somewhere for my bookmarks", "Pocket shut down", "a Git server for my team"), or an app name. Returns matching cards with their type, and the needs-map entries: how well it suits Edgible, the auth mode to publish with, what the machine needs, and the questions that change the answer.',
     inputSchema: { need: z.string().min(2).max(300).describe('The need or app, in the person\'s words') },
     annotations: { ...ro, openWorldHint: true },
-  }, text(find));
+    _meta: cardsUi,
+  }, viewed(find));
   server.registerTool('describe', {
     title: 'Describe a card',
     description: 'Show one Edgible card: its type (app or pattern), its apps, images, ports, auth mode per hostname, minimum machine, test status, and the Why and What from its README, with a link to its How.',
@@ -526,7 +573,8 @@ export function registerReadTools(server) {
       name: z.string().min(1).max(64).describe('The card name, such as linkding or ci'),
     },
     annotations: { ...ro, openWorldHint: true },
-  }, text(describe));
+    _meta: cardsUi,
+  }, viewed(describe));
   server.registerTool('sign_in', {
     title: 'Sign this server in to Edgible',
     description: 'Whether the Edgible CLI this server runs is signed in; if not, a link and code to approve it from any device (a phone too) with an Edgible login, valid for 10 minutes. Use it when a tool says this server is not signed in. Give the link to the person; never approve it for them.',
@@ -563,6 +611,12 @@ export function registerReadTools(server) {
     description: 'A panel of the apps and devices whats_running found, for hosts that support MCP Apps.',
     mimeType: UI_MIME,
   }, async () => ({ contents: [{ uri: WHATS_RUNNING_URI, mimeType: UI_MIME, text: WHATS_RUNNING_HTML }] }));
+  server.registerResource('cards-view', CARDS_URI, {
+    title: 'Cards',
+    description: 'The cards find or describe returned, each drawn like its page on cards.edgible.org, for hosts that support MCP Apps.',
+    mimeType: UI_MIME,
+    _meta: { ui: { csp: VIEW_CSP } },
+  }, async () => ({ contents: [{ uri: CARDS_URI, mimeType: UI_MIME, text: CARDS_HTML, _meta: { ui: { csp: VIEW_CSP } } }] }));
   return server;
 }
 
