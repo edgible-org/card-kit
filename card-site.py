@@ -1362,7 +1362,7 @@ nav.chapters a.next{text-align:right;margin-left:auto}
 a yellow edge, the icon in an art window, abilities, a stats bar and its place in the set. It keeps its
 light face in dark mode, as a printed card would. The page's tables follow, in full. */
 .card-hero{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:32px;align-items:start;margin:16px 0 8px}
-@media (max-width:760px){.card-hero{grid-template-columns:minmax(0,1fr)}.tc{max-width:380px}}
+@media (max-width:760px){.card-hero{grid-template-columns:minmax(0,1fr)}.tc{max-width:380px;margin-left:auto;margin-right:auto}}
 .card-hero-side .meta{flex-direction:column;align-items:flex-start;gap:8px;margin-top:0}
 .card-hero-side .card-image{margin-top:16px}
 .tc{background:#000033;border-radius:20px;padding:10px;box-shadow:0 10px 28px rgba(0,0,51,.22);color:#000033}
