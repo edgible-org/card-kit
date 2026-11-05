@@ -68,7 +68,7 @@ Name the app once chosen, with a link to its card's page: "Your app: [Passbolt](
 
 ### Keep this skill current
 
-This skill changes often, as cards are tested and agents tried. Check it is current when the person asks ("update the Edgible skill"), at the start of [Set up Edgible](setup.md#set-up-edgible), and when a command or its output does not match what this skill says. It works the same in any agent with a shell:
+This skill changes often, as cards are tested and agents tried. Check it is current when the person asks ("update the Edgible skill"), at the start of [Set up Edgible](setup.md#set-up-edgible), and when a command or its output does not match what this skill says. **In Claude's apps** (Chat in Claude Desktop, claude.ai, the phone), the skill is an upload to the person's account, which no chat can change: don't look for a repository. Give them the current zip, https://github.com/edgible-org/card-kit/releases/download/skill/edgible-cards.zip, and the steps: in Customize → Skills, remove the old edgible-cards, then + → Create skill → Upload a skill, and start a new chat. Otherwise it works the same in any agent with a shell:
 
 1. **Find the copy you loaded.** Take the folder this `SKILL.md` was read from, follow links to the real folder (`realpath`; `readlink -f` on Linux), and find its repository with `git -C <folder> rev-parse --show-toplevel`, usually `~/.card-kit`. On Windows it may be in WSL or on the Windows side: use the path you read it from.
 2. **Check, changing nothing.** `git -C <repo> fetch -q`, then `git -C <repo> rev-list --count HEAD..@{u}`. If it is behind, say how far and what changed, one line each, from `git -C <repo> log --oneline --no-merges HEAD..@{u}`. If it is current, say so in a few words and carry on.
