@@ -118,7 +118,7 @@
     default: dashboard on org; the tracking script on none, because every visitor's browser loads it (the umami card)
     sensitive: the same
   machine: little
-  cards: [umami, website]
+  cards: [umami, website, rybbit]
   ask: ["one site or several?"]
 
 - category: Content Management Systems (CMS)
