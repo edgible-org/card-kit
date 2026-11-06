@@ -78,6 +78,8 @@ Leave device names, hostnames, organization ids, and passwords out of the README
 
 Some apps let the first visitor set them up: make the admin, or finish an install wizard. Published first, that is anyone on the internet. Such a card makes it safe before Publish, in `prepare.sh`, a short `sh` script next to `card.yml`. The README's Start step runs it with `sh <card>/prepare.sh` and shows it in full, and `test-card` runs the same file, so what a person runs is what was tested.
 
+An app with accounts on `none` is the same risk for as long as it runs: many let anyone register by default. Turn that off before Publish, and add a [check](#test-inputs) that a stranger cannot make an account. An admin signing in does not show that, and the card's test passes without it.
+
 It starts the same way in every card, so it runs from anywhere and in a test:
 
 ```sh
