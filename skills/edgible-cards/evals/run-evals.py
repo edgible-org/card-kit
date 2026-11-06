@@ -32,7 +32,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 # The skill a session loads is the installed one, so that is the folder it may read and the
-# version the report names. Without an installed copy, this folder's is used.
+# version the report names. A session cannot load a skill that is not installed, so main()
+# refuses to run without it: from 2026-10-13 a machine with only a clone scored weeks of answers
+# from sessions that never had the skill. SKILL_DIR's fallback is for reading the prompts' version.
 INSTALLED = Path.home() / ".claude" / "skills" / "edgible-cards"
 SKILL_DIR = INSTALLED.resolve() if (INSTALLED / "SKILL.md").is_file() else HERE.parent
 SKILL = "edgible-cards"
@@ -265,6 +267,10 @@ def main(argv: list[str]) -> int:
         sys.exit("no prompts to run")
     args.out.mkdir(parents=True, exist_ok=True)
     git = lambda *a: subprocess.run(["git", "-C", str(SKILL_DIR), *a], capture_output=True, text=True).stdout.strip()
+    if not (INSTALLED / "SKILL.md").is_file():
+        print(f"{INSTALLED} is not installed, so no session could load the skill. "
+              f"Link it: ln -sfn {HERE.parent} {INSTALLED}", file=sys.stderr)
+        return 2
     meta = {"date": str(date.today()), "rotation_day": args.rotate, "card_kit": git("rev-parse", "--short", "HEAD") or "unknown",
             "claude": subprocess.run(["claude", "--version"], capture_output=True, text=True).stdout.strip(),
             "mcp": "edgible find and describe" if args.mcp else "none",
