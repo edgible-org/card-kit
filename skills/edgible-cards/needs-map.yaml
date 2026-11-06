@@ -106,7 +106,7 @@
     sensitive: the same; members' contact details stay in the app
   permissions: "admins set booking rules, such as length, how far ahead, and who may book which resource"
   machine: always on, so usually a small cloud server; little else
-  cards: [rallly]
+  cards: [rallly, hi-events, seatsurfing]
   ask: ["who looks after it when you step down?", "a home machine, or a small cloud server at a few dollars a month? and do bookings need payment?"]
 
 - category: Analytics
@@ -130,7 +130,7 @@
     default: the site on none; its editor or admin on org where the app allows a separate hostname
     sensitive: n/a, a website is public
   machine: always on, with a reliable connection, so usually a small cloud server
-  cards: [wordpress, website, accounts]
+  cards: [wordpress, website, accounts, redaxo]
   ask: ["is the site static, or edited in a CMS?", "does it have members or paid content?"]
 
 - category: Blogging Platforms
@@ -248,7 +248,7 @@
     default: org for the web (the jellyfin card); native apps on the home network
     sensitive: org, or home network only
   machine: disk for the library; transcoding is heavy on CPU, a GPU helps
-  cards: [jellyfin]
+  cards: [jellyfin, mediamtx]
   ask: ["which devices do you watch on?"]
 
 - category: Internet of Things (IoT)
@@ -284,7 +284,7 @@
     default: the editor on org; webhook paths on none, because the services calling them cannot sign in
     sensitive: org, with webhooks only where needed
   machine: always on
-  cards: [n8n]
+  cards: [n8n, activepieces]
   ask: ["do other services need to call it with webhooks?"]
 
 - category: Generative Artificial Intelligence (GenAI)
@@ -409,7 +409,7 @@
     default: "org: tools such as ComfyUI have no login of their own, so never none; an API for other apps on api-key"
     sensitive: org only, or not published
   machine: a GPU with plenty of memory, or Apple Silicon; lots of disk for models
-  cards: []
+  cards: [speaches]
   candidates:
     - {name: Speaches, repo: speaches-ai/speaches, why: "an OpenAI-compatible API for transcription (faster-whisper) and speech (Kokoro, Piper) in one container; runs on CPU"}
     - {name: Kokoro-FastAPI, repo: remsky/Kokoro-FastAPI, why: "text to speech with an OpenAI-compatible API; a CPU image, good voices for its size"}
@@ -428,7 +428,7 @@
     sensitive: "org only, on a machine with nothing else on it"
   permissions: "an agent that runs code or a shell acts on its machine as whoever runs it: give it a spare machine and only the keys it needs, as with OpenClaw"
   machine: "varies; Edge0 needs an Apple Silicon Mac (M3 or later); agents want a machine they can have to themselves"
-  cards: []
+  cards: [localai]
   candidates:
     - {name: Edge0, repo: Edge0-AI/Edge0, why: "runs large mixture-of-experts models (35B) on a laptop by streaming experts from SSD, behind a local OpenAI-compatible server on port 8000; macOS 14+ on Apple Silicon, so a native card like ollama-osx, not Docker"}
     - {name: Agent Zero, repo: agent0ai/agent-zero, why: "an autonomous agent with its own Linux desktop inside one Docker image; a v3 preview is out, so expect change"}
@@ -447,7 +447,7 @@
     default: none with the app's own login and registration closed; SSH as a tcp app (the gitea card)
     sensitive: the same; the web alone could be org, but git would stop working
   machine: little
-  cards: [gitea, ci]
+  cards: [gitea, ci, onedev]
   ask: ["just you, or a team?"]
 
 - category: Software Development - Continuous Integration & Deployment
