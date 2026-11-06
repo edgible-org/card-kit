@@ -424,14 +424,17 @@ def main(argv: list[str]) -> int:
     # --fresh: a card whose files changed since its test.yml fails, unless that test passed: a
     # change to a passing card, such as a setting or its secrets, is a note, and the nightly
     # regression retests a changed card on the fleet. Without --fresh, it is always a note.
-    fresh = "--fresh" in argv
+    # --strict-fresh: a card whose files changed since its test.yml always fails, for a change that
+    # must be tested before it merges, such as an image bump.
+    strict_fresh = "--strict-fresh" in argv
+    fresh = "--fresh" in argv or strict_fresh
     # --untrusted: the card has not been reviewed (an agent wrote it), so nothing in it may
     # reach outside the card before it runs anywhere.
     untrusted = "--untrusted" in argv
     # --before-test: the card is about to be tested for the first time, so it has no
     # test.yml yet. Every other rule still applies.
     before_test = "--before-test" in argv
-    argv = [a for a in argv if a not in ("--fresh", "--untrusted", "--before-test")]
+    argv = [a for a in argv if a not in ("--fresh", "--strict-fresh", "--untrusted", "--before-test")]
     failed = False
     for path in card_paths(argv):
         try:
@@ -474,7 +477,7 @@ def main(argv: list[str]) -> int:
             stale = freshness(path.parent)
             test_yml = path.parent / "test.yml"
             passed = test_yml.is_file() and re.search(r"^result:\s*pass\b", test_yml.read_text(), re.M)
-            if stale and fresh and passed and stale.startswith("the card's files changed"):
+            if stale and fresh and passed and not strict_fresh and stale.startswith("the card's files changed"):
                 print(f"note {path}: {stale} (it passed before; the nightly regression retests it)")
             elif stale and fresh:
                 errors.append(stale)

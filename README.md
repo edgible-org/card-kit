@@ -322,6 +322,8 @@ steps:
 
 `files` is a fingerprint of every file in the card but `README.md`, `images/`, `test.yml`, and hidden files. When it no longer matches, the card changed since its test: `check-cards` says so in a note, and `check-cards --fresh`, which the cards repo runs on every pull request, fails it unless its last test passed. A change to a passing card, such as a setting or its secrets, stays a note, and the nightly regression retests the changed card on the fleet.
 
+`check-cards --fresh` lets a changed card through when its last test passed, as a note, and the nightly regression retests it. `check-cards --strict-fresh` fails it until `test.yml` matches the files, for a change that must be tested before it merges, such as an image bump.
+
 ### Test inputs
 
 Everything `test-card` needs is in the card, so anyone, or a CI job, runs the same test with no options. Besides `prepare.sh`, which people run too, it is in the card's `test/` directory:
