@@ -322,6 +322,24 @@
   find: "the official MCP Registry (https://registry.modelcontextprotocol.io/v0/servers?search=<word>): servers listed with packages run on your own machine and are the ones to publish, servers with only remotes are already hosted; also GitHub repositories tagged mcp-server"
   ask: ["which assistant will connect to it: Claude Code, the Claude app (desktop, web, phone), or something else?", "should it only read, or also change things?", "who besides you should get in?"]
 
+- category: Notifications
+  source: edgible
+  jobs: [send alerts to my phone from my own scripts, tell me when a backup or job fails, push notifications without a third-party service, alerts from my self-hosted apps in one place]
+  replaces: [Pushover, Pushbullet, IFTTT notifications]
+  drivers: [privacy, cost, control]
+  fit: {rating: good, why: "a small always-on web service that phones and scripts call, which is what Edgible publishes; its callers cannot sign in to Edgible, so it relies on its own tokens"}
+  exposure:
+    default: "none, because phone apps and scripts cannot sign in to Edgible; the app's own access control denies everyone by default, and each sender and phone gets its own login or token"
+    sensitive: "the same, with only short messages that say something happened, as a notification can show on a locked screen"
+  permissions: "a topic or token that can publish can reach the person's phone, so give each script its own and read access only to those who need it"
+  machine: small; always on, or messages wait
+  cards: []
+  candidates:
+    - {name: ntfy, repo: binwiederhier/ntfy, why: "one container, publishing by a plain HTTP request, with phone apps; its access control can deny everyone by default"}
+    - {name: Gotify, repo: gotify/server, why: "one container with its own users and application tokens, and an Android app; no iOS app of its own"}
+  find: "GitHub repositories tagged notifications or push-notifications with a Docker image, most starred and recently updated"
+  ask: ["what will send the notifications, and what will receive them?", "iPhone, Android, or both?"]
+
 - category: Vector databases and AI search
   source: edgible
   jobs: [a vector database for my RAG app, semantic search over our documents, store embeddings without paying per query, memory for my AI agent]
