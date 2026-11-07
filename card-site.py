@@ -7,7 +7,7 @@ Run it from the root of the cards repo. It writes one page per card (its README,
 apps, and latest test), one page per need in the skill's needs map (what people say, whether
 self-hosting suits it, how to publish it, and the cards for it, titled by the hosted
 products people leave for it), an index of each, and llms.txt, sitemap.xml, and robots.txt.
-The index has a search box and filters (category, type, a public page, ARM, memory, test
+The index has a search box and, under a Filters toggle, filters (category, type, a public page, ARM, memory, test
 result) that run in the browser; without JavaScript it is the plain list. A card's
 categories are the needs that name it in the needs map.
 
@@ -365,6 +365,12 @@ def steward_html(c: dict) -> str:
     return (f'<span class="steward">Stewarded by <a href="https://github.com/{esc(who)}">{esc(who)}</a>{when}{link}</span>')
 
 
+def sentence(text: str) -> str:
+    """A note written as a fragment ("sort by recently updated"), as a sentence."""
+    text = str(text).strip()
+    return (text[:1].upper() + text[1:]).rstrip(".") + "." if text else text
+
+
 def homepage_html(c: dict) -> str:
     url = c.get("homepage", "")
     return f'<a href="{esc(url)}" rel="noopener">App home page</a>' if url.startswith("https://") else ""
@@ -590,14 +596,8 @@ class Site:
         self.stats(apps, patterns, tested)
         recent_html = (" &middot; New: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3])) if recent else ""
         body = f"""<section class="hero">
-<h1>Self-hosted setups you can copy or share</h1>
-<p class="lead">A card is a working self-hosted setup, made to be shared: plain files anyone can run on their own machine, change, and share back.</p>
-<ul class="pillars">
-<li><a href="about/#shaped-for-sharing"><strong>Made to share</strong><span>Nothing personal in it. You fill in your own.</span></a></li>
-<li><a href="about/#whats-in-a-card"><strong>The whole setup</strong><span>Apps, ports, and who can sign in, published with TLS.</span></a></li>
-<li><a href="about/#same-shape-every-time"><strong>The same steps every time</strong><span>Check, start, publish, verify, tear down.</span></a></li>
-<li><a href="about/#whats-in-a-card"><strong>Proof it works</strong><span>Tested on a real device, with the date on every card.</span></a></li>
-</ul>
+<h1>Self-hosted apps, tested and shareable</h1>
+<p class="lead">Plain files for a working self-hosted setup: the apps, ports and sign-in, published with TLS. Nothing personal in them, the same steps every time, and each one tested on a real device, with the date on the card.</p>
 <p class="stats">{len(apps)} app cards &middot; {len(patterns)} patterns &middot; {tested} passing their latest test{recent_html} &middot; <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
 </section>
 {self.finder()}
@@ -631,6 +631,7 @@ class Site:
         return f"""<form class="finder" role="search" hidden>
 <div class="find-row"><label class="find-q"><span class="sr-only">Search cards</span><input type="search" name="q" placeholder="Search: an app, a need, or a service you are leaving" autocomplete="off"></label>
 <button type="submit">Search</button><button type="button" class="clear-all" hidden>Clear all</button></div>
+<details class="find-more"><summary>Filters<span class="find-on"></span></summary>
 <div class="find-opts">
 <label><span class="sr-only">Category</span><select name="cat"><option value="">All categories</option>{options}</select></label>
 <label><span class="sr-only">Type</span><select name="type"><option value="">Apps and patterns</option><option value="app">App cards</option><option value="pattern">Pattern cards</option></select></label>
@@ -639,6 +640,7 @@ class Site:
 <label class="chip"><input type="checkbox" name="small"> Fits in 2 GB</label>
 <label class="chip"><input type="checkbox" name="pass"> Passing its test</label>
 </div>
+</details>
 <p class="find-count" aria-live="polite"></p>
 </form>"""
 
@@ -757,15 +759,15 @@ class Site:
         # A source with no address is a kind of source, so it is plain text.
         source_name = lambda s: f'<a href="{esc(s["url"])}">{esc(s["name"])}</a>' if s.get("url") else esc(s["name"])
         rows = "".join(
-            f'<tr><td>{source_name(s)}</td><td>{esc(s["good_for"])}'
-            + (f'<br><small>{esc(s["note"])}</small>' if s.get("note") else "")
-            + f'</td><td>{esc(read.get(s["read_by"], s["read_by"]))}</td><td>{esc(str(s["reviewed"]))}</td></tr>'
+            f'<tr><td>{source_name(s)}</td><td>{esc(sentence(s["good_for"]))}'
+            + (f'<span class="note">{esc(sentence(s["note"]))}</span>' if s.get("note") else "")
+            + f'</td><td>{esc(read.get(s["read_by"], s["read_by"]))}</td><td class="date">{esc(str(s["reviewed"]))}</td></tr>'
             for s in data.get("sources", []) if str(s.get("url", "")).startswith("http") or "url" not in s)
         bar = "".join(f"<li>{esc(b)}</li>" for b in data.get("bar", []))
         later = "".join(
             f'<tr><td><a href="https://github.com/{esc(p["repo"])}">{esc(p["name"])}</a></td><td>{esc(p["why"])}'
-            + (f'<br><small>Worth another look if {esc(p["revisit"])}.</small>' if p.get("revisit") else "")
-            + f'</td><td>{esc(str(p["date"]))}</td></tr>'
+            + (f'<span class="note">Worth another look if {esc(p["revisit"])}.</span>' if p.get("revisit") else "")
+            + f'</td><td class="date">{esc(str(p["date"]))}</td></tr>'
             for p in data.get("passed_over", []))
         body = f"""<p class="crumbs"><a href="../">Cards</a> / sources</p>
 <h1>Where we find apps</h1>
@@ -1254,9 +1256,7 @@ h1.with-icon{display:flex;align-items:center;gap:16px}
 .hero h1{font-size:2.5rem;max-width:20ch}.hero p{max-width:65ch}
 .lead{font-size:1.2rem;color:var(--muted);max-width:65ch}
 .stats{font-weight:600}
-.pillars{list-style:none;padding:0;margin:24px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.pillars li{background:var(--panel);border:1px solid var(--edge);border-top:3px solid var(--navy-mid);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
-.pillars a{display:flex;flex-direction:column;gap:6px;color:inherit;text-decoration:none}.pillars li:hover{border-color:var(--navy-mid)}.pillars strong{font-size:1.05rem}.pillars span{color:var(--muted);font-size:.95rem;line-height:1.5}
+td .note{display:block;margin-top:4px;color:var(--muted)}td.date{white-space:nowrap}
 .prose{max-width:70ch}
 .art{margin:28px 0}.art svg{display:block;width:100%;height:auto;max-width:820px;margin:0 auto}
 .crumbs{color:var(--muted);font-size:.9rem;margin:0}
@@ -1314,6 +1314,8 @@ dt{font-weight:600;margin-top:10px}dd{margin:2px 0 0 0}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--edge);border-radius:999px;padding:4px 12px;font-size:.92rem;cursor:pointer;user-select:none}
 .chip:has(input:checked){background:var(--navy-mid);border-color:var(--navy-mid);color:#fff}
 .chip input{accent-color:var(--link);margin:0}
+.find-more{margin:10px 0 0}.find-more summary{cursor:pointer;color:var(--link);font-weight:500;width:max-content}
+.find-more summary:focus-visible{outline:2px solid var(--link);outline-offset:2px}.find-more[open] .find-opts{margin-top:10px}
 .find-count{margin:8px 0 0;color:var(--muted);font-size:.9rem}.find-count:empty{display:none}
 .no-match{color:var(--muted)}
 [hidden]{display:none!important}
@@ -1460,6 +1462,8 @@ function apply(push) {
   const on = s.q || s.cat || s.type || s.public || s.arm || s.small || s.pass;
   f.querySelector("button.clear-all").hidden = !on;
   f.querySelector(".find-count").textContent = on ? `${shown} of ${total} cards` : "";
+  const n = [s.cat, s.type, s.public, s.arm, s.small, s.pass].filter(Boolean).length;
+  f.querySelector(".find-on").textContent = n ? ` (${n})` : "";
   if (push) {
     const u = new URLSearchParams();
     for (const [k, v] of Object.entries(s)) if (v) u.set(k, v === true ? "1" : v);
@@ -1469,6 +1473,8 @@ function apply(push) {
 const u = new URLSearchParams(location.search);
 f.q.value = u.get("q") || ""; f.cat.value = u.get("cat") || ""; f.type.value = u.get("type") || "";
 for (const k of ["public", "arm", "small", "pass"]) f[k].checked = u.get(k) === "1";
+// A shared address with filters in it opens the filters, so you see what narrowed the list.
+if (["cat", "type", "public", "arm", "small", "pass"].some(k => u.get(k))) f.querySelector(".find-more").open = true;
 // Results update as you type; the button and Enter also take you to them, and close a phone's keyboard.
 f.addEventListener("submit", e => {
   e.preventDefault(); apply(true); document.activeElement.blur();
