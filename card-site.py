@@ -594,11 +594,11 @@ class Site:
         tested = sum(1 for c in self.cards if self.status.get(c, {}).get("result") == "pass")
         recent = sorted((c for c in self.cards.values() if c.get("added")), key=lambda c: (c["added"], c["name"]), reverse=True)[:5]
         self.stats(apps, patterns, tested)
-        recent_html = (" &middot; New: " + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3])) if recent else ""
+        recent_html = ('<p class="stats">Recently added: ' + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3]) + "</p>") if recent else ""
         body = f"""<section class="hero">
 <h1>Self-hosted apps, tested and shareable</h1>
 <p class="lead">Plain files for a working self-hosted setup: the apps, ports and sign-in, published with TLS. Nothing personal in them, the same steps every time, and each one tested on a real device, with the date on the card.</p>
-<p class="stats">{len(apps)} app cards &middot; {len(patterns)} patterns &middot; {tested} passing their latest test{recent_html} &middot; <a href="about/">Why cards &rarr;</a> <a href="run-without-edgible/">Run one without Edgible &rarr;</a></p>
+{recent_html}
 </section>
 {self.finder()}
 <h2 id="app-cards">App cards</h2>
@@ -609,11 +609,6 @@ class Site:
 <ul class="tiles">{"".join(self.card_tile(c, "") for c in patterns)}</ul>
 <p class="no-match" hidden>No card matches. Try fewer words, <a href="#" class="clear-all">clear all</a>, or <a href="needs/">start from a need</a>.</p>
 <script>{FINDER_JS}</script>
-<h2>Start from a need</h2>
-<p>What people want to self-host, whether it suits a machine of your own, and how to publish it safely. <a href="needs/">All {len(self.needs)} needs</a>.</p>
-{self.leaving_list("")}
-<h2>With an AI agent</h2>
-<p>The <a href="{SKILL_URL}">edgible-cards skill</a> teaches an AI agent, such as Claude Code, to go from a need to a running, published card, to look after it, and to build and share a new card when none fits. <a href="ai/">Use cards with your AI &rarr;</a></p>
 """
         self.page("", "Edgible cards: self-hosted apps, with the test date on every card",
                   "Self-hosted setups written down to be shared: run one on a machine you control, change it, and share it back. Each is tested end to end on a real Edgible serving device.",
