@@ -6,7 +6,7 @@
 #
 # sources    one row per place we look
 #   name        what people call it
-#   url         where it is
+#   url         where it is (optional: a kind of source, with no one address, leaves it out)
 #   good_for    the kind of app it surfaces
 #   read_by     how it is read: code (pick-app or check-map read it), agent (the grow agent or the
 #               skill follow a find hint), person (Stefano or a maintainer browses it)
@@ -34,6 +34,12 @@ sources:
     used_for: the source edgible categories
     reviewed: 2026-11-01
     note: "the candidates field; add an app here when it passes the check below, not before"
+  - name: Self-hosting app catalogs
+    good_for: "curated app stores and installers that package self-hosted apps. An app several of them choose to carry and maintain is a good sign it is established and runs well in a container"
+    read_by: code
+    used_for: all categories without source edgible
+    reviewed: 2026-11-07
+    note: "one signal for which apps to look at first, not a rule: new apps score low because they are new"
   - name: MCP Registry
     url: https://registry.modelcontextprotocol.io/v0/servers
     good_for: MCP servers; ones with packages run on your own machine, ones with only remotes are already hosted

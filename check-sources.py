@@ -80,7 +80,7 @@ def main(argv: list[str]) -> int:
     unchecked: list[str] = []
 
     for s in sources.get("sources", []):
-        if str(s["url"]).startswith("http"):
+        if str(s.get("url", "")).startswith("http"):
             why = reachable(s["url"])
             if why:
                 findings.append(f"**{s['name']}** ({s['url']}) {why}.")

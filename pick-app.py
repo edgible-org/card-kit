@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import re
 import sys
 import tarfile
@@ -45,6 +46,14 @@ import yaml
 MAP = Path(__file__).resolve().parent / "skills" / "edgible-cards" / "needs-map.yaml"
 DEFAULT_CAP = 5   # cards a category grows to, unless its entry sets cards_wanted
 DATA = "https://github.com/awesome-selfhosted/awesome-selfhosted-data/archive/refs/heads/master.tar.gz"
+# Openly licensed catalogs of self-hosted apps. An app that people choose to package and keep running
+# is a sign of an established app, which stars alone are not. Only names are read, and only counted.
+CATALOG_YUNOHOST = "https://app.yunohost.org/default/v3/apps.json"
+CATALOG_TREES = [
+    ("runtipi/runtipi-appstore", "master", r"^apps/([^/]+)/config\.json$"),
+    ("IceWhaleTech/CasaOS-AppStore", "main", r"^Apps/([^/]+)/docker-compose\.yml$"),
+    ("coollabsio/coolify", "main", r"^templates/compose/([^/]+)\.ya?ml$"),
+]
 
 
 def slug(name: str) -> str:
@@ -60,6 +69,40 @@ def apps() -> list[dict]:
         for m in tar.getmembers():
             if m.isfile() and "/software/" in m.name and m.name.endswith(".yml"):
                 found.append(yaml.safe_load(tar.extractfile(m)))
+    return found
+
+
+def fold(name: str) -> str:
+    """A name as catalogs may spell it: Uptime Kuma, uptime-kuma and uptimekuma are one app."""
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+def github_tree(repo: str, branch: str) -> list[str]:
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1",
+                                 headers={"User-Agent": "edgible-card-kit"})
+    if os.environ.get("GH_TOKEN"):
+        req.add_header("Authorization", f"Bearer {os.environ['GH_TOKEN']}")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return [t["path"] for t in json.load(r)["tree"]]
+
+
+def catalogs() -> list[set[str]]:
+    """Each catalog's app names, folded. One that cannot be read is left out: it only orders candidates,
+    and with none at all they fall back to stars."""
+    found = []
+    try:
+        req = urllib.request.Request(CATALOG_YUNOHOST, headers={"User-Agent": "edgible-card-kit"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            apps_there = json.load(r)["apps"]
+        found.append({fold(k) for k in apps_there}
+                     | {fold((v.get("manifest") or {}).get("name")) for v in apps_there.values()})
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"note: a catalog could not be read: {exc}", file=sys.stderr)
+    for repo, branch, pattern in CATALOG_TREES:
+        try:
+            found.append({fold(m.group(1)) for p in github_tree(repo, branch) if (m := re.match(pattern, p))})
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"note: a catalog could not be read: {exc}", file=sys.stderr)
     return found
 
 
@@ -162,7 +205,12 @@ def main(argv: list[str]) -> int:
                 continue
             candidates.append(candidate(app))
         if candidates:
-            candidates.sort(key=lambda a: -(a["stars"] or 0))
+            # Most packaged first, then stars: the agent is only offered the first few.
+            lists = catalogs()
+            for c in candidates:
+                name = fold(c["name"])
+                c["packaged_by"] = sum(name in cat for cat in lists) if len(name) >= 4 else 0
+            candidates.sort(key=lambda a: (-a["packaged_by"], -(a["stars"] or 0)))
             print(json.dumps({"category": entry["category"], "entry": entry,
                               "candidates": candidates[:args.count], "unlisted_gaps": unlisted},
                              indent=2, default=str))
