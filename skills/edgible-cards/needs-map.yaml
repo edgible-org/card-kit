@@ -299,7 +299,7 @@
   permissions: "knowledge bases and groups decide which documents each person's questions can draw on; with need-to-know rules, such as a law firm's ethical walls, one shared knowledge base is wrong"
   builders: "a private model and document chat for a prototype, so early users' data does not go to an outside AI service"
   machine: much memory; a GPU or Apple Silicon for anything but small models
-  cards: [assistant, litellm, ollama-osx]
+  cards: [assistant, litellm, ollama-osx, open-webui]
   find: "awesome-selfhosted lists only a few; also GitHub repositories tagged local-llm or llm-inference, most starred and recently updated"
   ask: ["what hardware do you have?", "chat, documents, or an API for your own apps?"]
 
@@ -315,7 +315,7 @@
   permissions: "every tool the server offers is something the assistant can do with the person's data; offer read-only tools first, and ask before tools that change or delete things"
   builders: "the quickest way to let early users try an MCP server: publish it from the developer's machine or a small cloud server, without building hosting"
   machine: "next to the data or tools it reaches; always on if others use it. Most packaged servers speak stdio, so publishing one needs a bridge container that serves it over Streamable HTTP; a server that already speaks HTTP needs none"
-  cards: [mcp-signin, mcp-bridge, edgible-mcp]
+  cards: [mcp-signin, mcp-bridge, edgible-mcp, grafana-mcp]
   candidates:
     - {name: Grafana MCP, repo: grafana/mcp-grafana, why: "reaches dashboards and metrics a person already runs, and can be read-only; has its own multi-architecture image and an HTTP mode; needs a Grafana to point at"}
     - {name: GitHub MCP Server, repo: github/github-mcp-server, why: "GitHub's own server, with a multi-architecture image; a clear use, but needs a GitHub token the person supplies"}
@@ -354,7 +354,7 @@
     regulated: "do not let it answer from client, patient, or financial records; send those questions to a person"
   permissions: "a public bot answers anyone, so its knowledge base must hold only what anyone may see"
   machine: always on, so usually a small cloud server; a GPU only for a local model
-  cards: [n8n]
+  cards: [n8n, chatwoot]
   candidates:
     - {name: Typebot, repo: baptisteArno/typebot.io, why: "a chatbot builder with a website widget: the public viewer and the admin builder are separate apps, which suits their different auth modes; needs Postgres"}
     - {name: Chatwoot, repo: chatwoot/chatwoot, why: "a customer support inbox with website chat and AI replies; heavier, with Rails, Sidekiq, Postgres and Redis"}
@@ -373,7 +373,7 @@
   permissions: "agents act with the credentials they are given: give each one only the keys and tools it needs. An agent with a shell (OpenClaw) acts on its machine as whoever runs it: give it a machine you are willing to hand it, never your personal laptop, and never publish its control panel on none"
   builders: "a fast way to prototype an AI feature or product and let early users try it through an API"
   machine: modest; the model runs elsewhere unless it is local
-  cards: [openclaw, n8n, litellm]
+  cards: [openclaw, n8n, litellm, langflow]
   candidates:
     - {name: Langflow, repo: langflow-ai/langflow, why: "a visual builder for agents and RAG apps that publishes each flow as an API; one container to start"}
     - {name: Dify, repo: langgenius/dify, why: "a full platform for building AI apps and chatbots; the most used, but many services behind one Compose file"}
