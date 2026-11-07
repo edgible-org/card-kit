@@ -967,7 +967,7 @@ class Site:
 {fit_section(c["fit"])}
 {upstream_section(UPSTREAM.for_card(self.upstream, name))}
 {needs_html}
-<p class="by-hand">Setting it up by hand? Install Edgible from <a href="https://edgible.com/">edgible.com</a>, then follow the steps below.</p>
+<p class="by-hand">Setting it up by hand? Install Edgible from <a href="https://edgible.com/">edgible.com</a>, then follow the steps below, or <a href="../run-without-edgible/">run it without Edgible</a>.</p>
 <article class="readme">
 {self.readme_html(c)}
 </article>
