@@ -754,11 +754,13 @@ class Site:
             return
         data = yaml.safe_load(SOURCES.read_text()) or {}
         read = {"code": "Read automatically", "agent": "Followed by our AI agent", "person": "Browsed by a person"}
+        # A source with no address is a kind of source, so it is plain text.
+        source_name = lambda s: f'<a href="{esc(s["url"])}">{esc(s["name"])}</a>' if s.get("url") else esc(s["name"])
         rows = "".join(
-            f'<tr><td><a href="{esc(s["url"])}">{esc(s["name"])}</a></td><td>{esc(s["good_for"])}'
+            f'<tr><td>{source_name(s)}</td><td>{esc(s["good_for"])}'
             + (f'<br><small>{esc(s["note"])}</small>' if s.get("note") else "")
             + f'</td><td>{esc(read.get(s["read_by"], s["read_by"]))}</td><td>{esc(str(s["reviewed"]))}</td></tr>'
-            for s in data.get("sources", []) if str(s["url"]).startswith("http"))
+            for s in data.get("sources", []) if str(s.get("url", "")).startswith("http") or "url" not in s)
         bar = "".join(f"<li>{esc(b)}</li>" for b in data.get("bar", []))
         later = "".join(
             f'<tr><td><a href="https://github.com/{esc(p["repo"])}">{esc(p["name"])}</a></td><td>{esc(p["why"])}'

@@ -91,7 +91,7 @@ def main() -> int:
         problems += [f"{c}: no card {s} in edgible-org/cards" for s in e.get("cards", []) if s not in card_names]
     listed = yaml.safe_load(SOURCES_FILE.read_text())
     for src in listed.get("sources", []):
-        for k in ("name", "url", "good_for", "read_by", "used_for", "reviewed"):
+        for k in ("name", "good_for", "read_by", "used_for", "reviewed"):
             if not src.get(k):
                 problems.append(f"sources.yaml: {src.get('name', '?')}: no {k}")
         if src.get("read_by") not in READ_BY:
