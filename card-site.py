@@ -1053,7 +1053,10 @@ class Site:
 
         sec = []
         if jobs:
-            sec.append("<h2>What people say</h2><ul>" + "".join(f"<li>{esc(j)}</li>" for j in jobs) + "</ul>")
+            sec.append("<h2>What people say</h2>"
+                       "<p>Say any of these to your AI. The <a href=\"../../ai/\">Edgible skill</a> "
+                       "guides you through your options.</p><ul>"
+                       + "".join(f"<li>{esc(j)}</li>" for j in jobs) + "</ul>")
         if replaces or drivers:
             p = []
             if replaces:
