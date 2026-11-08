@@ -333,7 +333,7 @@
     sensitive: "the same, with only short messages that say something happened, as a notification can show on a locked screen"
   permissions: "a topic or token that can publish can reach the person's phone, so give each script its own and read access only to those who need it"
   machine: small; always on, or messages wait
-  cards: []
+  cards: [ntfy]
   candidates:
     - {name: ntfy, repo: binwiederhier/ntfy, why: "one container, publishing by a plain HTTP request, with phone apps; its access control can deny everyone by default"}
     - {name: Gotify, repo: gotify/server, why: "one container with its own users and application tokens, and an Android app; no iOS app of its own"}
