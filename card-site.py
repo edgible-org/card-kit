@@ -597,7 +597,7 @@ class Site:
         recent_html = ('<p class="stats">Recently added: ' + ", ".join(f'<a href="{esc(c["name"])}/">{esc(c["name"])}</a>' for c in recent[:3]) + "</p>") if recent else ""
         body = f"""<section class="hero">
 <h1>Self-hosted apps, tested and shareable</h1>
-<p class="lead">Plain files for a working self-hosted setup: the apps, ports and sign-in, published with TLS. Nothing personal in them, the same steps every time, and each one tested on a real device, with the date on the card.</p>
+<p class="lead">A card is a working self-hosted setup, written down as plain text so anyone can run it and share it. Nothing personal in it, the same steps every time, and tested on a real device, with the date on the card.</p>
 {recent_html}
 </section>
 {self.finder()}
