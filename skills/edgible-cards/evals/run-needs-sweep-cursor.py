@@ -123,7 +123,13 @@ def parse_stream_json(raw: str) -> dict:
     }
 
 
-CURSOR_LIMIT = re.compile(r"(usage limit|rate limit|Authentication required|not logged in)", re.I)
+# Only match Cursor Agent *session* failures — never scan the model's answer text
+# (answers often say "rate limits" about product spending caps, which falsely stopped a batch).
+CURSOR_SESSION_FAIL = re.compile(
+    r"(Authentication required|Please run 'cursor agent login'|Not logged in|"
+    r"You've hit your|usage limit reached|rate limit exceeded)",
+    re.I,
+)
 
 
 def answer_cursor(prompt: str, model: str, timeout: int, mcp_config: Path | None) -> dict:
@@ -165,14 +171,14 @@ def answer_cursor(prompt: str, model: str, timeout: int, mcp_config: Path | None
             return {"error": f"timeout after {timeout}s", "events": [], "raw": out + "\n" + err}
 
         raw = (done.stdout or "") + (("\n" + done.stderr) if done.stderr else "")
-        if done.returncode != 0 and CURSOR_LIMIT.search(raw):
+        # Prefer stderr / non-zero exit for session failures; do not scan answer body.
+        fail_blob = (done.stderr or "") + "\n" + (done.stdout or "")[:400]
+        if done.returncode != 0 and CURSOR_SESSION_FAIL.search(fail_blob):
             return {"error": raw.strip() or f"agent exited {done.returncode}", "events": [], "raw": raw}
         if done.returncode != 0 and not done.stdout.strip():
             return {"error": raw.strip() or f"agent exited {done.returncode}", "events": [], "raw": raw}
 
         parsed = parse_stream_json(done.stdout or raw)
-        if CURSOR_LIMIT.search(parsed["answer"][:500] if parsed["answer"] else raw):
-            return {"error": parsed["answer"] or raw.strip(), "events": parsed["events"], "raw": raw}
         if not parsed["answer"]:
             return {"error": "no answer from Cursor agent", "events": parsed["events"], "raw": raw}
         # If stream never mentioned the skill name, still treat a long advisory answer as
