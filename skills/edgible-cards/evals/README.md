@@ -23,7 +23,8 @@ Methodically sample needs from the map, get a Cursor + edgible-cards answer for 
 
 - Default root: `~/edgible-needs-sweep/` (override with `EDGIBLE_NEEDS_SWEEP_DIR`)
 - Ledger: `~/edgible-needs-sweep/needs-sweep-ledger.json`
-- Results: `~/edgible-needs-sweep/results/needs-sweep-cursor-YYYY-MM-DD-seedN/`
+- Results: `~/edgible-needs-sweep/results/needs-sweep-cursor-<model>-YYYY-MM-DD-seedN/`
+- The **answer model** (Cursor `--model`) is the variable under test—what a person would use in their AI tool. `report.md` and `results.json` name it first; the judge model is recorded separately. Compare folders across models over time.
 
 ```bash
 # once
