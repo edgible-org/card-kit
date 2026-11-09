@@ -22,7 +22,7 @@ Methodically sample needs from the map, get a Cursor + edgible-cards answer for 
 **Output stays outside card-kit** so a run does not dirty `git status`:
 
 - Default root: `~/edgible-needs-sweep/` (override with `EDGIBLE_NEEDS_SWEEP_DIR`)
-- Ledger: `~/edgible-needs-sweep/needs-sweep-ledger.json`
+- Ledger: `~/edgible-needs-sweep/needs-sweep-ledger.json` — **per answer model** (`models.<model>.drawn`); each model has its own without-replacement pool so composer and sonnet can each cover the full map
 - Results: `~/edgible-needs-sweep/results/needs-sweep-cursor-<model>-YYYY-MM-DD-seedN/`
 - The **answer model** (Cursor `--model`) is the variable under test—what a person would use in their AI tool. `report.md` and `results.json` name it first; the judge model is recorded separately. Compare folders across models over time.
 
@@ -34,8 +34,11 @@ cd ~/.card-kit/skills/edgible-cards/evals
 # regenerate the set after needs-map changes
 python3 make-needs-sweep.py --write-set
 
-# ~2h batch (samples 10 without replacement, then scores)
+# ~2h batch (samples 10 without replacement for this model, then scores)
 ./run-needs-sweep-cursor.sh --seed 20261109 --model <id-from-agent-list-models>
+
+# pool progress for one model (or --status --all-models)
+./sample-needs-sweep.sh --model composer-2.5 --status
 
 # smoke one id without touching the ledger pool
 python3 run-needs-sweep-cursor.py \
