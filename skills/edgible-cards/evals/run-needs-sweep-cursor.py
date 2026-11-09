@@ -193,6 +193,64 @@ def answer_cursor(prompt: str, model: str, timeout: int, mcp_config: Path | None
         }
 
 
+def needs_sweep_report(results: list[dict], meta: dict) -> str:
+    """Like run-evals.report, but names the answering model as the primary variable."""
+    answer_model = meta.get("model") or "default"
+    judge = f"{meta.get('judge_harness', 'claude')} / {meta.get('judge_model') or 'default'}"
+    lines = [
+        f"# edgible-cards needs sweep (Cursor), {meta['date']}",
+        "",
+        f"**Answer model (under test):** `{answer_model}` via harness `{meta.get('harness', 'cursor')}`. "
+        f"This is the model a person would use in their AI tool.",
+        f"**Judge:** `{judge}` (scores the answer; not the product under test).",
+        f"{sum(r['pass'] for r in results)} of {len(results)} needs pass. "
+        f"Skill from card-kit `{meta['card_kit']}`, agent `{meta.get('agent', '?')}`. "
+        f"MCP: {meta.get('mcp', 'none')}.",
+        "",
+    ]
+    if meta.get("not_run"):
+        lines += [
+            f"**Stopped early, not scored:** {meta['stopped']}. "
+            f"Not run: {', '.join(meta['not_run'])}.",
+            "",
+        ]
+    lines += [
+        "| Prompt | Result | Skill loaded | expect | must_not broken | Principles missed |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for r in results:
+        loaded = (
+            f"{'yes' if r['loaded'] else 'no'} "
+            f"({'right' if r['loaded'] == r['should_load'] else 'WRONG'})"
+        )
+        lines.append(
+            f"| {r['id']} | {'pass' if r['pass'] else 'FAIL'} | {loaded} | "
+            f"{r['expect_passed']}/{r['expect_total']} | {len(r['must_not_violated'])} | "
+            f"{len(r['principles_failed'])} |"
+        )
+    lines += ["", "## Details", ""]
+    for r in results:
+        v = r["verdict"]
+        lines.append(f"### {r['id']}: {'pass' if r['pass'] else 'FAIL'}")
+        if "error" in v:
+            lines += ["", f"- Judge error: {v['error']}", ""]
+            continue
+        misses = [e for e in v.get("expect", []) if e.get("pass") is not True]
+        broken = [m for m in v.get("must_not", []) if m.get("violated") is True]
+        missed_p = [p for p in v.get("principles", []) if p.get("pass") is False]
+        for label, group in (("Missed", misses), ("Broke", broken), ("Principle missed", missed_p)):
+            for item in group:
+                lines.append(f"- {label}: {item['item']}. {item.get('evidence', '')}")
+        if v.get("better"):
+            lines.append(f"- Would be better: {v['better']}")
+        if not (misses or broken or missed_p or v.get("better")):
+            lines.append("- Nothing to note.")
+        lines.append("")
+    lines += ["## What would make answers better", ""]
+    lines += [f"- {r['id']}: {r['verdict']['better']}" for r in results if r["verdict"].get("better")]
+    return "\n".join(lines) + "\n"
+
+
 def write_mcp_config(path: Path, command: str) -> None:
     path.write_text(json.dumps({
         "mcpServers": {
@@ -341,13 +399,9 @@ def main(argv: list[str]) -> int:
     (args.out / "results.json").write_text(
         home(json.dumps({"meta": meta, "results": results}, indent=2)) + "\n"
     )
-    report_text = ev.report(results, meta)
-    # Label harness clearly at the top.
-    report_text = report_text.replace(
-        "# edgible-cards skill evals,",
-        "# edgible-cards needs sweep (Cursor harness),",
-        1,
-    )
+    # Custom header: the answering model is what a person would use in their AI tool;
+    # it is the variable we compare across runs. Judge model is secondary.
+    report_text = needs_sweep_report(results, meta)
     (args.out / "report.md").write_text(home(report_text))
     print(f"\n{sum(r['pass'] for r in results)}/{len(results)} pass. Report: {args.out / 'report.md'}")
     if stopped:

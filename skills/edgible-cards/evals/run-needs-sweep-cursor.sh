@@ -73,7 +73,9 @@ fi
 [[ ${#IDS[@]} -gt 0 ]] || { echo "no ids to run" >&2; exit 1; }
 
 if [[ -z "$OUT" ]]; then
-  OUT="$DATA_DIR/results/needs-sweep-cursor-$(date +%F)-seed${SEED}"
+  MODEL_SLUG="${MODEL:-default}"
+  MODEL_SLUG="${MODEL_SLUG//\//-}"
+  OUT="$DATA_DIR/results/needs-sweep-cursor-${MODEL_SLUG}-$(date +%F)-seed${SEED}"
 fi
 
 if [[ "$JUDGE_HARNESS" == "cursor" && "$JUDGE_MODEL" == "sonnet" ]]; then
