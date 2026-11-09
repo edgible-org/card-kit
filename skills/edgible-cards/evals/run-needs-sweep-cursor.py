@@ -193,6 +193,130 @@ def answer_cursor(prompt: str, model: str, timeout: int, mcp_config: Path | None
         }
 
 
+# Stems for expect items drafted by make-needs-sweep.py (strip per-need specifics).
+EXPECT_STEMS = [
+    "offers card(s) for this need before apps with no card",
+    "gives each offered card its cards.edgible.org page address",
+    "treats fit as",
+    "states who reaches it and which auth mode fits",
+    "asks a decision question along the lines of",
+    "does not deploy or build anything before the person chooses",
+    "says self-hosting with Edgible is a",
+    "recommends what works instead",
+]
+
+
+def expect_stem(item: str) -> str:
+    text = (item or "").strip()
+    for stem in EXPECT_STEMS:
+        if text.startswith(stem):
+            return stem
+    # Fall back: truncate long one-off expects so the table stays readable.
+    return text if len(text) <= 72 else text[:69] + "…"
+
+
+def criteria_tabulation(results: list[dict]) -> dict:
+    """Aggregate expect / must_not / principles misses across the batch."""
+    expect: dict[str, dict] = {}
+    must_not: dict[str, dict] = {}
+    principles: dict[str, dict] = {p: {"missed": 0, "applied": 0, "prompts": []} for p in ev.PRINCIPLES}
+
+    for r in results:
+        v = r.get("verdict") or {}
+        if "error" in v:
+            continue
+        pid = r["id"]
+        seen_expect = set()
+        for e in v.get("expect", []):
+            stem = expect_stem(e.get("item", ""))
+            slot = expect.setdefault(stem, {"missed": 0, "scored": 0, "prompts": []})
+            slot["scored"] += 1
+            if e.get("pass") is not True and stem not in seen_expect:
+                seen_expect.add(stem)
+                slot["missed"] += 1
+                slot["prompts"].append(pid)
+        for m in v.get("must_not", []):
+            item = m.get("item", "")
+            slot = must_not.setdefault(item, {"violated": 0, "scored": 0, "prompts": []})
+            slot["scored"] += 1
+            if m.get("violated") is True:
+                slot["violated"] += 1
+                slot["prompts"].append(pid)
+        for p in v.get("principles", []):
+            item = p.get("item", "")
+            if item not in principles:
+                principles[item] = {"missed": 0, "applied": 0, "prompts": []}
+            if p.get("pass") is None:
+                continue
+            principles[item]["applied"] += 1
+            if p.get("pass") is False:
+                principles[item]["missed"] += 1
+                principles[item]["prompts"].append(pid)
+
+    return {"expect": expect, "must_not": must_not, "principles": principles}
+
+
+def format_criteria_section(tab: dict, n_prompts: int) -> list[str]:
+    lines = [
+        "## Criteria across this batch",
+        "",
+        f"How often each criterion was missed over **{n_prompts}** scored needs "
+        "(same answer model). Use this to prioritise skill fixes.",
+        "",
+        "### Expect items",
+        "",
+        "| Criterion | Missed | Scored | Prompts |",
+        "| --- | ---: | ---: | --- |",
+    ]
+    expect_rows = sorted(
+        tab["expect"].items(),
+        key=lambda kv: (-kv[1]["missed"], -kv[1]["scored"], kv[0]),
+    )
+    if not expect_rows:
+        lines.append("| *(none scored)* |  |  |  |")
+    for stem, slot in expect_rows:
+        prompts = ", ".join(slot["prompts"][:8])
+        if len(slot["prompts"]) > 8:
+            prompts += ", …"
+        lines.append(
+            f"| {stem} | {slot['missed']}/{n_prompts} | {slot['scored']} | {prompts or '—'} |"
+        )
+
+    lines += [
+        "",
+        "### Principles",
+        "",
+        "| Principle | Missed | Applied | Prompts |",
+        "| --- | ---: | ---: | --- |",
+    ]
+    for item in ev.PRINCIPLES:
+        slot = tab["principles"].get(item, {"missed": 0, "applied": 0, "prompts": []})
+        if slot["applied"] == 0 and slot["missed"] == 0:
+            lines.append(f"| {item} | 0 | 0 (n/a) | — |")
+            continue
+        prompts = ", ".join(slot["prompts"][:8])
+        if len(slot["prompts"]) > 8:
+            prompts += ", …"
+        lines.append(
+            f"| {item} | {slot['missed']}/{slot['applied']} | {slot['applied']} | {prompts or '—'} |"
+        )
+
+    violated = [(k, v) for k, v in tab["must_not"].items() if v["violated"]]
+    lines += ["", "### must_not broken", ""]
+    if not violated:
+        lines.append("None broken in this batch.")
+    else:
+        lines += [
+            "| must_not | Broken | Prompts |",
+            "| --- | ---: | --- |",
+        ]
+        for item, slot in sorted(violated, key=lambda kv: (-kv[1]["violated"], kv[0])):
+            prompts = ", ".join(slot["prompts"])
+            lines.append(f"| {item} | {slot['violated']}/{n_prompts} | {prompts} |")
+    lines.append("")
+    return lines
+
+
 def needs_sweep_report(results: list[dict], meta: dict) -> str:
     """Like run-evals.report, but names the answering model as the primary variable."""
     answer_model = meta.get("model") or "default"
@@ -228,7 +352,10 @@ def needs_sweep_report(results: list[dict], meta: dict) -> str:
             f"{r['expect_passed']}/{r['expect_total']} | {len(r['must_not_violated'])} | "
             f"{len(r['principles_failed'])} |"
         )
-    lines += ["", "## Details", ""]
+    tab = criteria_tabulation(results)
+    meta["criteria"] = tab
+    lines += [""] + format_criteria_section(tab, len(results))
+    lines += ["## Details", ""]
     for r in results:
         v = r["verdict"]
         lines.append(f"### {r['id']}: {'pass' if r['pass'] else 'FAIL'}")
@@ -300,9 +427,26 @@ Reply with only this JSON, no other text:
 
 
 
+def rewrite_report(out: Path) -> int:
+    """Rebuild report.md (and criteria in results.json) from an existing results.json."""
+    path = out / "results.json"
+    if not path.is_file():
+        sys.exit(f"no results.json in {out}")
+    data = json.loads(path.read_text())
+    meta, results = data.get("meta", {}), data.get("results", [])
+    report_text = needs_sweep_report(results, meta)
+    home = lambda text: text.replace(str(Path.home()), "~")
+    (out / "report.md").write_text(home(report_text))
+    path.write_text(home(json.dumps({"meta": meta, "results": results}, indent=2)) + "\n")
+    print(f"rewrote {out / 'report.md'} with criteria tabulation")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True, help="directory for report and transcripts (outside card-kit)")
+    ap.add_argument("--out", type=Path, help="directory for report and transcripts (outside card-kit)")
+    ap.add_argument("--rewrite-report", action="store_true",
+                    help="rebuild report.md from --out/results.json (adds criteria tabulation; no new answers)")
     ap.add_argument("--set", type=Path, default=HERE / "needs-sweep.yaml")
     ap.add_argument("--only", nargs="+", default=[], metavar="ID")
     ap.add_argument("--model", default="", help="Cursor --model id (from agent --list-models)")
@@ -315,6 +459,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mcp", default=shutil.which("edgible-mcp") or "",
                     help="stdio Edgible MCP command for find/describe; default edgible-mcp on PATH; '' for none")
     args = ap.parse_args(argv)
+
+    if not args.out:
+        sys.exit("--out is required")
+    if args.rewrite_report:
+        return rewrite_report(args.out)
 
     # HERE = …/card-kit/skills/edgible-cards/evals → parents[2] is card-kit
     card_kit = HERE.parents[2]
