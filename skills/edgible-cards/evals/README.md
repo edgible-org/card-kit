@@ -48,7 +48,13 @@ python3 run-needs-sweep-cursor.py \
   --out ~/edgible-needs-sweep/results/smoke-$(date +%F)
 ```
 
-Inspect `report.md` in the out directory, then failing `<id>.answer.md` files. `./sample-needs-sweep.sh --status` shows drawn / remaining.
+Inspect `report.md` in the out directory, then failing `<id>.answer.md` files. `./sample-needs-sweep.sh --model composer-2.5 --status` shows drawn / remaining. Each report includes a **Criteria across this batch** table (expect stems, principles, must_not) so misses are tabulated across needs, not only listed per prompt. Rebuild an old report with:
+
+```bash
+python3 run-needs-sweep-cursor.py --rewrite-report --out ~/edgible-needs-sweep/results/<batch-dir>
+```
+
+While a batch runs, monitor with `tail -f` on the run log (the wrapper prints `monitor: tail -f …`). When starting in the background, redirect stdout to `<out>.log` so that path exists. After kicking off a run, the Cursor agent should include that `tail -f` line in its reply.
 
 Judging reuses `run-evals.py`'s Claude judge (import only; that file is unchanged). Answering is `agent -p --mode ask`.
 

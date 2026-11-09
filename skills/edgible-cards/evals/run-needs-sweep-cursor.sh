@@ -98,6 +98,11 @@ ARGS=(
 )
 [[ -n "$MODEL" ]] && ARGS+=(--model "$MODEL")
 
+LOG="${OUT}.log"
+# When started under nohup/redirect, the invoker may already tee elsewhere; still print
+# a monitor hint for whoever kicked off the batch (human or Cursor agent).
 echo "ids: ${IDS[*]}"
 echo "out: $OUT"
+echo "monitor: tail -f $LOG"
+echo "report: $OUT/report.md"
 exec python3 "$HERE/run-needs-sweep-cursor.py" "${ARGS[@]}" ${EXTRA[@]+"${EXTRA[@]}"}
