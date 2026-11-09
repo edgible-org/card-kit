@@ -766,7 +766,7 @@ class Site:
             for p in data.get("passed_over", []))
         body = f"""<p class="crumbs"><a href="../">Cards</a> / sources</p>
 <h1>Where we find apps</h1>
-<p class="lead">The places we look when choosing which app to make a card for, what an app needs to qualify, and the apps we have looked at that are not cards yet. Apps change quickly, so each source shows when it was last reviewed.</p>
+<p class="lead">The places a card starts from. Each one shows the date it was last checked. A card can also start from a pull request, and it is tested and read before it is listed.</p>
 <h2>Sources</h2>
 <div class="scroll"><table><thead><tr><th>Source</th><th>Good for</th><th>How we use it</th><th>Reviewed</th></tr></thead><tbody>{rows}</tbody></table></div>
 <h2>What an app needs to become a card</h2>
@@ -777,7 +777,7 @@ class Site:
 <p>Know a source or an app we have missed? <a href="{REPO_URL}/issues/new">Tell us</a>, or <a href="../add-your-app/">add your own app</a>.</p>
 """
         self.page("sources/", "Where we find apps | Edgible cards",
-                  "The sources Edgible looks at when choosing apps for cards, what an app needs to qualify, and the apps looked at that are not cards yet.",
+                  "The places a card starts from, each with the date it was last checked. A card can also start from a pull request.",
                   body)
 
     def inline_pictures(self, text: str, base: Path) -> str:
