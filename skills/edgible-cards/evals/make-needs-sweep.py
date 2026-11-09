@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Draft needs-sweep.yaml from needs-map.yaml, and sample batches without replacement.
 
-    python3 make-needs-sweep.py --write-set          # rewrite needs-sweep.yaml from the map
-    python3 make-needs-sweep.py --sample 10 --seed 20261109
+    python3 make-needs-sweep.py --write-set
+    python3 make-needs-sweep.py --model composer-2.5 --sample 10 --seed 20261109
 
-The prompt set lives in this folder. The ledger of drawn ids lives outside the card-kit
-repo (default ~/edgible-needs-sweep/needs-sweep-ledger.json) so sampling does not dirty git.
+The prompt set lives in this folder. The ledger lives outside card-kit
+(default ~/edgible-needs-sweep/needs-sweep-ledger.json) and is **per answer model**:
+each model has its own without-replacement pool so you can compare models over the
+full needs map. Sampling does not dirty git.
 """
 from __future__ import annotations
 
@@ -196,10 +198,27 @@ def data_dir(path: Path | None) -> Path:
     return root
 
 
+def model_slug(model: str) -> str:
+    return model.replace("/", "-")
+
+
+def empty_pool() -> dict:
+    return {"drawn": [], "batches": []}
+
+
 def load_ledger(path: Path) -> dict:
+    """Ledger shape: {\"models\": {\"<answer-model>\": {drawn, batches}}}."""
     if not path.is_file():
-        return {"drawn": [], "batches": []}
-    return json.loads(path.read_text())
+        return {"models": {}}
+    data = json.loads(path.read_text())
+    # Migrate pre-per-model ledgers (flat drawn/batches) into models["_legacy"].
+    if "models" not in data and ("drawn" in data or "batches" in data):
+        return {"models": {"_legacy": {
+            "drawn": data.get("drawn", []),
+            "batches": data.get("batches", []),
+        }}}
+    data.setdefault("models", {})
+    return data
 
 
 def save_ledger(path: Path, ledger: dict) -> None:
@@ -207,33 +226,50 @@ def save_ledger(path: Path, ledger: dict) -> None:
     path.write_text(json.dumps(ledger, indent=2) + "\n")
 
 
-def sample(ids: list[str], n: int, seed: int, ledger_path: Path, commit: bool) -> list[str]:
+def pool_for(ledger: dict, model: str) -> dict:
+    models = ledger.setdefault("models", {})
+    if model not in models:
+        models[model] = empty_pool()
+    return models[model]
+
+
+def last_sample_path(root: Path, model: str) -> Path:
+    return root / f"last-sample-{model_slug(model)}.json"
+
+
+def sample(ids: list[str], n: int, seed: int, ledger_path: Path, model: str, commit: bool) -> list[str]:
     ledger = load_ledger(ledger_path)
-    drawn = set(ledger.get("drawn", []))
+    pool = pool_for(ledger, model)
+    drawn = set(pool.get("drawn", []))
     remaining = [i for i in ids if i not in drawn]
     if not remaining:
-        sys.exit(f"no needs left in the pool ({len(drawn)} drawn). Use --reset-ledger for a new epoch.")
+        sys.exit(
+            f"no needs left for model {model!r} ({len(drawn)} drawn). "
+            f"Use --model {model} --reset-ledger for a new epoch."
+        )
     rng = random.Random(seed)
     take = min(n, len(remaining))
     chosen = rng.sample(remaining, take)
-    print(f"seed={seed} sample={take} remaining_before={len(remaining)} remaining_after={len(remaining) - take}")
+    print(f"model={model} seed={seed} sample={take} "
+          f"remaining_before={len(remaining)} remaining_after={len(remaining) - take}")
     print("chosen:")
     for i in chosen:
         print(f"  {i}")
     if commit:
-        ledger.setdefault("drawn", []).extend(chosen)
-        ledger.setdefault("batches", []).append({
+        pool.setdefault("drawn", []).extend(chosen)
+        pool.setdefault("batches", []).append({
             "date": str(date.today()),
             "seed": seed,
             "ids": chosen,
         })
         save_ledger(ledger_path, ledger)
-        print(f"ledger updated: {ledger_path} ({len(ledger['drawn'])} drawn total)")
+        print(f"ledger updated: {ledger_path} model={model} ({len(pool['drawn'])} drawn)")
     else:
         print("ledger not updated (--no-commit)")
-    # Write last sample for the shell wrapper to pick up.
-    last = ledger_path.parent / "last-sample.json"
-    last.write_text(json.dumps({"date": str(date.today()), "seed": seed, "ids": chosen}, indent=2) + "\n")
+    last = last_sample_path(ledger_path.parent, model)
+    last.write_text(json.dumps({
+        "date": str(date.today()), "seed": seed, "model": model, "ids": chosen,
+    }, indent=2) + "\n")
     print(f"last sample: {last}")
     return chosen
 
@@ -241,56 +277,98 @@ def sample(ids: list[str], n: int, seed: int, ledger_path: Path, commit: bool) -
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--write-set", action="store_true", help=f"rewrite {SET_PATH.name} from needs-map.yaml")
-    ap.add_argument("--sample", type=int, metavar="N", help="draw N unused needs without replacement")
+    ap.add_argument("--model", default="",
+                    help="answer model under test; without-replacement pool is per model (required for sample/status/reset/release)")
+    ap.add_argument("--sample", type=int, metavar="N", help="draw N unused needs for --model without replacement")
     ap.add_argument("--seed", type=int, default=int(date.today().strftime("%Y%m%d")))
     ap.add_argument("--data-dir", type=Path, default=None, help=f"ledger/results root (default {DEFAULT_DATA})")
     ap.add_argument("--ledger", type=Path, default=None, help="ledger path (default <data-dir>/needs-sweep-ledger.json)")
     ap.add_argument("--no-commit", action="store_true", help="print a sample without updating the ledger")
-    ap.add_argument("--reset-ledger", action="store_true", help="clear the ledger (new epoch)")
+    ap.add_argument("--reset-ledger", action="store_true",
+                    help="clear this --model's pool (or all models if --model is omitted with --all-models)")
+    ap.add_argument("--all-models", action="store_true", help="with --status/--reset-ledger, apply to every model pool")
     ap.add_argument("--release-unscored", nargs="+", metavar="ID",
-                    help="remove these ids from the ledger so they can be drawn again")
-    ap.add_argument("--status", action="store_true", help="print drawn / remaining counts")
+                    help="remove these ids from this --model's pool so they can be drawn again")
+    ap.add_argument("--status", action="store_true", help="print drawn / remaining counts for --model (or all)")
+    ap.add_argument("--adopt-legacy", action="store_true",
+                    help="move a pre-per-model (_legacy) pool into --model, then clear _legacy")
     args = ap.parse_args(argv)
 
     root = data_dir(args.data_dir)
     ledger_path = args.ledger or (root / LEDGER_NAME)
+    needs_model = args.sample is not None or args.release_unscored or (
+        (args.status or args.reset_ledger) and not args.all_models
+    ) or args.adopt_legacy
+    if needs_model and not args.model:
+        sys.exit("--model is required (without-replacement pools are per answer model)")
 
     if args.write_set:
         entries = parse_needs_map(NEEDS_MAP)
         write_set(entries, SET_PATH)
         print(f"wrote {len(entries)} scenarios to {SET_PATH}")
 
+    if args.adopt_legacy:
+        ledger = load_ledger(ledger_path)
+        legacy = ledger.get("models", {}).get("_legacy")
+        if not legacy:
+            sys.exit("no _legacy pool to adopt")
+        ledger["models"][args.model] = legacy
+        del ledger["models"]["_legacy"]
+        save_ledger(ledger_path, ledger)
+        print(f"adopted _legacy into model {args.model!r}: {len(legacy.get('drawn', []))} drawn")
+
     if args.reset_ledger:
-        save_ledger(ledger_path, {"drawn": [], "batches": []})
-        print(f"reset ledger: {ledger_path}")
+        ledger = load_ledger(ledger_path)
+        if args.all_models:
+            ledger["models"] = {}
+            save_ledger(ledger_path, ledger)
+            print(f"reset all model pools: {ledger_path}")
+        else:
+            ledger.setdefault("models", {})[args.model] = empty_pool()
+            save_ledger(ledger_path, ledger)
+            print(f"reset pool for model {args.model!r}: {ledger_path}")
 
     if args.release_unscored:
         ledger = load_ledger(ledger_path)
+        pool = pool_for(ledger, args.model)
         release = set(args.release_unscored)
-        ledger["drawn"] = [i for i in ledger.get("drawn", []) if i not in release]
-        for batch in ledger.get("batches", []):
+        pool["drawn"] = [i for i in pool.get("drawn", []) if i not in release]
+        for batch in pool.get("batches", []):
             batch["ids"] = [i for i in batch.get("ids", []) if i not in release]
         save_ledger(ledger_path, ledger)
-        print(f"released {sorted(release)}; drawn now {len(ledger['drawn'])}")
+        print(f"released {sorted(release)} for {args.model!r}; drawn now {len(pool['drawn'])}")
 
-    if not SET_PATH.is_file() and (args.sample or args.status):
+    if not SET_PATH.is_file() and (args.sample is not None or args.status):
         sys.exit(f"{SET_PATH} missing; run with --write-set first")
 
     ids = load_ids_from_set(SET_PATH) if SET_PATH.is_file() else []
 
     if args.status:
         ledger = load_ledger(ledger_path)
-        drawn = set(ledger.get("drawn", []))
-        remaining = [i for i in ids if i not in drawn]
-        print(f"total={len(ids)} drawn={len(drawn)} remaining={len(remaining)}")
-        print(f"ledger={ledger_path}")
+        models = sorted(ledger.get("models", {}))
+        if args.all_models or not args.model:
+            if not models:
+                print(f"total={len(ids)} no model pools yet; ledger={ledger_path}")
+            for name in models:
+                pool = ledger["models"][name]
+                drawn = set(pool.get("drawn", []))
+                remaining = [i for i in ids if i not in drawn]
+                print(f"model={name} total={len(ids)} drawn={len(drawn)} remaining={len(remaining)}")
+            print(f"ledger={ledger_path}")
+        else:
+            pool = pool_for(ledger, args.model)
+            drawn = set(pool.get("drawn", []))
+            remaining = [i for i in ids if i not in drawn]
+            print(f"model={args.model} total={len(ids)} drawn={len(drawn)} remaining={len(remaining)}")
+            print(f"ledger={ledger_path}")
 
     if args.sample is not None:
         if args.sample < 1:
             sys.exit("--sample must be >= 1")
-        sample(ids, args.sample, args.seed, ledger_path, commit=not args.no_commit)
+        sample(ids, args.sample, args.seed, ledger_path, args.model, commit=not args.no_commit)
 
-    if not (args.write_set or args.sample is not None or args.status or args.reset_ledger or args.release_unscored):
+    if not (args.write_set or args.sample is not None or args.status or args.reset_ledger
+            or args.release_unscored or args.adopt_legacy):
         ap.print_help()
         return 2
     return 0
