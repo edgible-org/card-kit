@@ -473,7 +473,7 @@ class Site:
 {head}</head>
 <body>
 <header class="top"><div class="wrap">
-<div class="brand"><a class="brand-logo" href="https://www.edgible.ai" target="_self"><img src="{up}assets/images/edgible-logo-white.png" alt="Edgible" width="107" height="24"></a><a class="brand-cards" href="{up}">Cards</a></div>
+<div class="brand"><a class="brand-logo" href="https://www.edgible.ai" target="_self"><img src="{up}assets/images/edgible-logo-white.svg" alt="Edgible" width="107" height="24"></a><a class="brand-cards" href="{up}">Cards</a></div>
 <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button>
 <nav id="site-nav"><a href="{up}about/">About</a><a href="{up}ai/">Using AI</a><a href="{up}playbooks/">AI Playbooks</a><a href="{up}needs/">Needs</a><a href="{up}sources/">Sources</a><a class="star" href="{REPO_URL}" title="Star edgible-org/cards on GitHub, so others find it">&#9733; Star on GitHub{self.stars}</a></nav>
 </div></header>
