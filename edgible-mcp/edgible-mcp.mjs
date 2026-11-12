@@ -5,6 +5,9 @@
 //   edgible-mcp --allow-write       also the tools that deploy, move and remove apps
 //   edgible-mcp --http 8000         the same over Streamable HTTP, at /mcp (and /healthz)
 //
+// It also serves the Edgible CLI's own MCP tools (cli-tools.mjs): an app's record, status, logs
+// and settings changes, from `edgible mcp`.
+//
 // Read-only by default: find, describe and whats_running (server.mjs). With --allow-write
 // (or EDGIBLE_MCP_ALLOW_WRITE=1) it adds deploy_card, move_card, remove_card, card_status and
 // activity (write.mjs): every change asks the person first and is recorded, and
@@ -21,6 +24,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { READ_INSTRUCTIONS, VERSION, prepareSignIn, registerReadTools } from './server.mjs';
 import { ALLOWED, RECORD, STATE, WRITE_INSTRUCTIONS, actor, keyPage, registerWriteTools } from './write.mjs';
+import { loadCliTools, registerCliTools } from './cli-tools.mjs';
 
 const argv = process.argv.slice(2);
 const allowWrite = argv.includes('--allow-write') || process.env.EDGIBLE_MCP_ALLOW_WRITE === '1';
@@ -29,10 +33,11 @@ const host = argv.includes('--host') ? argv[argv.indexOf('--host') + 1] : '127.0
 
 function buildServer() {
   const server = new McpServer({ name: 'edgible', version: VERSION }, {
-    instructions: allowWrite ? `${READ_INSTRUCTIONS} ${WRITE_INSTRUCTIONS}` : READ_INSTRUCTIONS,
+    instructions: `${allowWrite ? `${READ_INSTRUCTIONS} ${WRITE_INSTRUCTIONS}` : READ_INSTRUCTIONS}${cliTools.length ? ` ${CLI_INSTRUCTIONS}` : ''}`,
   });
   registerReadTools(server);
   if (allowWrite) registerWriteTools(server);
+  registerCliTools(server, allowWrite);
   return server;
 }
 
@@ -40,6 +45,9 @@ const tools = allowWrite
   ? `read and write tools${ALLOWED.length ? ` (changes only on ${ALLOWED.join(', ')})` : ''}, record in ${RECORD}`
   : 'read-only tools';
 if (allowWrite) await mkdir(STATE, { recursive: true });
+// The CLI's own tools (cli-tools.mjs), listed once at start; without the CLI the cards tools still serve.
+const cliTools = await loadCliTools(allowWrite);
+const CLI_INSTRUCTIONS = 'The Edgible CLI\'s tools are here too: list_applications, get_application, get_application_status and get_application_logs for one app\'s record, deployment and its own output, list_devices for devices with last seen, preview_application_change' + (allowWrite ? ' and apply_application_change, which asks first like the tools above.' : '.');
 
 if (!port) {
   await buildServer().connect(new StdioServerTransport());
