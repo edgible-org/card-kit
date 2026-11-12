@@ -350,15 +350,21 @@ def main(argv: list[str]) -> int:
 
     docs = spec["docs"]
     words = {5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+    # The device id comes from python3, not jq: a fresh Ubuntu has python3 but no jq, and a card
+    # should not need a package installed (with sudo) just to publish. Same result as the old jq:
+    # the id of the one device with that name, else an error naming what was found, and exit 1.
+    pick_device = """import json, sys
+name = sys.argv[1]
+found = [d for d in json.load(sys.stdin) if d["name"] == name]
+if len(found) != 1:
+    sys.exit("need exactly one device named " + name + " (" + ", ".join(d["status"] + " " + d["id"] for d in found) + ")")
+print(found[0]["id"])
+"""
     if multi:
-        lookup = ("device_id() {\n  edgible device list --json | jq -er --arg name \"$1\" '\n"
-                  "    map(select(.name == $name))\n    | if length == 1 then .[0].id\n"
-                  "      else error(\"need exactly one device named \" + $name + \" (\" + (map(.status + \" \" + .id) | join(\", \")) + \")\")\n"
-                  "      end\n  '\n}\n" + "\n".join(f"{id_of(pl)}=$(device_id \"${var_of(pl)}\")" for pl in app_places))
+        lookup = ("device_id() {\n  edgible device list --json | python3 -c '\n" + pick_device
+                  + "  ' \"$1\"\n}\n" + "\n".join(f"{id_of(pl)}=$(device_id \"${var_of(pl)}\")" for pl in app_places))
     else:
-        lookup = ("device_id=$(edgible device list --json | jq -er --arg name \"$DEVICE\" '\n  map(select(.name == $name))\n"
-                  "  | if length == 1 then .[0].id\n    else error(\"need exactly one device named \" + $name + \" (\" + (map(.status + \" \" + .id) | join(\", \")) + \")\")\n"
-                  "    end\n')")
+        lookup = "device_id=$(edgible device list --json | python3 -c '\n" + pick_device + "' \"$DEVICE\")"
     helper_steps = ""
     for i, pl in enumerate(helper_places):
         where = f"On the machine for place `{pl}`. " if multi else ""

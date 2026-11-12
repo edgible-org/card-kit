@@ -44,7 +44,7 @@ Before anything starts, put the card's open choices to the person in one message
 - **The card's record.** Say how recently it was tested and what the nightly image scan found, from the same data as the README's badges (public, no sign-in). With the Edgible MCP tools and no shell, `describe` has both: its Tested section carries the nightly test (date, Edgible version, result) and, once the server is recent enough, an `image scan:` line with last night's scan; `find` shows them in one line per card. Use those, and do not ask the person to run `curl`. Without an `image scan:` line, say the image scan is not available from here. With a shell, fetch it directly:
 
   ```bash
-  curl -fsS https://raw.githubusercontent.com/edgible-org/cards/test-status/status.json | jq '.["<card>"]'
+  curl -fsS https://raw.githubusercontent.com/edgible-org/cards/test-status/status.json | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin).get("<card>"), indent=2))'
   curl -fsS https://raw.githubusercontent.com/edgible-org/cards/scan-status/<card>.json
   ```
 

@@ -10,7 +10,7 @@ Each card runs from a directory on its machine: the one that holds its `card.yml
 dir=~/umami                    # the card's directory
 f=docker-compose.yml
 C="docker compose --env-file $dir/card.env -f $dir/$f"
-project=$($C config --format json | jq -r .name)
+project=$($C config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["name"])')
 ```
 
 ### What is running
@@ -141,7 +141,7 @@ The published apps stay as they are, unless the card's ports or apps changed.
 
 Some cards run an app whose source a person may want to change (teamdesk is one). A card says so with `source:` on the app in `card.yml`: `repo`, and when they are set `ref`, `path`, `dockerfile`, `dev`. The README's **Customising** section is the same method in words. Read `source` from the card the person runs, from upstream `main`, not from memory. A card with no `source:` has no code to change: say so, and if the person still wants a change, offer the app's own settings, or a fork of the app's project that they build as in [Add your own app](build.md#add-your-own-app).
 
-1. **Find the card's directory and the running image:** [What is running](#what-is-running), then `$C config --format json | jq -r '.services[].image'`. Confirm it matches `from:` in `card.yml`, and look for an `<APP>_IMAGE` line in `card.env`: if it is set, the person has customised before, and that image name is what to build on.
+1. **Find the card's directory and the running image:** [What is running](#what-is-running), then `$C config --images`. Confirm it matches `from:` in `card.yml`, and look for an `<APP>_IMAGE` line in `card.env`: if it is set, the person has customised before, and that image name is what to build on.
 2. **Get the code.** Ask where it should go, and fork it for them only with a yes (`gh repo fork <repo> --clone`). Start from `source.ref` when there is one, so they begin from the code that is running. If `repo` has no Dockerfile, stop: the card is wrong, see [Fix a card or card-kit](build.md#fix-a-card-or-card-kit).
 3. **Make the change in the clone.** Read the repository's own notes first (`CLAUDE.md`, `README.md`), because they hold its rules. Try it from source with `source.dev` before building an image, and run the repository's own tests and checks.
 4. **Build on the machine that runs the card:** `docker build -f <dockerfile> -t <app>:custom <path>`. Give the image its own tag, never one the card pinned. Push to a registry only if the person wants it on another machine, and ask first, because a pushed image is public unless the registry says otherwise. Build for each CPU the target machine has.
