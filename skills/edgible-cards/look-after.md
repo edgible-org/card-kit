@@ -15,6 +15,8 @@ project=$($C config --format json | python3 -c 'import json, sys; print(json.loa
 
 ### What is running
 
+From PowerShell with the device in WSL, run these through `wsl.exe -d <distro> --`, with the signed-in `edgible` ([which one](SKILL.md#where-you-are-running)), and name the Edgible device in your answer with each app's address and auth mode.
+
 ```bash
 docker compose ls --all    # each Compose project, with the path of its Compose file
 edgible app list           # each published app: name, port, device, status
