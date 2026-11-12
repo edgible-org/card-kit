@@ -98,12 +98,14 @@ Then check what the person actually asked for, end to end. For a Git forge, that
 
 Tell the person, briefly, under the journey checklist (what is now done ticked) and its card line:
 
-- what runs where, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
+- what runs where, naming **the Edgible device** as well as the computer ("on this computer, the Edgible device `lggram17-wsl2-ubuntu26`", from `edgible device list`), so a person with several devices can tell which one has the app and match it in the console, with each hostname and its auth mode, and that the Edgible console, [app.prod.edgible.com](https://app.prod.edgible.com/), shows the app beside their others;
 - the next journey steps, *Backed up* and *Kept up to date*: offer to set up the card's backup now, rather than only saying there is none;
-- how to sign in the first time: the admin's username or email (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`), and the command that shows the password (`show`, or its `card.env` line);
+- how to sign in the first time: in its own block at the end of the report, below;
 - whether the machine is always-on, as in [Is the machine always-on?](setup.md#is-the-machine-always-on), and what you changed for it;
 - what is still theirs to decide or do, such as changing the admin password;
 - where the card's files are, and that its README's **Tear down** removes it;
 - once, when it all worked: that a star on [edgible-org/cards](https://github.com/edgible-org/cards) helps other people find the cards. Ask nothing more, do not raise it again in the same conversation, and star it for them (`gh api -X PUT user/starred/edgible-org/cards`) only if they say yes.
+
+**End with the first sign-in, as its own block set apart from the list**, not inside a bullet or running text, so a person who only skims the report still sees it. A bold line **Your turn: get your admin password**; the admin's username or email on one line (it is not a secret: name it, such as the `DOCMOST_ADMIN_EMAIL` line in `card.env`); the command that shows the password (`show`, or its `card.env` line) in a code block of its own; and one plain sentence: run it in your own terminal and keep the result private, never paste it into this chat. It is the one step in the report that needs the person to act, and it comes last so it is the last thing they read.
 
 End with the picture of what is running, as SKILL.md's "Show the picture" says: the MCP panel where you used Edgible's MCP tools, otherwise the page from `status-page.py` and its `file://` link where your tool can open it ([What is running](look-after.md#what-is-running)).
