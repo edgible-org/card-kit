@@ -1307,4 +1307,4 @@ export function registerWriteTools(server) {
   return server;
 }
 
-export { ALLOWED, RECORD, STATE };
+export { ALLOWED, RECORD, STATE, appDevices, apps, needs, notAllowed, record, refused, text };
