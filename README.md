@@ -22,6 +22,8 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    | Cursor | `~/.cursor/skills/` (it also reads `~/.claude/skills/`) |
    | Codex | `~/.codex/skills/`. Codex's built-in skill installer copies the folder rather than cloning it, so the skill cannot say its version or update itself: clone and link as above instead (a Mac without git needs Apple's Command Line Tools, `xcode-select --install`). If it already copied it, "Update the Edgible skill" swaps the copy for a link. On a Mac, Codex is in the ChatGPT desktop app: choose Codex from the menu at the top left, next to Home |
    | OpenCode | `~/.config/opencode/skills/`. OpenCode may say it can't install skills: run these steps in a terminal yourself, then start OpenCode again |
+   | GitHub Copilot CLI | `~/.copilot/skills/`, or register the cloned folder in `~/.copilot/settings.json` (on Ubuntu it did that itself: it cloned to `~/.card-kit` and listed `~/.card-kit/skills`). On Windows it has made a plain copy, which cannot say its version or update itself: clone and link as above instead. `copilot skill list` shows what it loaded; start a new session after |
+   | GitHub Copilot in VS Code | `~/.copilot/skills/` in the home folder of the computer VS Code is attached to: with the WSL extension that is the Linux home (`/home/<name>/.copilot/skills`), not the Windows one. **Chat: Configure Skills** lists what it loaded; `/` may not list it |
    | Another agent | its documentation; many read `~/.agents/skills/` |
 
    - macOS or Linux: `mkdir -p ~/.cursor/skills && ln -s ~/.card-kit/skills/edgible-cards ~/.cursor/skills/edgible-cards` (with your agent's folder).
@@ -31,7 +33,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
 
 **In the Claude app** (Chat or Cowork, on desktop, web or phone), a skill is an upload to your account, and a chat cannot install or update it. Download [edgible-cards.zip](https://github.com/edgible-org/card-kit/releases/download/skill/edgible-cards.zip), rebuilt on every change to the skill, and in **Customize → Skills** choose **+ → Create skill → Upload a skill**. To update it, remove the old edgible-cards there and upload the new zip. Claude Code, in a terminal or Desktop's Code tab, reads the linked folder instead, as above.
 
-Not yet tried: the Windows junction. If a step fails, say what it printed.
+The Windows junction works for GitHub Copilot CLI and for Copilot in VS Code (tried 12 November 2026); the other agents' Windows folders are not tried yet. If a step fails, say what it printed.
 
 ## What a card is
 
