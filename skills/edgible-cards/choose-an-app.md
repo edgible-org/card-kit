@@ -34,7 +34,13 @@ done | sort -rn | head -25
 ```bash
 # MCP servers: the official registry. Servers with packages run on your own machine.
 curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=postgres&version=latest&limit=50" \
-  | jq -r '.servers[].server | select(.packages) | [.name, .repository.url // "-", .description] | @tsv'
+  | python3 -c '
+import json, sys
+for entry in json.load(sys.stdin)["servers"]:
+    s = entry["server"]
+    if s.get("packages"):
+        print(s["name"], (s.get("repository") or {}).get("url") or "-", s.get("description"), sep="\t")
+'
 # Other AI tools: GitHub topics, most starred, updated recently
 gh api "search/repositories?q=topic:vector-database+pushed:>$(date -v-6m +%F 2>/dev/null || date -d '6 months ago' +%F)&sort=stars&per_page=15" \
   --jq '.items[] | [.stargazers_count, .full_name, .description] | @tsv'
