@@ -34,3 +34,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./run check-map
+
+  skill-frontmatter:
+    # SKILL.md's front matter must be valid YAML for a strict parser (GitHub Copilot CLI
+    # refuses the whole skill otherwise; VS Code, Codex and Cursor forgive it), with a
+    # description under 1024 characters. An unquoted ": " in the description breaks it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          import yaml
+          text = open("skills/edgible-cards/SKILL.md", encoding="utf-8").read()
+          front = text.split("---")[1]
+          meta = yaml.safe_load(front)
+          assert meta["name"] == "edgible-cards", meta.get("name")
+          assert 0 < len(meta["description"]) < 1024, len(meta["description"])
+          print("front matter ok:", len(meta["description"]), "characters")
+          PY
