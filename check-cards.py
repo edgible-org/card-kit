@@ -17,6 +17,9 @@ It also checks the naming conventions the tools rely on, so card.yml stays short
 - an app with source: has image: ${<APP>_IMAGE:-<from>} in its Compose file, a documented <APP>_IMAGE
   line in card.env, and a Customising section in the README (card-readme writes it).
 
+The files a person runs on their own machine (README.md, prepare.sh, install.sh, uninstall.sh) do
+not run jq, which a fresh Ubuntu lacks: they read JSON with python3. test/ may use it.
+
 A card of metadata.type app is one app that other cards are built from, so it also must:
 - have test.yml;
 - have one Compose file and one place;
@@ -100,6 +103,25 @@ def card_paths(argv: list[str]) -> list[Path]:
     if not found:
         sys.exit("no cards found")
     return found
+
+
+# What a person runs on their own machine must not need jq: a fresh Ubuntu has python3 but no jq,
+# and installing it takes sudo, a step a newcomer should not meet. test/ runs on the test machines
+# and may use it. A jq at the start of a line or after | ; & ( ` or $( is a command; gh's own --jq
+# and a word in prose do not match.
+PERSON_RUNS = ("README.md", "prepare.sh", "install.sh", "uninstall.sh")
+JQ_COMMAND = re.compile(r"(?:^|[|;&(`]|\$\()\s*jq(?=\s)")
+
+
+def jq_errors(card_dir: Path) -> list[str]:
+    errors = []
+    for name in PERSON_RUNS:
+        path = card_dir / name
+        if path.is_file():
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                if JQ_COMMAND.search(line):
+                    errors.append(f"{name} line {number} runs jq, which a fresh Ubuntu lacks: read the JSON with python3 (json.load) instead")
+    return errors
 
 
 def env_name(name: str) -> str:
@@ -450,7 +472,8 @@ def main(argv: list[str]) -> int:
                     f"{path}: metadata.name is {name}, directory is {path.parent.name}"
                 )
             validator.validate(card)
-            errors = convention_errors(path.parent, card) + test_errors(path.parent, card, test_validator)
+            errors = (convention_errors(path.parent, card) + jq_errors(path.parent)
+                      + test_errors(path.parent, card, test_validator))
             data_errors, data_notes = data_problems(
                 card, {f.name: f.read_text() for f in sorted(path.parent.glob("*compose*.yml"))})
             errors += data_errors
