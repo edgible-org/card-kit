@@ -1,0 +1,5 @@
+# Keep LF line endings in the working tree on every OS. Git for Windows checks files out with CRLF
+# by default, so a fresh clone there showed every file as modified (the skill's update step stops to
+# ask before discarding local changes) and shell and Python scripts failed when run from WSL
+# ("python3\r: No such file or directory"). Binary files are detected and left alone.
+* text=auto eol=lf
