@@ -21,6 +21,8 @@ Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules
 
 The person names an app ("self-host Miniflux") or describes a need ("something for bookmarks"). Either way, look for a card first. For a need, read each candidate's **Why** to see whether it meets that need.
 
+**With Edgible's MCP tools connected** (`find` and `describe` in your tool list), use them for this step: `find` for the need or the app's name, `describe` for each candidate's Why, What, auth modes and machine. They read the same upstream catalog as the commands below. Use the commands only when the tools are missing or fail.
+
 List what exists. Cards are the top-level directories that hold a `card.yml`, and the repo's README lists them by type, with each one's test status:
 
 ```bash
