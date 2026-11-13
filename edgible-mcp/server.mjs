@@ -536,12 +536,17 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.1';
+export const VERSION = '0.8.2';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
+// MCP Apps panels (find, describe, whats_running). EDGIBLE_MCP_VIEWS=off leaves them out, for a host
+// that fails to draw them (VS Code 1.146: "Error loading MCP App: The Agent Host connection is no
+// longer available."). The text answers are complete without them.
+export const viewsEnabled = (env = process.env) => !/^(0|off|false|no)$/i.test((env.EDGIBLE_MCP_VIEWS || '').trim());
+
 // The read-only tools, on any MCP server: this one, or the combined edgible server.
-export function registerReadTools(server) {
+export function registerReadTools(server, { views = viewsEnabled() } = {}) {
   const text = (fn) => async (args) => {
     try { return { content: [{ type: 'text', text: await fn(args) }] }; } catch (err) {
       return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
@@ -558,13 +563,13 @@ export function registerReadTools(server) {
       return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
     }
   };
-  const cardsUi = { ui: { resourceUri: CARDS_URI } };
+  const cardsUi = views ? { _meta: { ui: { resourceUri: CARDS_URI } } } : {};
   server.registerTool('find', {
     title: 'Find cards for a need',
     description: 'Search Edgible cards (type app: one app; type pattern: several apps wired together) for a need described in plain words ("somewhere for my bookmarks", "Pocket shut down", "a Git server for my team"), or an app name. Returns matching cards with their type, and the needs-map entries: how well it suits Edgible, the auth mode to publish with, what the machine needs, and the questions that change the answer.',
     inputSchema: { need: z.string().min(2).max(300).describe('The need or app, in the person\'s words') },
     annotations: { ...ro, openWorldHint: true },
-    _meta: cardsUi,
+    ...cardsUi,
   }, viewed(find));
   server.registerTool('describe', {
     title: 'Describe a card',
@@ -573,7 +578,7 @@ export function registerReadTools(server) {
       name: z.string().min(1).max(64).describe('The card name, such as linkding or ci'),
     },
     annotations: { ...ro, openWorldHint: true },
-    _meta: cardsUi,
+    ...cardsUi,
   }, viewed(describe));
   server.registerTool('sign_in', {
     title: 'Sign this server in to Edgible',
@@ -596,16 +601,9 @@ export function registerReadTools(server) {
     },
     annotations: { ...ro, openWorldHint: true },
     // MCP Apps: hosts that support it show the view below beside the text answer.
-    _meta: { ui: { resourceUri: WHATS_RUNNING_URI } },
-  }, async (args) => {
-    try {
-      const r = await whatsRunning(args);
-      if (typeof r === 'string') return { content: [{ type: 'text', text: r }] };
-      return { content: [{ type: 'text', text: r.text }], structuredContent: r.view };
-    } catch (err) {
-      return { isError: true, content: [{ type: 'text', text: `Failed: ${err.message}` }] };
-    }
-  });
+    ...(views ? { _meta: { ui: { resourceUri: WHATS_RUNNING_URI } } } : {}),
+  }, viewed(whatsRunning));
+  if (!views) return server;
   server.registerResource('whats-running-view', WHATS_RUNNING_URI, {
     title: 'What is running',
     description: 'A panel of the apps and devices whats_running found, for hosts that support MCP Apps.',
