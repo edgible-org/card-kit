@@ -21,9 +21,9 @@ Do Edgible's work through these tools: set them up once, at the end of [Set up E
 1. **Say what and why, and ask:** "I'll connect Edgible's tools to this app, so I can check, deploy and fix your apps directly. It runs on this computer, as your Edgible sign-in, and asks you before any change." Then wait for the yes.
 2. **Its folder:** `edgible-mcp` in the card-kit repository this skill is in ([Keep this skill current](SKILL.md#keep-this-skill-current) step 1 finds it), usually `~/.card-kit/edgible-mcp`. Install what it needs there, once: `npm ci --omit=dev --no-audit --no-fund`. It needs Node 20 or later, which the Edgible CLI needs too.
 3. **Add it** the way this app adds a local (stdio) MCP server: the command is the full path of `node` (`command -v node`, since desktop apps do not read the shell's `PATH`), and the arguments are the full path of `edgible-mcp.mjs` in that folder, then `--allow-write`. In Claude Code: `claude mcp add --scope user edgible -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write`. If you don't know how this app adds one, give the person the command and arguments and point them to its MCP docs.
-4. **Restart:** the tools appear only in a new session. Say so, and say what to ask for when they are back; finish this conversation's task the way below if it can't wait.
+4. **Restart:** the tools appear only in a new session. Say so, and say what to ask for when they are back.
 
-Until the tools are there, or for what they don't cover (first-time setup, backups and restores, moves of an app with data, commands inside an app), use the commands in these pages.
+For what the tools don't cover (first-time setup, and the list under [Look after a running app](look-after.md#after-it-is-running)), use the commands in these pages.
 
 **Later, from anywhere:** when the person wants Edgible from their phone, the web, or another computer, suggest their own connector (the edgible-connector card, as below). When Edgible offers its own hosted MCP server, offer that instead: it needs no device of theirs.
 
