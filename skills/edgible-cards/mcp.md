@@ -16,6 +16,8 @@ Edgible has MCP servers, so an AI app can see and look after a person's Edgible 
 
 ### Connect Edgible's tools
 
+**On Windows, connect `edgible-remote` instead.** When the AI app runs on Windows itself (PowerShell, Codex, Claude's desktop app, VS Code without its WSL extension) and Edgible is in WSL, a local server would have to run inside WSL and be started across from Windows: skip the steps below. Set up the person's own connector (the edgible-connector card, as in [Use an MCP server from Claude anywhere](#use-an-mcp-server-from-claude-anywhere)) on an always-on device of theirs, or on this computer's WSL device if it is their only one, and add its `/mcp` address to the app as a remote MCP server named `edgible-remote`, signed in with Edgible. An AI app inside WSL (a WSL terminal, VS Code with the WSL extension) is on Edgible's side: use the steps below.
+
 Do Edgible's work through these tools: set them up once, at the end of [Set up Edgible](setup.md#set-up-edgible), or the first time you work on Edgible in an app that takes MCP servers and has no Edgible tools. Skip it in an app without a shell on the person's machine (Claude's web or phone app, or a cloud sandbox), and where the tools are already listed.
 
 1. **Say what and why, and ask:** "I'll connect Edgible's tools to this app, so I can check, deploy and fix your apps directly. It runs on this computer, as your Edgible sign-in, and asks you before any change." Then wait for the yes.
