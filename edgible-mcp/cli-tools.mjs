@@ -51,7 +51,17 @@ export async function loadCliTools(allowWrite) {
   }
 }
 
-async function call(allowWrite, name, args) {
+// Stop the child (a clean shutdown, and a test that must let go of it).
+export async function closeCliTools() {
+  const old = client;
+  client = null;
+  try { await old?.close(); } catch { /* already gone */ }
+}
+
+const NOT_SIGNED_IN = /not signed in/i;
+const SIGN_IN_HINT = 'This server\'s Edgible CLI is not signed in. Call sign_in and give the person its link and code to approve; do not tell them to run `edgible auth login` on their own computer.';
+
+async function callOnce(allowWrite, name, args) {
   let c = await child(allowWrite);
   try {
     return await c.callTool({ name, arguments: args });
@@ -60,6 +70,21 @@ async function call(allowWrite, name, args) {
     c = await child(allowWrite);      // the child had exited: start it again, once
     return c.callTool({ name, arguments: args });
   }
+}
+
+async function call(allowWrite, name, args) {
+  let r = await callOnce(allowWrite, name, args);
+  if (r?.isError && NOT_SIGNED_IN.test(resultText(r))) {
+    // The child reads the CLI's sign-in when it starts, so one started before this server was signed
+    // in (or signed in again) keeps saying "Not signed in" while the server's own tools see the
+    // sign-in. Start a fresh one, once.
+    const old = client;
+    client = null;
+    try { await old?.close(); } catch { /* already gone */ }
+    r = await callOnce(allowWrite, name, args);
+    if (r?.isError && NOT_SIGNED_IN.test(resultText(r))) return { isError: true, ...text(SIGN_IN_HINT) };
+  }
+  return r;
 }
 
 const resultText = (r) => (r.content || []).filter((x) => x.type === 'text').map((x) => x.text).join('\n');
