@@ -21,8 +21,6 @@ project=$($C config --format json | python3 -c 'import json, sys; print(json.loa
 
 With the tools, `whats_running`: every device and app, each hostname checked against its auth mode. Answer from it, naming each app's device, address and auth mode. For apps run from a folder, the commands below also find the folder.
 
-From PowerShell with the device in WSL, run these through `wsl.exe -d <distro> --`, with the signed-in `edgible` ([which one](SKILL.md#where-you-are-running)), and name the Edgible device in your answer with each app's address and auth mode.
-
 ```bash
 docker compose ls --all    # each Compose project, with the path of its Compose file
 edgible app list           # each published app: name, port, device, status
@@ -32,7 +30,7 @@ The path `docker compose ls` prints leads to the card's directory, and `metadata
 
 Answer with a short table: each card, its directory, its apps with hostname and auth mode, and whether each is up.
 
-Then show the picture, without asking: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing, and needs the network (outside your tool's sandbox). End your answer with its `file://` address, from the last line it prints, as a link. From a shell in WSL for a person on Windows, add its Windows form too (`wslpath -w <the file>`, such as `\\wsl.localhost\<distro>\home\<name>\.edgible\status.html`), since a Windows browser cannot open the Linux path. In an AI app with a browser panel of its own (the Codex app, where a clicked link opens beside the chat), run it with `--no-open` and give the link only. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
+Then show the picture, without asking: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing, and needs the network (outside your tool's sandbox). End your answer with its `file://` address, from the last line it prints, as a link. In an AI app with a browser panel of its own (the Codex app, where a clicked link opens beside the chat), run it with `--no-open` and give the link only. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
 
 ### Is it working
 
