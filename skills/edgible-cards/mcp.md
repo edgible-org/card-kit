@@ -18,7 +18,7 @@ Edgible has MCP servers, so an AI app can see and look after a person's Edgible 
 
 Do Edgible's work through these tools: set them up once, at the end of [Set up Edgible](setup.md#set-up-edgible), or the first time you work on Edgible in an app that takes MCP servers and has no Edgible tools. Skip it in an app without a shell on the person's machine (Claude's web or phone app, or a cloud sandbox), and where the tools are already listed.
 
-**On Windows itself (PowerShell or cmd), connect the person's own connector, `edgible-remote`, not `edgible-local`.** The local server is tested on macOS and Linux only. On a Windows computer whose Edgible device is in WSL it runs with the Windows `node` and calls the Windows-side `edgible`, often an old install that is not signed in: the server starts, then every tool that goes through the CLI fails with "Connection closed" (seen with GitHub Copilot CLI, 13 November 2026). The skill's other commands are written for bash (`grep`, `$(…)`, `command -v`) and show red errors in PowerShell, so work through the connector's tools wherever they cover the task, and use commands only for what they don't (first-time setup, and the list under [Look after a running app](look-after.md#after-it-is-running)). So offer it the same way (steps 1 and 4 below), and after the yes look for the organisation's connector: `edgible app list`, through the WSL distro that holds the device ([which one](SKILL.md#where-you-are-running)), shows an `mcp-signin` app beside an `edgible-mcp`. Its address is `https://<mcp-signin hostname>/mcp`, the app on `none`, never the `-login` one. Add it as a remote (HTTP) server named `edgible-remote`, ask the person to sign in with Edgible in a private window, and restart. Say that what it can change depends on the connector's own device list (`EDGIBLE_MCP_DEVICES`), which is set where the connector runs. With no connector in the organisation, offer to set one up from the edgible-connector card ([below](#use-an-mcp-server-from-claude-anywhere)) and carry on with the commands meanwhile. If this app cannot complete the sign-in, say so and ask before trying anything else. A shell inside WSL is Linux: connect `edgible-local` there, as below.
+**On Windows, read [windows.md](windows.md) first:** it says which server to connect.
 
 1. **Say what and why, and ask:** "I'll connect Edgible's tools to this app, so I can check, deploy and fix your apps directly. It runs on this computer, as your Edgible sign-in, and asks you before any change." Then wait for the yes.
 2. **Its folder:** `edgible-mcp` in the card-kit repository this skill is in ([Keep this skill current](SKILL.md#keep-this-skill-current) step 1 finds it), usually `~/.card-kit/edgible-mcp`. Install what it needs there, once: `npm ci --omit=dev --no-audit --no-fund`. It needs Node 20 or later, which the Edgible CLI needs too.
@@ -26,6 +26,18 @@ Do Edgible's work through these tools: set them up once, at the end of [Set up E
 4. **Restart:** the tools appear only in a new session. Say so, and say what to ask for when they are back.
 
 For what the tools don't cover (first-time setup, and the list under [Look after a running app](look-after.md#after-it-is-running)), use the commands in these pages.
+
+### Add a server, by tool
+
+Show the person the exact command first and run it only after their yes. `<address>` is `https://<mcp-signin hostname>/mcp` for the connector ([windows.md](windows.md) finds it), or the full path of `edgible-mcp.mjs` for the local server.
+
+| Tool | Remote (HTTP) server, `edgible-remote` | Local (stdio) server, `edgible-local` |
+| --- | --- | --- |
+| Claude Code | `claude mcp add --scope user --transport http edgible-remote <address>` | `claude mcp add --scope user edgible-local -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write` |
+| GitHub Copilot CLI | `copilot mcp add --transport http edgible-remote <address>`, then `/mcp auth edgible-remote` for the browser sign-in | an entry in `~/.copilot/mcp-config.json`: `"edgible-local": {"type": "local", "command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "tools": ["*"]}` |
+| Another tool | its documentation | its documentation |
+
+The tools appear only in a new session. `/mcp` (Copilot CLI) or `claude mcp list` shows whether the server connected.
 
 **Later, from anywhere:** when the person wants Edgible from their phone, the web, or another computer, suggest their own connector (the edgible-connector card, as below). When Edgible offers its own hosted MCP server, offer that instead: it needs no device of theirs.
 
