@@ -48,14 +48,15 @@ Report each check with its result and the evidence, such as the status code or t
 
 ### Something is wrong
 
-Work from the app outwards, and stop at the first layer that is broken. With the tools, start with `get_application_status` (its deployment history says why a deploy is stalled), `whats_running` with `app`, and `list_devices` (when each device was last seen), then the machine-level steps below that no tool reaches.
+Work from the app outwards, and stop at the first layer that is broken. With the tools, start with `list_devices` (is the device online, and when was it last seen), then `get_application_status` (its deployment history says why a deploy is stalled) and `whats_running` with `app`, then the machine-level steps below that no tool reaches.
 
-1. **Containers:** `$C ps`, then `$C logs --tail 100 <service>`; for a managed app, `docker logs <container>` on its machine.
-2. **On the machine:** `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>`, with the port from `card.env`. An `https` app is plain HTTP on the machine.
-3. **Edgible:** the tools above, or by hand `edgible app doctor <app>`, `edgible app events <app>`, and `edgible certs`.
-4. **The machine:** Docker is running, `edgible agent status`, `edgible doctor`, and [Keep it running](setup.md#keep-it-running) after a restart.
-5. **The clock, on a VM:** compare `date -u` there with the real time. These all mean a wrong clock: `Forbidden` throughout `sudo journalctl -u edgible-agent`; an app stuck waiting on its certificate while `edgible certs` shows `attempts: 0`; a sign-in code that is refused. `edgible app doctor` may blame the certificate instead. `sudo chronyc makestep` fixes it, with no restart: Edgible recovers within a few minutes. To stop it recurring, see [Make a machine](setup.md#make-a-machine).
-6. **DNS:** ask Edgible's nameservers before you decide a hostname is broken. The person's resolver may still remember it as missing.
+1. **The device first.** `list_devices` (or `edgible device list`): is the app's device online, and when was it last seen? When several apps on one device fail together, or Edgible reports them `degraded`, the device is the likely cause, not the apps: ask whether the machine is asleep, its lid closed, off, or off the network, before you look at any app. A laptop that sleeps stops its apps until it wakes: see [Is the machine always-on?](setup.md#is-the-machine-always-on).
+2. **Containers:** `$C ps`, then `$C logs --tail 100 <service>`; for a managed app, `docker logs <container>` on its machine.
+3. **On the machine:** `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>`, with the port from `card.env`. An `https` app is plain HTTP on the machine.
+4. **Edgible:** the tools above, or by hand `edgible app doctor <app>`, `edgible app events <app>`, and `edgible certs`.
+5. **The machine:** Docker is running, `edgible agent status`, `edgible doctor`, and [Keep it running](setup.md#keep-it-running) after a restart.
+6. **The clock, on a VM:** compare `date -u` there with the real time. These all mean a wrong clock: `Forbidden` throughout `sudo journalctl -u edgible-agent`; an app stuck waiting on its certificate while `edgible certs` shows `attempts: 0`; a sign-in code that is refused. `edgible app doctor` may blame the certificate instead. `sudo chronyc makestep` fixes it, with no restart: Edgible recovers within a few minutes. To stop it recurring, see [Make a machine](setup.md#make-a-machine).
+7. **DNS:** ask Edgible's nameservers before you decide a hostname is broken. The person's resolver may still remember it as missing.
 
 Fix the cause, then run [Is it working](#is-it-working). If the card itself is wrong, see [Fix a card or card-kit](build.md#fix-a-card-or-card-kit).
 
