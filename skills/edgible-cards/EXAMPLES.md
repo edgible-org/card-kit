@@ -64,7 +64,7 @@ A good answer explains that the phone uses connectors added on Claude's web or d
 
 > Does Edgible have an MCP server? I mostly use the Claude desktop app.
 
-A good answer says yes: `edgible mcp`, in the Edgible CLI, read-only to start, with write tools once you trust it. It gives the entry for the desktop app's config file, with the full path to `edgible`, since the app does not read the shell's `PATH`, and says the CLI must be installed and logged in first. It mentions that Claude's web and phone apps need a remote connector instead.
+A good answer says yes: edgible-mcp, from card-kit, which also serves the Edgible CLI's own tools, and asks before any change. It gives the entry for the desktop app's config file, `node` with the full path to `edgible-mcp.mjs`, since the app does not read the shell's `PATH`, and says the CLI must be installed and logged in first. It mentions that Claude's web and phone apps need a remote connector instead.
 
 > We're prototyping a RAG chatbot for our product docs. Is it worth running our own vector database instead of paying for Pinecone?
 

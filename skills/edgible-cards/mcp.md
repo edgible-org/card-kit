@@ -10,18 +10,22 @@ Use them for what they cover. Prefer them over the matching commands: `find` and
 
 Edgible has MCP servers, so an AI app can see and look after a person's Edgible apps itself. Answer "does Edgible have an MCP?" or "can I use Edgible from Claude, or Cursor?" with this:
 
-- **`edgible mcp`**, in the Edgible CLI. Tools: who is signed in, the apps and devices, an app's status and logs, and a preview of a change. With `--allow-write`, it also applies changes and redeploys. It runs on the person's machine, signed in as their CLI. Start read-only, and add `--allow-write` once they trust it. `edgible mcp --help` lists the tools.
-- **edgible-mcp**, from card-kit: `find` and `describe` cards, and `whats_running`, which checks each app answers the way its auth mode says. Its [README](https://github.com/edgible-org/card-kit/tree/main/edgible-mcp) says how to run it.
+- **edgible-mcp**, in card-kit, next to this skill: the cards tools (`find`, `describe`, `deploy_card`, `move_card`, `remove_card`, `whats_running` and the rest) and, served through it, the Edgible CLI's own (`list_applications`, `get_application_status`, `get_application_logs`, `list_devices`, settings changes). Its [README](https://github.com/edgible-org/card-kit/tree/main/edgible-mcp) lists every tool. This is the one to set up.
+- **`edgible mcp`**, in the Edgible CLI: only the CLI's tools. edgible-mcp already includes them, so don't add both.
 - **From anywhere:** Claude's web and phone apps take only remote connectors. See [Use an MCP server from Claude anywhere](#use-an-mcp-server-from-claude-anywhere).
 
-A local server needs the CLI installed and logged in on that machine first ([Set up Edgible](setup.md#set-up-edgible)). Then add it:
+### Connect Edgible's tools
 
-- **Claude Code:** `claude mcp add edgible -- edgible mcp`.
-- **Claude's desktop app:** Settings, Developer, Edit Config. In `claude_desktop_config.json`, add `"edgible": {"command": "<path>", "args": ["mcp"]}` under `mcpServers`, where `<path>` is what `command -v edgible` prints: the app does not read the shell's `PATH`. Quit and reopen the app, and the tools appear in a chat's tools menu.
-- **Cursor:** the same entry in `~/.cursor/mcp.json`. Settings, MCP, lists its tools.
-- **Another app:** the command `edgible` with the argument `mcp`, as that app's docs say.
+Do Edgible's work through these tools: set them up once, at the end of [Set up Edgible](setup.md#set-up-edgible), or the first time you work on Edgible in an app that takes MCP servers and has no Edgible tools. Skip it in an app without a shell on the person's machine (Claude's web or phone app, or a cloud sandbox), and where the tools are already listed.
 
-**Offer it** when you work in an app that takes MCP servers (Claude's desktop app, Cursor, Claude Code) without Edgible MCP tools, and the person wants to know what is running, why something broke, or an app's status or logs: once, in a sentence, say that with `edgible mcp` added you could check these yourself instead of asking them to paste output. Do not offer it again if they decline, or in Claude's web or phone app, which cannot run it.
+1. **Say what and why, and ask:** "I'll connect Edgible's tools to this app, so I can check, deploy and fix your apps directly. It runs on this computer, as your Edgible sign-in, and asks you before any change." Then wait for the yes.
+2. **Its folder:** `edgible-mcp` in the card-kit repository this skill is in ([Keep this skill current](SKILL.md#keep-this-skill-current) step 1 finds it), usually `~/.card-kit/edgible-mcp`. Install what it needs there, once: `npm ci --omit=dev --no-audit --no-fund`. It needs Node 20 or later, which the Edgible CLI needs too.
+3. **Add it** the way this app adds a local (stdio) MCP server: the command is the full path of `node` (`command -v node`, since desktop apps do not read the shell's `PATH`), and the arguments are the full path of `edgible-mcp.mjs` in that folder, then `--allow-write`. In Claude Code: `claude mcp add --scope user edgible -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write`. If you don't know how this app adds one, give the person the command and arguments and point them to its MCP docs.
+4. **Restart:** the tools appear only in a new session. Say so, and say what to ask for when they are back; finish this conversation's task the way below if it can't wait.
+
+Until the tools are there, or for what they don't cover (first-time setup, backups and restores, moves of an app with data, commands inside an app), use the commands in these pages.
+
+**Later, from anywhere:** when the person wants Edgible from their phone, the web, or another computer, suggest their own connector (the edgible-connector card, as below). When Edgible offers its own hosted MCP server, offer that instead: it needs no device of theirs.
 
 ## Use an MCP server from Claude anywhere
 
