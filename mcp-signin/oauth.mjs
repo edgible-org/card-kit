@@ -24,6 +24,16 @@ const token = () => randomBytes(32).toString('base64url');
 const hash = (t) => createHash('sha256').update(t).digest('hex');
 const now = () => Math.floor(Date.now() / 1000);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+// The consent page's form-action policy. Browsers apply form-action to the redirect that follows
+// the Allow, so the address the client asked to be sent back to must be named: a command-line tool
+// gives http://127.0.0.1:<port> (the standard for native apps, RFC 8252), which 'self' https: alone
+// blocks, so the tool never got its code and stayed "connecting". Name exactly that origin, or the
+// scheme for a custom one (vscode:), not a wildcard.
+export function formAction(redirectUri) {
+  const u = new URL(redirectUri);
+  const back = u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : u.protocol;
+  return `form-action 'self' https: ${back}`;
+}
 const page = (title, body) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><body style="font:16px system-ui;max-width:32em;margin:3em auto;padding:0 1em;line-height:1.5"><h1>${esc(title)}</h1>${body}`;
 
 export async function edgibleProvider({ state, loginUrl, organizationId, users, name, purpose }) {
@@ -94,18 +104,18 @@ export async function edgibleProvider({ state, loginUrl, organizationId, users, 
   // The sign-in page, on the org-only port. Edgible has signed the person in before it gets here.
   function who(req) {
     const email = req.get('x-auth-email');
-    if (req.get('x-auth-type') !== 'org' || !email) return { refuse: 'Edgible did not say who you are. Open this from Claude again.' };
+    if (req.get('x-auth-type') !== 'org' || !email) return { refuse: 'Edgible did not say who you are. Open this from your assistant again.' };
     if (req.get('x-auth-organization-id') !== organizationId) return { refuse: `${email} is signed in to another Edgible organisation.` };
     if (!allowed(email)) return { refuse: `${email} may not use ${name}. Ask its owner to add you.` };
     return { email };
   }
   function signinPage(req, res) {
     const p = pending.get(String(req.query.request || ''));
-    if (!p) return res.status(400).send(page('Sign-in expired', '<p>Start again from Claude.</p>'));
+    if (!p) return res.status(400).send(page('Sign-in expired', '<p>Start again from your assistant.</p>'));
     const w = who(req);
     if (w.refuse) { console.error(`mcp-signin: refused sign-in: ${w.refuse}`); return res.status(403).send(page('Not allowed', `<p>${esc(w.refuse)}</p>`)); }
     const to = new URL(p.redirectUri).host;
-    res.set('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https:; frame-ancestors 'none'")
+    res.set('content-security-policy', `default-src 'none'; style-src 'unsafe-inline'; ${formAction(p.redirectUri)}; frame-ancestors 'none'`)
       .send(page(`Allow access to ${name}?`, `<p><b>${esc(p.clientName || 'An assistant')}</b> at <b>${esc(to)}</b> asks to use <b>${esc(name)}</b> as <b>${esc(w.email)}</b>${purpose ? `: ${esc(purpose)}` : ''}.</p>
 <p>Allow it only if you started this from that assistant just now.</p>
 <form method="post" action="signin"><input type="hidden" name="request" value="${esc(req.query.request)}"><button style="font:inherit;padding:.5em 1.2em" name="allow" value="yes">Allow</button> <button style="font:inherit;padding:.5em 1.2em" name="allow" value="no">Cancel</button></form>`));
@@ -114,7 +124,7 @@ export async function edgibleProvider({ state, loginUrl, organizationId, users, 
     const key = String(req.body?.request || '');
     const p = pending.get(key);
     pending.delete(key);
-    if (!p) return res.status(400).send(page('Sign-in expired', '<p>Start again from Claude.</p>'));
+    if (!p) return res.status(400).send(page('Sign-in expired', '<p>Start again from your assistant.</p>'));
     const w = who(req);
     if (w.refuse) return res.status(403).send(page('Not allowed', `<p>${esc(w.refuse)}</p>`));
     const back = new URL(p.redirectUri);
