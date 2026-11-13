@@ -4,7 +4,11 @@ Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules
 
 ## After it is running
 
-Each card runs from a directory on its machine: the one that holds its `card.yml`, its Compose files, and its `card.env`. The commands below use `dir` for that directory and `f` for a Compose file in it. Run them once per Compose file when the card has several, such as the ci card's `runner-compose.yml`:
+**Two kinds of app.** One deployed with `deploy_card` is managed by Edgible: look after it with Edgible's tools, as each section below says first, with no commands. One set up by hand from a card's README runs from a folder on its machine, and Edgible only publishes its port: `list_applications` shows it as `existing`, and its containers and `card.env` are reached with the commands below. `activity` lists the apps the tools deployed.
+
+**Not yet a tool**, for either kind: backups and restores, a move that keeps the app's data, commands inside an app (such as showing a generated password later), and changing a managed app's `card.env` or upgrading it (`deploy_card` refuses a name that exists; the way is `remove_card`, whose data stays on the device, then `deploy_card` again with the same app name and the new choices: ask first, and back up first where you can). Edgible does not yet collect a docker-compose app's own output, so `get_application_logs` comes back empty for cards: read it on the machine (`docker logs <container>`).
+
+An app run from a folder: the card's directory on its machine holds its `card.yml`, its Compose files, and its `card.env`. The commands below use `dir` for that directory and `f` for a Compose file in it. Run them once per Compose file when the card has several, such as the ci card's `runner-compose.yml`: the one that holds its `card.yml`, its Compose files, and its `card.env`. The commands below use `dir` for that directory and `f` for a Compose file in it. Run them once per Compose file when the card has several, such as the ci card's `runner-compose.yml`:
 
 ```bash
 dir=~/umami                    # the card's directory
@@ -14,6 +18,8 @@ project=$($C config --format json | python3 -c 'import json, sys; print(json.loa
 ```
 
 ### What is running
+
+With the tools, `whats_running`: every device and app, each hostname checked against its auth mode. Answer from it, naming each app's device, address and auth mode. For apps run from a folder, the commands below also find the folder.
 
 From PowerShell with the device in WSL, run these through `wsl.exe -d <distro> --`, with the signed-in `edgible` ([which one](SKILL.md#where-you-are-running)), and name the Edgible device in your answer with each app's address and auth mode.
 
@@ -32,21 +38,21 @@ Then show the picture, without asking: `python3 ~/.card-kit/status-page.py` (fro
 
 To prove an app works, show evidence from each layer:
 
-1. **Containers:** `$C ps` shows each service running, and healthy when it has a healthcheck.
-2. **Hostnames:** each hostname answers the way its auth mode says, checked through Edgible's nameservers as in [Deploy](deploy.md#3-deploy).
+1. **Containers:** with the tools, `get_application_status` (each device runs the current release) or `card_status` for an app they deployed; from a folder, `$C ps` shows each service running, and healthy when it has a healthcheck.
+2. **Hostnames:** each hostname answers the way its auth mode says: `whats_running` with `app`, or by hand through Edgible's nameservers as in [Deploy](deploy.md#3-deploy).
 3. **The card's own checks:** the scripts its README's Verify runs, in `etc/`, and those in `test/`. Run them with `card.env` exported and `HOSTNAME_<APP>` set to each hostname: `set -a; . $dir/card.env; set +a; export HOSTNAME_UMAMI=umami.example.edgible.app`.
 4. **The goal:** what the person uses it for, end to end, such as signing in, a `git push`, a workflow run, or an event that shows up on a dashboard.
-5. **The data path:** `edgible app doctor <app>` checks the deployment, certificates, and the path from the gateway to the workload.
+5. **The data path:** `whats_running` with `app` adds `edgible app doctor`'s verdict on the deployment, certificates, and the path from the gateway to the workload; by hand, `edgible app doctor <app>`.
 
 Report each check with its result and the evidence, such as the status code or the line printed. Do not use `test-card` for this. It tests a fresh copy of the card and publishes apps of its own, not the person's running instance.
 
 ### Something is wrong
 
-Work from the app outwards, and stop at the first layer that is broken:
+Work from the app outwards, and stop at the first layer that is broken. With the tools, start with `get_application_status` (its deployment history says why a deploy is stalled), `whats_running` with `app`, and `list_devices` (when each device was last seen), then the machine-level steps below that no tool reaches.
 
-1. **Containers:** `$C ps`, then `$C logs --tail 100 <service>`.
+1. **Containers:** `$C ps`, then `$C logs --tail 100 <service>`; for a managed app, `docker logs <container>` on its machine.
 2. **On the machine:** `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>`, with the port from `card.env`. An `https` app is plain HTTP on the machine.
-3. **Edgible:** `edgible app doctor <app>`, `edgible app events <app>`, and `edgible certs`.
+3. **Edgible:** the tools above, or by hand `edgible app doctor <app>`, `edgible app events <app>`, and `edgible certs`.
 4. **The machine:** Docker is running, `edgible agent status`, `edgible doctor`, and [Keep it running](setup.md#keep-it-running) after a restart.
 5. **The clock, on a VM:** compare `date -u` there with the real time. These all mean a wrong clock: `Forbidden` throughout `sudo journalctl -u edgible-agent`; an app stuck waiting on its certificate while `edgible certs` shows `attempts: 0`; a sign-in code that is refused. `edgible app doctor` may blame the certificate instead. `sudo chronyc makestep` fixes it, with no restart: Edgible recovers within a few minutes. To stop it recurring, see [Make a machine](setup.md#make-a-machine).
 6. **DNS:** ask Edgible's nameservers before you decide a hostname is broken. The person's resolver may still remember it as missing.
@@ -57,14 +63,15 @@ Fix the cause, then run [Is it working](#is-it-working). If the card itself is w
 
 - **The first sign-in:** the card's README says who the admin is, in How or Verify. A card with `secrets:` lists them in `card.yml`, each with its `kind`: a `human` one is for a person, and its `for:` says what it opens. Give the person the command that shows it, such as `docker compose --env-file ~/gitea/card.env -f ~/gitea/docker-compose.yml run --rm --no-deps gitea-secrets show GITEA_ADMIN_PASSWORD`. For a card without `secrets:`, list them with `grep -oE '^[A-Z0-9_]+(PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*=' $dir/card.env` and give the command that shows the one line, such as `grep '^BLOGLITE_ADMIN_PASSWORD=' ~/bloglite/card.env`.
 - **Changing a password** happens in the app, by its own docs. The value the card made, or the one in `card.env`, only made the first admin; `show` keeps printing that first value after a change. Never edit or delete a file in the `<card>-secrets` volume: the card's database and apps read their own secrets there.
-- **An `api-key` hostname:** `edgible app api-keys create --app <app> --name <who-calls-it>` prints the key once. Give it to the person and do not store it. `edgible app api-keys list --app <app>` and `delete` manage the keys.
+- **An `api-key` hostname:** for another app to use it, `app_key` makes the key and stores it as an organisation secret, unseen. For a person or a client of theirs, `edgible app api-keys create --app <app> --name <who-calls-it>` prints the key once. Give it to the person and do not store it. `edgible app api-keys list --app <app>` and `delete` manage the keys.
 - **An `org` hostname** lets in the members of the person's Edgible organization. `--allowed-orgs` on `edgible app update` adds other organizations.
 
 ### Change a setting
 
-- **Auth mode:** `edgible app update <app> --auth-modes org`. Ask first before changing it to `none`.
-- **A value in `card.env`:** edit it, then run `$C up -d --wait`, which recreates the services the change affects. Run `check-env` first when the change is a port.
-- **Host port or hostname:** the CLI cannot change a published app's port or hostnames. Change `<APP>_PORT` (or the card's `<APP>_URL`, for the person's own domain), run `$C up -d --wait`, then `edgible app delete <app> --yes` and publish it again as in the README, with `--hostnames` for an own domain. The generated hostname comes from the app's name, so it stays the same. An own domain is one the person controls, pointed at the generated hostname with a `CNAME`: Edgible refuses any name under `edgible.com`, which is reserved for the hostnames it generates. Expect a short outage, and verify through Edgible's nameservers.
+- **Auth mode, and other settings Edgible holds:** with the tools, `get_application`, then `apply_application_change` with a patch to its declaration: the first call returns the preview to put to the person. By hand, `edgible app update <app> --auth-modes org`. Ask first before changing it to `none`.
+- **Their own domain:** `add_address`, which returns the `CNAME` record to add at their domain provider.
+- **A value in `card.env`**, for an app run from a folder (a managed app: see Not yet a tool, above): edit it, then run `$C up -d --wait`, which recreates the services the change affects. Run `check-env` first when the change is a port.
+- **Host port or hostname, by hand:** the CLI cannot change a published app's port or hostnames. Change `<APP>_PORT` (or the card's `<APP>_URL`, for the person's own domain), run `$C up -d --wait`, then `edgible app delete <app> --yes` and publish it again as in the README, with `--hostnames` for an own domain. The generated hostname comes from the app's name, so it stays the same. An own domain is one the person controls, pointed at the generated hostname with a `CNAME`: Edgible refuses any name under `edgible.com`, which is reserved for the hostnames it generates. Expect a short outage, and verify through Edgible's nameservers.
 - **Pause:** `edgible app update <app> --target-state suspended`, then `$C stop`. **Resume:** `$C start`, then `--target-state running`. The data stays.
 
 ### Back up and restore
@@ -161,7 +168,7 @@ If the change would help others, offer a pull request to the app's repository, a
 
 ### Move to another machine
 
-Ask first. A move is a copy, then a switch, then retiring the old copy, and the old copy keeps serving until the switch. The app is down only from deleting it on the old machine to answering on the new one, about a minute or two.
+Ask first. With the tools, `move_card` moves an app they deployed to another device, except one that keeps data in volumes: Edgible would start it empty there and leave the data behind, so it refuses, and the steps below move it with a backup. A move is a copy, then a switch, then retiring the old copy, and the old copy keeps serving until the switch. The app is down only from deleting it on the old machine to answering on the new one, about a minute or two.
 
 1. **The new machine** is a serving device that `edgible device list` shows online, with Docker, and room for the card: compare the card's `places:` with what the machine has free. A machine that runs something else that matters needs the margin, not just the total.
 2. **Copy.** With a `data:` section: run `backup-card` on the old machine, make its backup directory visible to the new one (how is the person's choice: a drive, a network share, `rsync` over SSH if they have it; Edgible does not move it, but tell them the full path and that it holds `card.env`, so it should stay private), fetch the tools there as in [Back up and restore](#back-up-and-restore), and run `restore-card <backup> <new dir> --device <the new device's name>`, which also points `card.env` at the new machine. Into a new directory it restores the card under its own name, and ends with `verify-card`: the copy must pass before the switch. Do not pass `--move`: without it every secret and login comes across as it was, which is friendlier and adds no step that can fail. Say so. If the old machine or the backup may have been exposed, tell the person that the secrets can be replaced instead (`restore-card --move` applies each secret's `on-move` rule, so people sign in again), and do that only if they want it. It has not been run on a real move. Without a `data:` section: [back up](#back-up-and-restore) by hand, copy `$dir` with its `card.env` and the backups, run `$C create` on the new machine, restore each volume, `$C up -d --wait`, and check it on `127.0.0.1`.
@@ -170,6 +177,8 @@ Ask first. A move is a copy, then a switch, then retiring the old copy, and the 
 5. Run [Is it working](#is-it-working) through the hostname. Then, on the old machine, `$C down`, and keep its volumes and the backup until the person is satisfied.
 
 ### Remove
+
+With the tools, `remove_card` removes an app they deployed, asking first; its data stays on the device, which it says. For an app run from a folder, the steps here.
 
 First, say in one message what you will do and what stays, and wait for a yes, even when the person asked for it: "take it down" can mean stop it for now, unpublish it, or delete it with its data. Name the app and the device it is on, and say which steps you can do from here: an app on another device that runs as plain Docker Compose there (not one Edgible manages) can be unpublished from anywhere, but stopping its containers needs a shell on that device, so say who does that and how. Then follow the card's README **Tear down**, in order: Unpublish, Stop, Delete the data (it backs up each volume to `.tgz` first), and Remove the card. Ask before deleting data. Before `rm -rf` of the card, tell the person that any kept backup needs `card.env` and the `<card>-secrets.tgz` copy, which hold its passwords and keys. Remove only the apps, containers, and volumes this card made.
 
