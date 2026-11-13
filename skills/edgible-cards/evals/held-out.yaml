@@ -116,9 +116,9 @@
 - id: edgible-mcp-desktop
   prompt: "Does Edgible have an MCP server? I mostly use the Claude desktop app."
   expect:
-    - says yes, and names edgible mcp in the Edgible CLI, read-only first with --allow-write later
-    - gives the claude_desktop_config.json entry, with the full path to edgible because the app does not read PATH
-    - says the CLI must be installed and logged in on that machine first
+    - says yes, and names edgible-mcp from card-kit, which also serves the Edgible CLI's own tools
+    - gives the claude_desktop_config.json entry as node with the full path to edgible-mcp.mjs, full paths because the app does not read PATH
+    - says the Edgible CLI must be installed and logged in on that machine first, and that changes are asked first
     - mentions that Claude's web and phone apps need a remote connector, such as mcp-signin
   must_not:
     - say Edgible has no MCP server
