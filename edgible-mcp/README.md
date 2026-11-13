@@ -32,7 +32,7 @@ On your own machine, with Node 20 or later, and for whats_running and the write 
 ```bash
 git clone https://github.com/edgible-org/card-kit ~/.card-kit
 cd ~/.card-kit/edgible-mcp && npm ci --omit=dev
-claude mcp add edgible-cards -- node ~/.card-kit/edgible-mcp/edgible-mcp.mjs
+claude mcp add --scope user edgible-local -- node ~/.card-kit/edgible-mcp/edgible-mcp.mjs
 ```
 
 Add `--allow-write` at the end for the write tools, once you trust the setup. For another MCP client, the command is `node`, with the arguments `<path>/edgible-mcp.mjs` (and `--allow-write`). A desktop app needs the full path to `node`: it does not read the shell's `PATH`. The Edgible CLI's own MCP server, `edgible mcp`, is already served through this one, so there is no need to add both.
