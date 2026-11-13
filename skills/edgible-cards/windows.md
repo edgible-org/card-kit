@@ -4,7 +4,7 @@ Part of the edgible-cards skill: read [SKILL.md](SKILL.md) first, and its [Rules
 
 ## The simplest way: run the AI tool inside WSL
 
-Open the Ubuntu distro that runs (or will run) the Edgible device, and start the AI tool there. It then behaves as on Linux, and everything in this skill applies as written. Setting WSL up is in [WSL2 on Windows](setup.md#wsl2-on-windows). Suggest this first.
+Open the Ubuntu distro that runs (or will run) the Edgible device, and start the AI tool there. It then behaves as on Linux, and everything in this skill applies as written. Setting WSL up is in [WSL2 on Windows](setup.md#wsl2-on-windows). Suggest this first. When your shell is already in WSL, whether you were started there or in a VS Code window attached to WSL (its corner says **WSL: <distro>**), you are in this case: connect `edgible-local` as on Linux, from the clone in that distro, not `edgible-remote` ([mcp.md](mcp.md#add-a-server-by-tool) has GitHub Copilot's entry, which VS Code reads too).
 
 ## If the tool runs in PowerShell (or cmd)
 

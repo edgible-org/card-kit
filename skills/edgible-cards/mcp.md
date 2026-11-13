@@ -21,7 +21,7 @@ Do Edgible's work through these tools: set them up once, at the end of [Set up E
 **On Windows, read [windows.md](windows.md) first:** it says which server to connect.
 
 1. **Say what and why, and ask:** "I'll connect Edgible's tools to this app, so I can check, deploy and fix your apps directly. It runs on this computer, as your Edgible sign-in, and asks you before any change." Then wait for the yes.
-2. **Its folder:** `edgible-mcp` in the card-kit repository this skill is in ([Keep this skill current](SKILL.md#keep-this-skill-current) step 1 finds it), usually `~/.card-kit/edgible-mcp`. Install what it needs there, once: `npm ci --omit=dev --no-audit --no-fund`. It needs Node 20 or later, which the Edgible CLI needs too.
+2. **Its folder:** `edgible-mcp` in the card-kit repository this skill is in ([Keep this skill current](SKILL.md#keep-this-skill-current) step 1 finds it), usually `~/.card-kit/edgible-mcp`. Install what it needs there, once: `npm ci --omit=dev --no-audit --no-fund`. It needs Node 20 or later, which the Edgible CLI needs too. Use `npm ci`, never `npm install`: the install must follow `package-lock.json`, and `npm install` rewrites it in the skill's clone, which the next update then collides with. That lockfile is on main: if it is missing, the folder is not a clean clone of main, so check `git -C <repo> status -sb` and offer to update or clone again, as [Keep this skill current](SKILL.md#keep-this-skill-current) says, rather than installing without it.
 3. **Add it** the way this app adds a local (stdio) MCP server: the command is the full path of `node` (`command -v node`, since desktop apps do not read the shell's `PATH`), and the arguments are the full path of `edgible-mcp.mjs` in that folder, then `--allow-write`. Name it `edgible-local`, so it is clear which server a tool comes from: keep `edgible-remote` for the person's own hosted one and plain `edgible` for Edgible's own hosted server. In Claude Code: `claude mcp add --scope user edgible-local -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write`. If you don't know how this app adds one, give the person the command and arguments and point them to its MCP docs.
 4. **Restart:** the tools appear only in a new session. Say so, and say what to ask for when they are back.
 
@@ -34,10 +34,17 @@ Show the person the exact command first and run it only after their yes. `<addre
 | Tool | Remote (HTTP) server, `edgible-remote` | Local (stdio) server, `edgible-local` |
 | --- | --- | --- |
 | Claude Code | `claude mcp add --scope user --transport http edgible-remote <address>` | `claude mcp add --scope user edgible-local -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write` |
-| GitHub Copilot CLI | `copilot mcp add --transport http edgible-remote <address>`, then `/mcp auth edgible-remote` for the browser sign-in | an entry in `~/.copilot/mcp-config.json`: `"edgible-local": {"type": "local", "command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "tools": ["*"]}` |
+| GitHub Copilot: the CLI, and the agent in VS Code (seen in 1.146) | `copilot mcp add --transport http edgible-remote <address>`, then `/mcp auth edgible-remote` for the browser sign-in | an entry under `mcpServers` in `~/.copilot/mcp-config.json`: `"edgible-local": {"type": "local", "command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "env": {"PATH": "<folder of edgible>:/usr/local/bin:/usr/bin:/bin"}, "tools": ["*"]}`. In VS Code, add `"EDGIBLE_MCP_VIEWS": "off"` to `env` too (below) |
 | Another tool | its documentation | its documentation |
 
 The tools appear only in a new session. `/mcp` (Copilot CLI) or `claude mcp list` shows whether the server connected.
+
+**GitHub Copilot in VS Code** reads the same `~/.copilot/mcp-config.json` as Copilot CLI, on the side its shell runs: in a window attached to WSL, that is the Linux home in that distro. Keep its shape, `mcpServers` at the top: VS Code's own `mcp.json` uses `servers`, and a file with `servers` fails to load ("mcpServers: Required"). Two things differ from Copilot CLI:
+
+- **`PATH`.** The server runs `edgible`, and VS Code starts it without the login shell's `PATH`. Put the folder of `command -v edgible` in the entry's `env.PATH`, as above.
+- **Panels.** VS Code 1.146 showed "Error loading MCP App: The Agent Host connection is no longer available." in place of every MCP Apps panel. `EDGIBLE_MCP_VIEWS=off` in `env` leaves the panels out, and the text answers are complete without them.
+
+Then say to restart VS Code and ask again in a new chat.
 
 **Later, from anywhere:** when the person wants Edgible from their phone, the web, or another computer, suggest their own connector (the edgible-connector card, as below). When Edgible offers its own hosted MCP server, offer that instead: it needs no device of theirs.
 
