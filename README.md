@@ -6,7 +6,9 @@ If the cards help you, star [edgible-org/cards](https://github.com/edgible-org/c
 
 ## Install the skill
 
-The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to set up Edgible and run cards. If someone asked you, an agent, to install it from here, do this, saying what you will change and asking before you install anything:
+The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to set up Edgible and run cards.
+
+**Where it works.** Supported: any AI tool running on Linux, macOS, or Windows through WSL, where its shell is bash. Early access: tools running directly in Windows PowerShell (or cmd), where many of the skill's commands fail or get rewritten. On Windows, run the tool inside WSL (recommended), or connect Edgible's tools and work through them ([windows.md](skills/edgible-cards/windows.md)). PowerShell gets more work once Edgible's own hosted MCP server is settled, since it will make most of these shell differences go away. If someone asked you, an agent, to install it from here, do this, saying what you will change and asking before you install anything:
 
 **Before you start**, for a person: the skill sets up Edgible, but a computer needs a few common tools first, and they are quicker to install before you ask than halfway through. On a **Mac**: Apple's Command Line Tools (`xcode-select --install`), [Homebrew](https://brew.sh), and Docker Desktop (`brew install --cask docker`; open it once, and leave "Start Docker Desktop when you sign in" on). On **Windows**: WSL2 with Ubuntu 26.04 (`wsl --install -d Ubuntu-26.04`). On **Linux**: Docker (`sudo apt-get install -y docker.io docker-compose-v2` on Ubuntu) and Node.js 20 or later. Most developers' machines already have them; on a clean one they take about 20 minutes. Your agent checks for each anyway and asks before installing it.
 

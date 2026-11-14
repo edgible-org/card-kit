@@ -58,6 +58,8 @@ Say what has been tried, so the person picks with their eyes open. Edgible has b
 | **Windows with WSL2 and Ubuntu 26.04** | Tested; recommended on Windows | No extra tools, and lighter than a VM. The distro stops 15 to 25 seconds after its last session ends, so it needs a keep-alive task; see [WSL2 on Windows](#wsl2-on-windows). Shares one network and one memory cap with every other distro. |
 | **Other Linux** (Debian, Fedora, and so on), **Ubuntu 24.04 or an existing distro in WSL2**, **Windows Home or 10 with WSL2**, **WSL1** | Not tried | May work. Say it has not been tried, and be ready to read the errors. |
 
+**Where the AI tool runs** matters as much as the host. Supported: a tool whose shell is bash, on Linux, macOS, or in WSL. Early access: a tool running directly in Windows PowerShell or cmd. Say so to the person, and offer WSL first, or the organisation's connector ([windows.md](windows.md)).
+
 **Native (macOS, or WSL2) or a virtual machine?** Native means Edgible and Docker run on the person's own system; a VM puts them in a separate Ubuntu. Plus and minus:
 
 - **Native, plus:** lighter (WSL2 with the agent and two small containers used about 1.5 GB); nothing extra to install on Windows (WSL2) or Mac beyond Docker; files and ports are easy to reach from the host; no VM to start, size or update.

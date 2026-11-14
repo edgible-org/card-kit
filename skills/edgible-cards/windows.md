@@ -8,6 +8,8 @@ Open the Ubuntu distro that runs (or will run) the Edgible device, and start the
 
 ## If the tool runs in PowerShell (or cmd)
 
+This is early access: the skill is supported where its shell is bash. Say so plainly, once, and offer the WSL way above before going on.
+
 This skill's commands are written for bash (`grep`, `$(…)`, `command -v`), and many fail or get rewritten badly in PowerShell. Connect the organisation's connector instead, and work through its tools where they cover the task:
 
 1. **Make the offer** as SKILL.md says: your first reply, nothing else.
