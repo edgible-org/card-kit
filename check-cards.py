@@ -203,6 +203,15 @@ def convention_errors(card_dir: Path, card: dict) -> list[str]:
         readme = card_dir / "README.md"
         if not readme.is_file() or not re.search(r"^## Customising$", readme.read_text(), re.M):
             errors.append("an app has source:, so README.md needs a Customising section (card-readme writes it)")
+    for app in card.get("applications", []):
+        if not app.get("setup"):
+            continue
+        if app.get("protocol") != "https":
+            errors.append(f"app {app['name']} has setup:, which a person finishes in a browser, so its protocol is https")
+        if app["setup"].get("behind") in app.get("authModes", []):
+            errors.append(f"app {app['name']}: setup.behind is where it waits during setup, so authModes is where it goes after, not the same")
+        if not (card_dir / "test" / "setup.sh").is_file():
+            errors.append(f"app {app['name']} has setup:, so test/setup.sh does that setup in the card's test")
     if card["metadata"].get("type") == "app":
         errors += app_errors(card_dir, card, composes)
     return errors

@@ -114,6 +114,14 @@
         "teardown": {
           "$ref": "#/$defs/outcome"
         },
+        "setup": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/outcome"
+          },
+          "description": "One entry per app with setup: in card.yml: behind its setup auth mode it redirected strangers to the Edgible sign-in, test/setup.sh ran, its done command exited 0, and it was switched to its authModes."
+        },
         "checks": {
           "type": "object",
           "minProperties": 1,

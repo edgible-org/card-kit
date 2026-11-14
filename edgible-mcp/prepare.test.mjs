@@ -35,3 +35,10 @@ test('a prepare.sh without the usual header still counts', async () => {
   assert.match(await prepareStep(dir, 'odd'), /odd's prepare\.sh/);
   await rm(dir, { recursive: true });
 });
+
+test('an app with setup: is published behind org, and goes to its authModes after', async () => {
+  const { deployAuth } = await import('./write.mjs');
+  assert.deepEqual(deployAuth({ authModes: ['none'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: 'none' });
+  assert.deepEqual(deployAuth({ authModes: ['none'] }), { auth: 'none', after: null });
+  assert.deepEqual(deployAuth({}), { auth: 'org', after: null });
+});

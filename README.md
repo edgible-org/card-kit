@@ -81,7 +81,22 @@ Leave device names, hostnames, organization ids, and passwords out of the README
 
 ## Prepare
 
-Some apps let the first visitor set them up: make the admin, or finish an install wizard. Published first, that is anyone on the internet. Such a card makes it safe before Publish, in `prepare.sh`, a short `sh` script next to `card.yml`. The README's Start step runs it with `sh <card>/prepare.sh` and shows it in full, and `test-card` runs the same file, so what a person runs is what was tested.
+Some apps let the first visitor set them up: make the admin, or finish an install wizard. Published first on `none`, that is anyone on the internet. A card keeps that first visit for its owner in one of two ways.
+
+**The app's own setup, behind `org`.** When the setup asks the person anything (a language, a site title, their own admin and password), let the app ask it, its own way. The app is published on `org`, so only the organization reaches its real hostname; the person finishes its setup there; then it is switched to its `authModes`. Edgible looks after who reaches the app and when it opens. The app looks after everything inside it, and its own docs apply as written. The app says so in `card.yml`:
+
+```yaml
+applications:
+  - name: wordpress
+    authModes: [none]              # where it goes once set up
+    setup:
+      behind: org                  # where it waits while the person sets it up
+      done: $COMPOSE --profile cli run --rm -T wordpress-cli wp core is-installed
+```
+
+`done` is a shell command run on the device, with `card.env` exported and `$COMPOSE` set as for `prepare.sh`, that exits 0 once the setup is finished. It reaches the app on the device, not through the hostname. `card-readme` writes a Set up step after Publish: open the hostname, sign in with Edgible, finish the app's setup, run `done`, then `edgible app update <app> --auth-modes <authModes>`. The switch takes effect in seconds and keeps the person signed in. An agent asks before it makes the switch to `none`. The app makes the admin, so the card makes no admin password, and its look-after notes give the app's own reset command for a forgotten one. In a test, `test/setup.sh` does the setup in the person's place, the way the app's CLI or API allows, and `test-card` runs the rest as a person would: it checks strangers are sent to the Edgible sign-in, runs `test/setup.sh` and `done`, switches, and verifies.
+
+**A script, before Publish.** When there is nothing for a person to choose, such as an admin only an API uses, make it in `prepare.sh`, a short `sh` script next to `card.yml`. The README's Start step runs it with `sh <card>/prepare.sh` and shows it in full, and `test-card` runs the same file, so what a person runs is what was tested.
 
 An app with accounts on `none` is the same risk for as long as it runs: many let anyone register by default. Turn that off before Publish, and add a [check](#test-inputs) that a stranger cannot make an account. An admin signing in does not show that, and the card's test passes without it.
 
@@ -478,10 +493,11 @@ It works on a copy of the card, through the same steps a person follows. Places 
 1. **Check:** runs `check-env` with `--project-prefix`, so it checks the test's own Compose projects and a copy of the card already running on the machine is no conflict. It fills empty secrets the way `card.env` says, moves a taken host port, and stops on a conflict. Publish and Verify use the moved port, not the one in `card.yml`.
 2. **Start:** `up --wait`, as its own Compose project (`cardtest-<card>-<file>`), so a test never touches the machine's own containers or volumes.
 3. **Prepare:** the card's [`prepare.sh`](#prepare), when it has one. `$COMPOSE` is the test's compose command; `card.env` is exported. `--prepare COMMAND` runs a command in its place.
-4. **Publish:** each app in `card.yml`. A name already taken in the org is published as `test-<name>`, and the existing app is never touched.
-5. **Verify:** each hostname by its auth mode. `none` answers, `org` redirects to the Edgible sign-in, `api-key` answers `401`, and `tcp` connects. `udp` is skipped. It asks Edgible's own nameservers for the address, because resolvers keep a "does not exist" for 15 minutes when a new name is looked up too early.
-6. **Fingerprint:** when `card.yml` has `data.fingerprint`, it runs it after the checks (which may have added data) and records `steps.fingerprint` and the line it printed as `fingerprint:` in `test.yml`. A line that is not one JSON object of counts and ISO dates fails the run.
-7. **Tear down:** deletes the apps it published, and removes the containers and volumes it started, and nothing else.
+4. **Publish:** each app in `card.yml`. A name already taken in the org is published as `test-<name>`, and the existing app is never touched. An app with [`setup:`](#prepare) is published on `setup.behind`.
+5. **Set up:** for an app with `setup:`, it checks the hostname sends strangers to the Edgible sign-in, runs `test/setup.sh` with `$COMPOSE`, `card.env` and `HOSTNAME_<APP>`, retries `setup.done` until it exits 0, and switches the app to its `authModes`. Each app's result is under `steps.setup` in `test.yml`.
+6. **Verify:** each hostname by its auth mode. `none` answers, `org` redirects to the Edgible sign-in, `api-key` answers `401`, and `tcp` connects. `udp` is skipped. It asks Edgible's own nameservers for the address, because resolvers keep a "does not exist" for 15 minutes when a new name is looked up too early.
+7. **Fingerprint:** when `card.yml` has `data.fingerprint`, it runs it after the checks (which may have added data) and records `steps.fingerprint` and the line it printed as `fingerprint:` in `test.yml`. A line that is not one JSON object of counts and ISO dates fails the run.
+8. **Tear down:** deletes the apps it published, and removes the containers and volumes it started, and nothing else.
 
 While it runs, it measures each place: the peak memory of its containers together, its images, and its data at the end. It writes `test.yml` with `measured:`, unless nothing material (the result, a step, the images) changed since the last one. It prints a suggested `places:`: memory with half again as headroom, at least 256 MB; disk as images and data plus 1 GB; the architectures every image has. `--write-places` writes that into `card.yml`. Raise a number if the app documents a higher minimum.
 

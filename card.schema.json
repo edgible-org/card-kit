@@ -222,6 +222,26 @@
         },
         "source": {
           "$ref": "#/$defs/source"
+        },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "behind",
+            "done"
+          ],
+          "properties": {
+            "behind": {
+              "const": "org",
+              "description": "The auth mode the app is published on while a person finishes its own setup, such as an install wizard. Only the organization reaches it. When setup is done, it is switched to authModes."
+            },
+            "done": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A shell command, run on the device with card.env exported and $COMPOSE set, that exits 0 once the app's own setup is finished, such as $COMPOSE --profile cli run --rm -T wordpress-cli wp core is-installed."
+            }
+          },
+          "description": "The app sets itself up on its first visit. It is published behind org, a person runs its own setup on its real hostname, and it is switched to authModes once done exits 0. The card's test does the setup with test/setup.sh."
         }
       },
       "allOf": [

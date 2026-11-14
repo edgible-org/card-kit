@@ -4,7 +4,7 @@
 Run it on a serving device, from the directory that holds the card:
 
     python3 test-card.py gitea --device macbookair
-    python3 test-card.py wordpress --device macbookair --prepare '$COMPOSE --profile cli run --rm wordpress-cli wp core install ...'
+    python3 test-card.py gitea --device macbookair --prepare 'sh gitea/prepare.sh'
     python3 test-card.py immich --device macbookair --write-places --gpu optional
 
 It works on a copy of the card in a temporary directory, through every step a person
@@ -19,7 +19,12 @@ follows in the card's README:
   prepare     the card's prepare.sh, if it has one, between Start and Publish, such as
               making the admin; --prepare replaces it
   publish     each app in card.yml; a name already taken in the org is published as
-              test-<name>, and the existing app is never touched
+              test-<name>, and the existing app is never touched. An app with setup: is
+              published on its setup.behind auth mode
+  setup       for an app with setup:, what a person does after Publish: it checks the
+              hostname redirects strangers to the Edgible sign-in, runs test/setup.sh in place
+              of the person's own setup, retries setup.done until it exits 0, and switches
+              the app to its authModes
   verify      each hostname by its auth mode: none answers, org redirects to the Edgible
               sign-in, api-key answers 401, tcp connects; udp is skipped
   checks      the card's test/<name>.sh, after Verify and after places with no app have
@@ -101,6 +106,9 @@ def read_apps(card_yml: Path) -> list[dict]:
             "place": get("place"),
             "from": get("from"),
             "verify_path": get("verifyPath") or "/",
+            # setup: the app is published on behind while its own setup runs, then switched.
+            "setup_behind": get("behind").strip("\"'"),
+            "setup_done": get("done").strip("\"'"),
         })
     return apps
 
@@ -626,7 +634,8 @@ def main(argv: list[str]) -> int:
             return 2
         set_env(env_file, key, value)
     # test/<name>.sh are the card's own checks; --check adds more.
-    checks = [f"{f.stem}=sh {f}" for f in sorted((card / "test").glob("*.sh"))] + args.check
+    # test/setup.sh stands in for a person's own setup (card.yml setup:); it is not a check.
+    checks = [f"{f.stem}=sh {f}" for f in sorted((card / "test").glob("*.sh")) if f.name != "setup.sh"] + args.check
     apps = read_apps(card / "card.yml")
     composes = sorted(card.glob("*compose*.yml"))
     places = read_places(card / "card.yml")
@@ -734,9 +743,9 @@ def main(argv: list[str]) -> int:
 
         # The card's own prepare.sh, the one its README runs, unless --prepare replaces it.
         prepare_cmd = args.prepare or (f"sh {card / 'prepare.sh'}" if (card / "prepare.sh").is_file() else "")
+        compose = (f"export COMPOSE='docker compose -p {projects[first[0]]} --env-file {env_file} -f {first[0]}' && "
+                   if first else "")
         if prepare_cmd:
-            compose = (f"export COMPOSE='docker compose -p {projects[first[0]]} --env-file {env_file} -f {first[0]}' && "
-                       if first else "")
             prepare = sh(f"{run_env} && {compose}{prepare_cmd}", check=False, timeout=900)
             output = without_progress(prepare.stdout + "\n" + prepare.stderr)
             if prepare.returncode == 0:
@@ -754,7 +763,7 @@ def main(argv: list[str]) -> int:
             steps["publish"] = "fail"
             try:
                 sh(f"edgible app create existing --non-interactive --name {name} --port {app['port']} "
-                   f"--protocol {app['protocol']} --auth-modes {','.join(app['auth'])} "
+                   f"--protocol {app['protocol']} --auth-modes {app['setup_behind'] or ','.join(app['auth'])} "
                    f"--device-id {devices[0]['id']}", timeout=900)
             except Exception:
                 # The create can fail after the app was made, such as a retry that finds the name
@@ -769,8 +778,9 @@ def main(argv: list[str]) -> int:
         print("publish: pass", [n for _, n in published])
 
         listing = {a["name"]: a for a in json.loads(sh("edgible app list --json").stdout)}
-        for app, name in published:
-            host, deadline, result, detail = listing[name]["hostnames"][0], time.time() + args.verify_wait, "fail", ""
+
+        def wait_verify(app: dict, host: str) -> tuple[str, str]:
+            deadline, result, detail = time.time() + args.verify_wait, "fail", ""
             while time.time() < deadline:
                 try:
                     result, detail = verify(app, host)
@@ -779,6 +789,46 @@ def main(argv: list[str]) -> int:
                 if result in ("pass", "skip"):
                     break
                 time.sleep(10)
+            return result, detail
+
+        # setup: what a person does after Publish. The app is behind setup.behind (org), so only
+        # the organization reaches its own setup; test/setup.sh does that setup in the person's
+        # place; setup.done says it is finished; then the app is switched to its authModes.
+        setup_apps = [(a, n) for a, n in published if a["setup_behind"]]
+        if setup_apps:
+            steps["setup"] = {a["name"]: "fail" for a, _ in setup_apps}
+            hosts = " ".join(f"HOSTNAME_{a['name'].upper().replace('-', '_')}={listing[n]['hostnames'][0]}"
+                             for a, n in published)
+            for app, name in setup_apps:
+                result, detail = wait_verify(dict(app, auth=[app["setup_behind"]]), listing[name]["hostnames"][0])
+                print(f"setup {app['name']}: behind {app['setup_behind']}: {result} ({hide(detail)})")
+                if result != "pass":
+                    raise RuntimeError(f"{app['name']} was not behind {app['setup_behind']} during setup")
+            script = card / "test" / "setup.sh"
+            if not script.is_file():
+                raise RuntimeError("an app has setup:, but the card has no test/setup.sh to do it in a test")
+            r = sh(f"{run_env} && export {hosts} && {compose}sh {script}", check=False, timeout=900)
+            output = without_progress(r.stdout + "\n" + r.stderr)
+            print(f"setup: test/setup.sh {'ok' if r.returncode == 0 else f'FAILED (exit {r.returncode})'}",
+                  hide(output[-300:] if r.returncode == 0 else output[-1500:]))
+            if r.returncode != 0:
+                raise RuntimeError("test/setup.sh failed")
+            for app, name in setup_apps:
+                deadline, ok = time.time() + args.verify_wait, False
+                while time.time() < deadline and not ok:
+                    ok = sh(f"{run_env} && export {hosts} && {compose}{app['setup_done']}",
+                            check=False, timeout=300).returncode == 0
+                    if not ok:
+                        time.sleep(10)
+                if not ok:
+                    raise RuntimeError(f"{app['name']}'s setup.done did not exit 0 after test/setup.sh")
+                sh(f"edgible app update {name} --auth-modes {','.join(app['auth'])} --non-interactive --confirm",
+                   timeout=600)
+                steps["setup"][app["name"]] = "pass"
+                print(f"setup {app['name']}: done, switched to {','.join(app['auth'])}")
+
+        for app, name in published:
+            result, detail = wait_verify(app, listing[name]["hostnames"][0])
             steps["verify"][app["name"]] = result
             print(f"verify {app['name']}: {result} ({hide(detail)})")
 
@@ -901,6 +951,7 @@ def main(argv: list[str]) -> int:
     core = [steps[k] for k in ("check-env", "start", "publish", "teardown")]
     result = ("pass" if all(c == "pass" for c in core) and "fail" not in steps["verify"].values()
               and "fail" not in steps.get("checks", {}).values() and steps.get("fingerprint") != "fail"
+              and "fail" not in steps.get("setup", {}).values()
               and "pass" in steps["verify"].values() else "fail")
 
     # The suggested places:, written into card.yml before test.yml, so test.yml's files:
@@ -934,6 +985,7 @@ def main(argv: list[str]) -> int:
                                           image_facts(sorted({a["from"] for a in apps if a.get("from")})))) else []),
         "steps:", f"  check-env: {steps['check-env']}", f"  start: {steps['start']}",
         f"  publish: {steps['publish']}", "  verify:", *[f"    {k}: {v}" for k, v in steps["verify"].items()],
+        *(["  setup:", *[f"    {k}: {v}" for k, v in steps["setup"].items()]] if steps.get("setup") else []),
         *(["  checks:", *[f"    {k}: {v}" for k, v in steps["checks"].items()]] if steps.get("checks") else []),
         *([f"  fingerprint: {steps['fingerprint']}"] if steps.get("fingerprint") else []),
         f"  teardown: {steps['teardown']}",

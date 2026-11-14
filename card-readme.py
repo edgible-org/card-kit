@@ -11,12 +11,16 @@ The YAML file holds what only a person knows:
     edit: What to set in card.env.
     start: Anything after `up --wait`, such as why the admin is made before Publish.
     after-prepare: What prepare.sh prints, and anything left for a person to do.
+    setup:
+      wordpress: For an app with setup: in card.yml, what its own setup asks, and advice for it.
     verify:
       gitea: What the check proves, and the first sign-in.
     customise: Anything specific to changing this app, such as a rule its migrations follow.
     docs: [Gitea, https://docs.gitea.com]
 
-When the card has prepare.sh, Start runs it and shows it. Everything else comes from
+When the card has prepare.sh, Start runs it and shows it. An app with setup: in card.yml is
+published on setup.behind (org), and a Set up step after Publish has the person finish the
+app's own setup on its hostname, check setup.done, and switch it to its authModes. Everything else comes from
 card.yml and the Compose files, the same way on every card:
 How (Fetch, Edit card.env, Check, Start, Publish), each app's Verify check by its auth
 mode, Customising (when an app has source: in card.yml), Tear down, and the sizing sentence in What, from places:. Fetch reads from
@@ -326,7 +330,8 @@ def main(argv: list[str]) -> int:
         creates.append(
             f"edgible app create existing \\\n  --non-interactive \\\n  --name {a['name']} \\\n"
             f"  --port \"${var}\" \\\n  --protocol {a['protocol']} \\\n"
-            f"  --auth-modes {','.join(a['authModes'])} \\\n  --device-id \"${id_of(a['place'])}\"")
+            f"  --auth-modes {a['setup']['behind'] if a.get('setup') else ','.join(a['authModes'])} \\\n"
+            f"  --device-id \"${id_of(a['place'])}\"")
 
     verify = []
     for a in apps:
@@ -349,6 +354,9 @@ def main(argv: list[str]) -> int:
         verify.append(f"{head}\n\n{FENCE}bash\n{check}\n{FENCE}\n\n{note}")
 
     docs = spec["docs"]
+    # The card's secrets volume is needed to read its data back: say so where it is copied.
+    secrets_note = (f" `{name}-secrets.tgz` holds the card's passwords and keys: keep it as safe as the data, which needs them."
+                    if card.get("secrets") and any(f"{name}-secrets:" in (d / f).read_text() for f in composes) else "")
     words = {5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
     # The device id comes from python3, not jq: a fresh Ubuntu has python3 but no jq, and a card
     # should not need a package installed (with sudo) just to publish. Same result as the old jq:
@@ -365,11 +373,28 @@ print(found[0]["id"])
                   + "  ' \"$1\"\n}\n" + "\n".join(f"{id_of(pl)}=$(device_id \"${var_of(pl)}\")" for pl in app_places))
     else:
         lookup = "device_id=$(edgible device list --json | python3 -c '\n" + pick_device + "' \"$DEVICE\")"
-    helper_steps = ""
+    # setup: the app is published behind org, the person finishes its own setup, then opens it.
+    setup_apps = [a for a in apps if a.get("setup")]
+    setup_steps = ""
+    for i, a in enumerate(setup_apps):
+        behind, final = a["setup"]["behind"], ",".join(a["authModes"])
+        note = ((spec.get("setup") or {}).get(a["name"]) or "").strip()
+        setup_steps += (
+            f"\n### {6 + i}. Set up {a['name']}\n\n"
+            f"Publish put `{a['name']}` on `{behind}`, so only your Edgible organization reaches it. "
+            f"Open `https://<{a['name']} hostname>`, sign in with Edgible, and finish the app's own setup there. "
+            f"{note}\n\nWhen it is finished, this prints `done`:\n\n"
+            f"{FENCE}bash\nset -a\n. {name}/card.env\nset +a\n"
+            f"COMPOSE=\"docker compose {env} -f {name}/{composes[0]}\"\n"
+            f"{a['setup']['done']} && echo done\n{FENCE}\n\n"
+            f"Then open it to `{final}`. Until then it stays on `{behind}`, and nothing changes for you:"
+            f" a signed-in session stays signed in.\n\n"
+            f"{FENCE}bash\nedgible app update {a['name']} --auth-modes {final}\n{FENCE}\n")
+    helper_steps = setup_steps
     for i, pl in enumerate(helper_places):
         where = f"On the machine for place `{pl}`. " if multi else ""
         note = ((spec.get("helpers") or {}).get(pl) or "").strip()
-        helper_steps += (f"\n### {6 + i}. Start the {pl}\n\n{where}Its services connect out to what Publish "
+        helper_steps += (f"\n### {6 + len(setup_apps) + i}. Start the {pl}\n\n{where}Its services connect out to what Publish "
                          f"published, so they start now.\n\n{FENCE}bash\n{run_files(files_of[pl], 'pull')}\n{run_files(files_of[pl], 'up -d --wait')}\n"
                          f"{run_files(files_of[pl], 'ps')}\n{FENCE}\n\n{note}\n")
     fetch_note = ("\n\nOn each machine that runs a place, fetch the card and set up `card.env` the same way: "
@@ -400,7 +425,7 @@ The Compose file is [{composes[0]}]({composes[0]}), the settings [card.env](card
 
 ## How
 
-{words[5 + len(helper_places)]} steps. Edit [card.env](card.env) before you start.
+{words[5 + len(setup_apps) + len(helper_places)]} steps. Edit [card.env](card.env) before you start.
 
 ### 1. Fetch
 
@@ -431,7 +456,7 @@ python3 check-env.py {name}
 
 {start_block}
 
-{download_note(d)} `--wait` returns when each service is running, and healthy when it has a healthcheck. {spec.get('start', '').strip()}{prepare_block}
+{(download_note(d) + " `--wait` returns when each service is running, and healthy when it has a healthcheck. " + (spec.get('start') or '').strip()).rstrip()}{prepare_block}
 
 ### 5. Publish
 
@@ -469,7 +494,7 @@ Four steps, in this order. Step 1 runs wherever `edgible` is logged in. Steps 2 
 
 ### 3. Delete the data
 
-Skip this step to keep the data. The loop copies each volume to a `.tgz` file in this directory first.
+Skip this step to keep the data. The loop copies each volume to a `.tgz` file in this directory first.{secrets_note}
 
 {chr(10).join(f"{on(pl)}{FENCE}bash{chr(10)}{backup_of(files_of[pl])}{chr(10)}{run_files(files_of[pl], 'down --volumes')}{chr(10)}{FENCE}{chr(10)}" for pl in stop_order if files_of[pl]) if multi else FENCE + 'bash' + chr(10) + backup_of(composes) + chr(10) + run('down --volumes') + chr(10) + FENCE + chr(10)}
 ### 4. Remove the card
