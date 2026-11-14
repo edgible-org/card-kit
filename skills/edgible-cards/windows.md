@@ -31,5 +31,6 @@ An `edgible` on the Windows side that is not signed in is no reason to run `edgi
 ## Also on Windows
 
 - **Keeping it on:** WSL stops when its last session ends. See [Is the machine always-on?](setup.md#is-the-machine-always-on).
+- **A window attached to a removed distro does nothing.** A VS Code window still attached to a distro that was unregistered sends a prompt and shows no answer and no error. Open a new window (File, New Window), or close the remote connection from the corner, and work from there.
 - **Line endings:** card-kit and cards carry a `.gitattributes` that keeps LF. A clone made before it landed shows many files as modified (line endings only) when read from WSL: a fresh clone fixes it.
 - **Node and npm:** inside WSL, check that `npm` is the Linux one (`which npm` is not under `/mnt/c`); a Windows `npm` that leaks in installs the Windows build of a tool.
