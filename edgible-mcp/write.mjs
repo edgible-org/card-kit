@@ -282,6 +282,25 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
   return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]) };
 }
 
+// What a card's prepare.sh does, from its header ("# Prepare for the memos card: make the admin
+// and close sign-up before Memos is public."), or null when the card has none.
+export async function prepareStep(dir, card) {
+  const sh = await readFile(path.join(dir, 'prepare.sh'), 'utf8').catch(() => null);
+  if (sh === null) return null;
+  // The header's first sentence, which may run on over the next comment lines.
+  const lines = sh.split('\n');
+  const at = lines.findIndex((l) => /^#\s*Prepare for the [^:]+:/.test(l));
+  if (at < 0) return `do the setup in ${card}'s prepare.sh (such as making the admin)`;
+  const said = [];
+  for (const l of lines.slice(at)) {
+    const t = l.replace(/^#\s?/, '').trim();
+    if (!l.startsWith('#') || !t) break;
+    said.push(t);
+    if (/\.$/.test(t)) break;
+  }
+  return said.join(' ').replace(/^Prepare for the [^:]+:\s*/, '').split(/\.(?:\s|$)/)[0];
+}
+
 // ---------- Tools ----------
 
 async function deployCard({ card, app, device, choices = {}, keys = {}, hostnames = [], confirm = [] }) {
@@ -333,6 +352,16 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // master key, so gateway_key and gateway_spend work with nothing copied by hand.
     const gateway = card === GATEWAY_CARD;
     if (gateway) reasons.push({ token: 'gateway-api', reason: `${app}'s API will also be published as ${app}-api, open to the internet (auth mode none) but answering only calls with a key the gateway issued. This server keeps the gateway's master key, so it can make each app's key and report spending; the person never needs to see it. The gateway is always deployed this way: if they say no, nothing is deployed. Don't offer another way.` });
+    // A card's prepare.sh (make the admin, close sign-up, finish an install) runs from a shell
+    // after the start and before Publish. A managed app runs only the Compose file, so this
+    // version cannot run it: say what will not happen, and how open the app is meanwhile.
+    const prepare = await prepareStep(fetched.dir, card);
+    if (prepare) {
+      const open = auth.split(',').includes('none');
+      reasons.push({ token: 'no-prepare', reason: `${card}'s prepare step will not run: it would ${prepare}, and deploy_card cannot run it yet. ` + (open
+        ? `WARNING: ${app} is public (auth mode none), so until someone does that step by hand in the app, whoever opens it first may take its setup or its admin account. Do it in the app straight after the deploy, or deploy the card from a shell on the device with its README instead, which runs the step.`
+        : `${app} is behind the organisation's sign-in (auth mode org), so only its members can reach it meanwhile. The person does that step by hand in the app straight after the deploy, such as registering the first account.`) });
+    }
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
@@ -413,7 +442,9 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const shown = firstUse.filter((f) => !(gateway && f.name === GATEWAY_MASTER));
     if (shown.length) {
       result.firstUse = shown;
-      result.next += ' Give the person each first-use password once, now: it is not shown again. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
+      result.next += prepare
+        ? ` ${card}'s prepare step did not run, so these first-use passwords are on the device but may belong to no account yet: don't tell the person to sign in with them. Tell them to do the step by hand now (${prepare}), in the app, such as registering the first account with their own password, and say why: until then someone else could.`
+        : ' Give the person each first-use password once, now: it is not shown again. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
       // remove_card leaves an app's volumes on its device, and a card never replaces a secret that
       // exists, so an app deployed again under its old name keeps its old passwords.
       const before = (await readRecord()).some((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed');
@@ -1132,7 +1163,7 @@ export function registerWriteTools(server) {
   };
   server.registerTool('deploy_card', {
     title: 'Deploy an Edgible app card on a device',
-    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone. The first start downloads the app\'s images on the device, once; the result says about how much and how long, so tell the person before they wait, and say it is the download, not Edgible.',
+    description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A card with a prepare step (prepare.sh: make the admin, close sign-up, finish an install) asks for confirmation first, because that step does not run here: the person does it by hand in the app straight after, and on a public card someone else could do it first. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone. The first start downloads the app\'s images on the device, once; the result says about how much and how long, so tell the person before they wait, and say it is the download, not Edgible.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
       device: z.string().describe('The Edgible device to run it on, by name'),
