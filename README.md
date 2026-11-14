@@ -24,6 +24,7 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
    | OpenCode | `~/.config/opencode/skills/`. OpenCode may say it can't install skills: run these steps in a terminal yourself, then start OpenCode again |
    | GitHub Copilot CLI | `~/.copilot/skills/`, or register the cloned folder in `~/.copilot/settings.json` (on Ubuntu it did that itself: it cloned to `~/.card-kit` and listed `~/.card-kit/skills`). On Windows it has made a plain copy, which cannot say its version or update itself: clone and link as above instead. `copilot skill list` shows what it loaded; start a new session after |
    | GitHub Copilot in VS Code | `~/.copilot/skills/` in the home folder of the computer VS Code is attached to: with the WSL extension that is the Linux home (`/home/<name>/.copilot/skills`), not the Windows one. **Chat: Configure Skills** lists what it loaded; `/` may not list it. On Copilot Free the model can change from one reply to the next: if replies stop following the skill (no checklist, no `cards.edgible.org` links), check the model under the reply or in **Developer: Show Chat Debug View**, and start a new chat. Tested as working with GPT-6 Luna |
+   | Antigravity | `~/.gemini/config/skills/`. It connects `edgible-local` itself, in `~/.gemini/config/mcp_config.json` |
    | Another agent | its documentation; many read `~/.agents/skills/` |
 
    - macOS or Linux: `mkdir -p ~/.cursor/skills && ln -s ~/.card-kit/skills/edgible-cards ~/.cursor/skills/edgible-cards` (with your agent's folder).
