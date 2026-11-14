@@ -92,6 +92,15 @@ def sh(cmd: str, check: bool = True, timeout: int = 1800) -> subprocess.Complete
 
 # --- The card ---------------------------------------------------------------
 
+def unquote(value: str) -> str:
+    """A YAML scalar's value: the quotes around it go, and quotes inside it, such as a
+    command's own, stay."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        inner = value[1:-1]
+        return inner.replace("''", "'") if value[0] == "'" else inner.replace('\\"', '"')
+    return value
+
+
 def read_apps(card_yml: Path) -> list[dict]:
     """The applications in card.yml. It is flat enough to read without pyyaml."""
     text = re.split(r"\n(?:data|places):\s*\n", card_yml.read_text())[0]
@@ -107,8 +116,8 @@ def read_apps(card_yml: Path) -> list[dict]:
             "from": get("from"),
             "verify_path": get("verifyPath") or "/",
             # setup: the app is published on behind while its own setup runs, then switched.
-            "setup_behind": get("behind").strip("\"'"),
-            "setup_done": get("done").strip("\"'"),
+            "setup_behind": unquote(get("behind")),
+            "setup_done": unquote(get("done")),
         })
     return apps
 

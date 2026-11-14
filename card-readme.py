@@ -288,7 +288,10 @@ def main(argv: list[str]) -> int:
     repo = "cards"
     apps = card["applications"]
     # A card that declares secrets: makes them on the machine at Start, so Check only moves ports.
-    check_does = "It moves a taken port" if card.get("secrets") else "It fills each empty secret and moves a taken port"
+    # A card with no secrets at all, in card.yml or card.env, has nothing for Check to fill either.
+    env_text = (d / "card.env").read_text() if (d / "card.env").is_file() else ""
+    old_style = re.search(r"^[A-Z0-9_]*(PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*=\s*$", env_text, re.M)
+    check_does = "It fills each empty secret and moves a taken port" if old_style and not card.get("secrets") else "It moves a taken port"
     composes = sorted(p.name for p in d.glob("*compose*.yml"))
     env = f"--env-file {name}/card.env"
     owners: dict[tuple, str] = {}
