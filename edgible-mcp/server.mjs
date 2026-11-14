@@ -14,6 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { PARKED_AFTER_HOURS, lastSeenDay, presumedParked } from './parked.mjs';
 import { CARDS_HTML, CARDS_URI, UI_MIME, VIEW_CSP, WHATS_RUNNING_HTML, WHATS_RUNNING_URI } from './views.mjs';
 
 const CATALOG_TTL = Number(process.env.EDGIBLE_MCP_CATALOG_TTL || 900) * 1000;
@@ -471,10 +472,13 @@ async function whatsRunning({ app, device }) {
   const system = apps.filter(isSystemApp);
   apps = apps.filter((a) => !isSystemApp(a) || app);
 
+  // An app whose every device is presumed parked (offline over PARKED_AFTER_HOURS) is listed apart, unprobed.
+  const deviceOf = (d) => running.devices.find((x) => x.id === d.id);
+  const parkedApp = (a) => (a.devices || []).length > 0 && a.devices.every((d) => presumedParked(deviceOf(d)));
   const rows = await mapLimit(apps, 8, async (a) => {
     const detail = (await edgible(['app', 'get', a.id])).json;
     const modes = authModesOf(detail);
-    const probes = a.protocol === 'https' ? await Promise.all((a.hostnames || []).map((h) => probe(h, modes))) : [];
+    const probes = a.protocol === 'https' && !parkedApp(a) ? await Promise.all((a.hostnames || []).map((h) => probe(h, modes))) : [];
     const certs = (detail?.certificates || []).filter((c) => c.status !== 'issued').map((c) => `${c.hostname}: ${c.status}`);
     const issues = (detail?.deploymentIssues || []).map((i) => i.message || JSON.stringify(i));
     return { a, modes, probes, certs, issues };
@@ -489,27 +493,30 @@ async function whatsRunning({ app, device }) {
     organization: who.organization?.name || null, account: who.account || null,
     connector: process.env.EDGIBLE_MCP_DEVICE || null, checkedAt: new Date().toISOString(),
     filter: { ...(app ? { app } : {}), ...(device ? { device } : {}) },
-    devices: devs.map((d) => ({ name: d.name, status: d.status, agentVersion: d.agentVersion || null })),
+    devices: devs.map((d) => ({ name: d.name, status: d.status, agentVersion: d.agentVersion || null, lastSeen: d.lastSeen || null, parked: presumedParked(d) })),
     apps: [], system: app ? 0 : system.length,
   };
-  out.push('## Devices', '', devs.map((d) => `- ${d.name}: ${d.status}${d.agentVersion ? `, agent ${d.agentVersion}` : ''}`).join('\n') || '- none', '');
+  const devLine = (d) => `- ${d.name}: ${d.status}${presumedParked(d) ? `, last seen ${lastSeenDay(d)}: presumed parked` : ''}${d.agentVersion ? `, agent ${d.agentVersion}` : ''}`;
+  out.push('## Devices', '', devs.map(devLine).join('\n') || '- none', '');
   out.push('## Apps', '', '| App | Device | Port | Auth | Status | Works | Evidence |', '| --- | --- | --- | --- | --- | --- | --- |');
   for (const { a, modes, probes, certs, issues } of rows) {
     const devName = (a.devices || []).map((d) => d.name).join(', ');
-    const offline = (a.devices || []).some((d) => running.devices.find((x) => x.id === d.id)?.status === 'offline');
+    const offline = (a.devices || []).some((d) => deviceOf(d)?.status === 'offline');
+    const parked = parkedApp(a);
     let works;
-    if (a.protocol !== 'https') works = 'not checked';
+    if (parked) works = 'parked';
+    else if (a.protocol !== 'https') works = 'not checked';
     else if (probes.length && probes.every((p) => p.ok) && !certs.length && !issues.length) works = 'yes';
     else works = 'no';
     const evidence = [
       ...probes.map((p) => `${p.host}: ${p.evidence} (expected ${p.want})`),
       ...certs.map((c) => `certificate ${c}`), ...issues,
-      ...(offline ? ['its device is offline'] : []),
+      ...(parked ? [`its device has been offline since ${lastSeenDay(deviceOf(a.devices[0]))}: presumed parked, not checked`] : offline ? ['its device is offline'] : []),
       ...(a.protocol !== 'https' ? [`${a.protocol}, ${(a.hostnames || []).join(', ')}`] : []),
     ].join('; ');
     view.apps.push({
       name: a.name, device: devName, port: a.port, protocol: a.protocol, hostnames: a.hostnames || [],
-      auth: a.protocol !== 'https' ? ['none'] : modes, status: a.status, works, deviceOffline: offline, evidence,
+      auth: a.protocol !== 'https' ? ['none'] : modes, status: a.status, works, deviceOffline: offline, deviceParked: parked, evidence,
     });
     out.push(`| ${a.name} | ${devName} | ${a.port} | ${a.protocol !== 'https' ? `none (${a.protocol})` : modes.join(', ') || '?'} | ${a.status} | ${works} | ${evidence} |`);
   }
@@ -530,13 +537,14 @@ async function whatsRunning({ app, device }) {
       out.push('', `edgible app doctor failed: ${(doc.stderr || doc.stdout).trim().slice(0, 500)}`);
     }
   }
+  if (rows.some(({ a }) => parkedApp(a))) out.push('', `Parked means the app's device has been offline for over ${PARKED_AFTER_HOURS} hours, so it is presumed off on purpose (a test machine with its lid closed) and its apps are not counted as problems. Ask the person before you treat it as broken.`);
   out.push('', 'Works means each hostname answered, with no credentials, the way its auth mode says. It does not prove the app does its job: check that end to end, such as signing in.');
   return { text: out.join('\n'), view };
 }
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.4';
+export const VERSION = '0.8.5';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 

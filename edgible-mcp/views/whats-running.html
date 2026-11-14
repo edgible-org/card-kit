@@ -84,11 +84,13 @@
   }
 
   function appDot(a) {
+    if (a.deviceParked) return '';
     if (a.deviceOffline || a.works === 'no') return 'bad';
     if (a.works === 'yes') return 'ok';
     return 'warn';
   }
   function appState(a) {
+    if (a.deviceParked) return 'parked';
     if (a.deviceOffline) return 'device offline';
     if (a.works === 'yes') return 'working';
     if (a.works === 'no') return 'needs attention';
@@ -108,9 +110,10 @@
     var ok = v.apps.filter(function (a) { return appDot(a) === 'ok'; }).length;
     var bad = v.apps.filter(function (a) { return appDot(a) === 'bad'; }).length;
     var online = v.devices.filter(function (d) { return d.status === 'online'; }).length;
+    var parked = v.apps.filter(function (a) { return a.deviceParked; }).length;
     var sum = el('div', 'summary');
     [[v.apps.length, v.apps.length === 1 ? 'app' : 'apps'], [ok, 'working'], [bad, 'need attention'],
-     [online + ' of ' + v.devices.length, 'devices online']].forEach(function (p) {
+     [online + ' of ' + v.devices.length, 'devices online']].concat(parked ? [[parked, 'parked']] : []).forEach(function (p) {
       var s = el('span', 'pill'); s.appendChild(el('b', null, String(p[0]))); s.appendChild(document.createTextNode(' ' + p[1])); sum.appendChild(s);
     });
     root.appendChild(sum);
@@ -146,9 +149,9 @@
     var devs = el('div', 'devices');
     v.devices.forEach(function (d) {
       var x = el('div', 'device');
-      x.appendChild(el('span', 'dot ' + (d.status === 'online' ? 'ok' : d.status === 'offline' ? 'bad' : '')));
+      x.appendChild(el('span', 'dot ' + (d.status === 'online' ? 'ok' : d.parked ? '' : d.status === 'offline' ? 'bad' : '')));
       x.appendChild(el('span', 'name', d.name));
-      x.appendChild(el('span', 'sub', d.status + (d.agentVersion ? ', agent ' + d.agentVersion : '')));
+      x.appendChild(el('span', 'sub', (d.parked ? 'parked, offline since ' + (d.lastSeen ? d.lastSeen.slice(0, 10) : 'an unknown time') : d.status) + (d.agentVersion ? ', agent ' + d.agentVersion : '')));
       devs.appendChild(x);
     });
     if (!v.devices.length) devs.appendChild(el('p', 'empty', 'No devices yet.'));

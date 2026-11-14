@@ -26,6 +26,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { certificateState, imageDownload, pollUntil, sizeWords, startNext, startingNote, timeWords } from './download.mjs';
+import { offlineWords } from './parked.mjs';
 import { LABELS, PROVIDERS, deployNext, gatewayKeysRefusal, patch, patchRemove, plan, planRemove, proposal, proposalRemove, readGateway } from './gateway-provider.mjs';
 
 const STATE = process.env.EDGIBLE_MCP_STATE || path.join(homedir(), '.edgible-mcp');
@@ -316,7 +317,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
   if (!NAME.test(card) || !NAME.test(app)) return refused('card and app names are lowercase letters, digits and dashes');
   const target = await findDevice(device);
   if (notAllowed(target.name)) return refused(notAllowed(target.name));
-  if (target.status !== 'online') return refused(`device ${target.name} is ${target.status}`);
+  if (target.status !== 'online') return refused(`device ${target.name} is ${offlineWords(target)}`);
   if ((await apps()).some((a) => a.name === app)) return refused(`an app called ${app} already exists in this organisation`);
   const fetched = await fetchCard(card);
   if (!fetched) return refused(`no card called ${card} in ${REPO}`);
@@ -474,7 +475,7 @@ async function moveCard({ app, to, confirm = [] }) {
   if (current.subtype !== 'docker-compose') return refused(`${app} is a "${current.subtype}" app, which Edgible cannot move by itself: it needs the app started on the new machine first`);
   const target = await findDevice(to);
   if (notAllowed(target.name, ...appDevices(current))) return refused(notAllowed(target.name, ...appDevices(current)));
-  if (target.status !== 'online') return refused(`device ${target.name} is ${target.status}`);
+  if (target.status !== 'online') return refused(`device ${target.name} is ${offlineWords(target)}`);
   // `edgible app move` carries only storage Edgible manages. A card's volumes are host-bind
   // storage, so the app would start empty on the new device and its data stay on the old one.
   let storage;

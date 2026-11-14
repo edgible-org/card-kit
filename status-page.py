@@ -24,6 +24,22 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 VIEW = HERE / "edgible-mcp" / "views" / "whats-running.html"
+# Same rule as edgible-mcp/parked.mjs: offline for over this long means presumed parked (platform finding 56).
+PARKED_AFTER_HOURS = float(os.environ.get("EDGIBLE_PARKED_AFTER_HOURS") or 24)
+
+
+def presumed_parked(d):
+    if not d or d.get("status") != "offline":
+        return False
+    try:
+        seen = datetime.datetime.fromisoformat((d.get("lastSeen") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return datetime.datetime.now(datetime.timezone.utc) - seen > datetime.timedelta(hours=PARKED_AFTER_HOURS)
+
+
+def last_seen_day(d):
+    return (d.get("lastSeen") or "")[:10] or "an unknown time"
 
 
 def find_cli():
@@ -97,24 +113,31 @@ def build(cli, app=None, device=None):
         apps = [a for a in apps if any(device in (d.get("name"), d.get("id")) for d in a.get("devices") or [])]
         devices = [d for d in devices if device in (d.get("name"), d.get("id"))]
     status_of = {d.get("id"): d.get("status") for d in devices}
+    device_of = {d.get("id"): d for d in devices}
 
     def one(a):
         detail = edgible(cli, "app", "get", a["id"])
         modes = auth_modes(detail)
-        probes = [probe(h, modes) for h in a.get("hostnames") or []] if a.get("protocol") == "https" else []
+        own = [device_of.get(d.get("id")) for d in a.get("devices") or []]
+        parked = bool(own) and all(presumed_parked(d) for d in own)
+        probes = [probe(h, modes) for h in a.get("hostnames") or []] if a.get("protocol") == "https" and not parked else []
         certs = [f"certificate {c.get('hostname')}: {c.get('status')}" for c in (detail or {}).get("certificates") or [] if c.get("status") != "issued"]
         issues = [i.get("message") or json.dumps(i) for i in (detail or {}).get("deploymentIssues") or []]
         offline = any(status_of.get(d.get("id")) == "offline" for d in a.get("devices") or [])
-        if a.get("protocol") != "https":
+        if parked:
+            works = "parked"
+        elif a.get("protocol") != "https":
             works = "not checked"
         else:
             works = "yes" if probes and all(p[0] for p in probes) and not certs and not issues else "no"
-        evidence = [p[1] for p in probes] + certs + issues + (["its device is offline"] if offline else [])
+        gone = ([f"its device has been offline since {last_seen_day(own[0])}: presumed parked, not checked"] if parked
+                else ["its device is offline"] if offline else [])
+        evidence = [p[1] for p in probes] + certs + issues + gone
         return {
             "name": a.get("name"), "device": ", ".join(d.get("name", "") for d in a.get("devices") or []),
             "port": a.get("port"), "protocol": a.get("protocol"), "hostnames": a.get("hostnames") or [],
             "auth": modes if a.get("protocol") == "https" else ["none"], "status": a.get("status"),
-            "works": works, "deviceOffline": offline, "evidence": "; ".join(evidence),
+            "works": works, "deviceOffline": offline, "deviceParked": parked, "evidence": "; ".join(evidence),
         }
 
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
@@ -122,7 +145,8 @@ def build(cli, app=None, device=None):
     return {
         "organization": (who.get("organization") or {}).get("name"), "account": who.get("account"),
         "connector": None, "checkedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "filter": {}, "devices": [{"name": d.get("name"), "status": d.get("status"), "agentVersion": d.get("agentVersion")} for d in devices],
+        "filter": {}, "devices": [{"name": d.get("name"), "status": d.get("status"), "agentVersion": d.get("agentVersion"),
+                     "lastSeen": d.get("lastSeen"), "parked": presumed_parked(d)} for d in devices],
         "apps": rows, "system": 0 if app else len(system),
     }
 
@@ -141,7 +165,8 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html)
     ok = sum(1 for a in view["apps"] if a["works"] == "yes" and not a["deviceOffline"])
-    print(f"{len(view['apps'])} apps, {ok} working; page: file://{out}")
+    parked = sum(1 for a in view["apps"] if a["deviceParked"])
+    print(f"{len(view['apps'])} apps, {ok} working{f', {parked} parked' if parked else ''}; page: file://{out}")
     if not args.no_open:
         webbrowser.open(out.as_uri())
 
