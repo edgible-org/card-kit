@@ -389,10 +389,11 @@ print(found[0]["id"])
             f"{note}\n\nWhen it is finished, this prints `done`:\n\n"
             f"{FENCE}bash\nset -a\n. {name}/card.env\nset +a\n"
             f"COMPOSE=\"docker compose {env} -f {name}/{composes[0]}\"\n"
-            f"{a['setup']['done']} && echo done\n{FENCE}\n\n"
-            f"Then open it to `{final}`. Until then it stays on `{behind}`, and nothing changes for you:"
-            f" a signed-in session stays signed in.\n\n"
-            f"{FENCE}bash\nedgible app update {a['name']} --auth-modes {final}\n{FENCE}\n")
+            f"{a['setup']['done']} && echo done\n{FENCE}\n"
+            + (f"\nIt stays on `{behind}`: there is nothing to open.\n" if final == behind else
+               f"\nThen open it to `{final}`. Until then it stays on `{behind}`, and nothing changes for you:"
+               f" a signed-in session stays signed in.\n\n"
+               f"{FENCE}bash\nedgible app update {a['name']} --auth-modes {final}\n{FENCE}\n"))
     helper_steps = setup_steps
     for i, pl in enumerate(helper_places):
         where = f"On the machine for place `{pl}`. " if multi else ""

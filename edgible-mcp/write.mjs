@@ -288,7 +288,9 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
 // install wizard, then is switched to its authModes with their yes.
 export function deployAuth(application) {
   const modes = (application.authModes || ['org']).join(',');
-  return application.setup ? { auth: application.setup.behind, after: modes } : { auth: modes, after: null };
+  if (!application.setup) return { auth: modes, after: null, setup: false };
+  // An app whose authModes is [setup.behind] stays there: nothing to switch after setup.
+  return { auth: application.setup.behind, after: modes === application.setup.behind ? null : modes, setup: true };
 }
 
 // What a card's prepare.sh does, from its header ("# Prepare for the memos card: make the admin
@@ -353,7 +355,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       refs[n] = { secret, key: key || n };
     }
     const human = declared.filter(([, s]) => s.kind === 'human');
-    const { auth, after } = deployAuth(published[0]);
+    const { auth, after, setup } = deployAuth(published[0]);
     const reasons = [];
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
     // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
@@ -444,9 +446,11 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const created = (await apps()).find((a) => a.name === app);
     await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], ...(download ? { download: { size: download.size, time: download.time } } : {}), next: startNext(download) };
-    if (after) {
-      result.setup = { behind: auth, after };
-      result.next += ` ${app} sets itself up on its first visit, so it is on ${auth} for now: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). Wait for them; never do it in their place. When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. The switch takes effect in seconds and keeps them signed in.`;
+    if (setup) {
+      result.setup = { behind: auth, ...(after ? { after } : {}) };
+      result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). Wait for them; never do it in their place.` + (after
+        ? ` When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. The switch takes effect in seconds and keeps them signed in.`
+        : ` It stays on ${auth} afterwards, so there is nothing to switch.`);
     }
     if (api) {
       result.gateway = `${api.url}/v1`;

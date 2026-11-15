@@ -208,8 +208,9 @@ def convention_errors(card_dir: Path, card: dict) -> list[str]:
             continue
         if app.get("protocol") != "https":
             errors.append(f"app {app['name']} has setup:, which a person finishes in a browser, so its protocol is https")
-        if app["setup"].get("behind") in app.get("authModes", []):
-            errors.append(f"app {app['name']}: setup.behind is where it waits during setup, so authModes is where it goes after, not the same")
+        modes = app.get("authModes", [])
+        if app["setup"].get("behind") in modes and modes != [app["setup"]["behind"]]:
+            errors.append(f"app {app['name']}: authModes is where it goes after setup: [{app['setup']['behind']}] to stay behind, or modes without it")
         if not (card_dir / "test" / "setup.sh").is_file():
             errors.append(f"app {app['name']} has setup:, so test/setup.sh does that setup in the card's test")
     if card["metadata"].get("type") == "app":

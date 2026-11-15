@@ -831,10 +831,13 @@ def main(argv: list[str]) -> int:
                         time.sleep(10)
                 if not ok:
                     raise RuntimeError(f"{app['name']}'s setup.done did not exit 0 after test/setup.sh")
-                sh(f"edgible app update {name} --auth-modes {','.join(app['auth'])} --non-interactive --confirm",
-                   timeout=600)
+                # An app that stays behind (authModes is [setup.behind]) has nothing to switch.
+                if app["auth"] != [app["setup_behind"]]:
+                    sh(f"edgible app update {name} --auth-modes {','.join(app['auth'])} --non-interactive --confirm",
+                       timeout=600)
                 steps["setup"][app["name"]] = "pass"
-                print(f"setup {app['name']}: done, switched to {','.join(app['auth'])}")
+                print(f"setup {app['name']}: done, " + (f"switched to {','.join(app['auth'])}"
+                      if app["auth"] != [app["setup_behind"]] else f"stays on {app['setup_behind']}"))
 
         for app, name in published:
             result, detail = wait_verify(app, listing[name]["hostnames"][0])

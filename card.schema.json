@@ -233,7 +233,7 @@
           "properties": {
             "behind": {
               "const": "org",
-              "description": "The auth mode the app is published on while a person finishes its own setup, such as an install wizard. Only the organization reaches it. When setup is done, it is switched to authModes."
+              "description": "The auth mode the app is published on while a person finishes its own setup, such as an install wizard. Only the organization reaches it. When setup is done, it is switched to authModes, or stays when authModes is [org]."
             },
             "done": {
               "type": "string",

@@ -38,7 +38,8 @@ test('a prepare.sh without the usual header still counts', async () => {
 
 test('an app with setup: is published behind org, and goes to its authModes after', async () => {
   const { deployAuth } = await import('./write.mjs');
-  assert.deepEqual(deployAuth({ authModes: ['none'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: 'none' });
-  assert.deepEqual(deployAuth({ authModes: ['none'] }), { auth: 'none', after: null });
-  assert.deepEqual(deployAuth({}), { auth: 'org', after: null });
+  assert.deepEqual(deployAuth({ authModes: ['none'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: 'none', setup: true });
+  assert.deepEqual(deployAuth({ authModes: ['org'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: null, setup: true });
+  assert.deepEqual(deployAuth({ authModes: ['none'] }), { auth: 'none', after: null, setup: false });
+  assert.deepEqual(deployAuth({}), { auth: 'org', after: null, setup: false });
 });

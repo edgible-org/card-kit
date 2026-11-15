@@ -83,7 +83,7 @@ Leave device names, hostnames, organization ids, and passwords out of the README
 
 Some apps let the first visitor set them up: make the admin, or finish an install wizard. Published first on `none`, that is anyone on the internet. A card keeps that first visit for its owner in one of two ways.
 
-**The app's own setup, behind `org`.** When the setup asks the person anything (a language, a site title, their own admin and password), let the app ask it, its own way. The app is published on `org`, so only the organization reaches its real hostname; the person finishes its setup there; then it is switched to its `authModes`. Edgible looks after who reaches the app and when it opens. The app looks after everything inside it, and its own docs apply as written. The app says so in `card.yml`:
+**The app's own setup, behind `org`.** When the setup asks the person anything (a language, a site title, their own admin and password), let the app ask it, its own way. The app is published on `org`, so only the organization reaches its real hostname; the person finishes its setup there; then it is switched to its `authModes`, or stays, for an app whose `authModes` is `[org]` too. Edgible looks after who reaches the app and when it opens. The app looks after everything inside it, and its own docs apply as written. The app says so in `card.yml`:
 
 ```yaml
 applications:
