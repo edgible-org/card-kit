@@ -333,7 +333,7 @@
     sensitive: "the same, with only short messages that say something happened, as a notification can show on a locked screen"
   permissions: "a topic or token that can publish can reach the person's phone, so give each script its own and read access only to those who need it"
   machine: small; always on, or messages wait
-  cards: [ntfy]
+  cards: [ntfy, gotify]
   candidates:
     - {name: ntfy, repo: binwiederhier/ntfy, why: "one container, publishing by a plain HTTP request, with phone apps; its access control can deny everyone by default"}
     - {name: Gotify, repo: gotify/server, why: "one container with its own users and application tokens, and an Android app; no iOS app of its own"}
@@ -351,7 +351,7 @@
     sensitive: not published, or api-key only; embeddings can reveal the text they came from, so treat them like the documents
   builders: "a free, private vector store for a prototype RAG or agent app, moved to a bigger machine later without changing the code"
   machine: memory grows with the collection; fast disk
-  cards: [qdrant]
+  cards: [qdrant, weaviate]
   candidates:
     - {name: Qdrant, repo: qdrant/qdrant, why: "one container, a REST and gRPC API, an api-key setting, a built-in dashboard; the easiest to run small"}
     - {name: Chroma, repo: chroma-core/chroma, why: "one container with a simple HTTP API, popular for prototypes and agent memory"}
