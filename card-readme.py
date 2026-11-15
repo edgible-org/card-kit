@@ -376,29 +376,48 @@ print(found[0]["id"])
                   + "  ' \"$1\"\n}\n" + "\n".join(f"{id_of(pl)}=$(device_id \"${var_of(pl)}\")" for pl in app_places))
     else:
         lookup = "device_id=$(edgible device list --json | python3 -c '\n" + pick_device + "' \"$DEVICE\")"
-    # setup: the app is published behind org, the person finishes its own setup, then opens it.
+    # setup: the apps are published behind org, the person finishes the app's own setup once, then
+    # the ones that go public are opened. Several apps with setup: are one app on several
+    # hostnames (an editor on org, webhooks or phone apps on none), so they share one step.
     setup_apps = [a for a in apps if a.get("setup")]
     setup_steps = ""
-    for i, a in enumerate(setup_apps):
-        behind, final = a["setup"]["behind"], ",".join(a["authModes"])
-        note = ((spec.get("setup") or {}).get(a["name"]) or "").strip()
-        setup_steps += (
-            f"\n### {6 + i}. Set up {a['name']}\n\n"
-            f"Publish put `{a['name']}` on `{behind}`, so only your Edgible organization reaches it. "
-            f"Open `https://<{a['name']} hostname>`, sign in with Edgible, and finish the app's own setup there. "
+    if setup_apps:
+        behind = setup_apps[0]["setup"]["behind"]
+        opening = [a for a in setup_apps if ",".join(a["authModes"]) != a["setup"]["behind"]]
+        staying = [a for a in setup_apps if a not in opening]
+        where = (staying or setup_apps)[0]
+        names = " and ".join(f"`{a['name']}`" for a in setup_apps)
+        notes = (spec.get("setup") or {})
+        note = (notes.get(name) or notes.get(where["name"]) or "").strip()
+        dones = list(dict.fromkeys(a["setup"]["done"] for a in setup_apps))
+        title = setup_apps[0]["name"] if len(setup_apps) == 1 else name
+        setup_steps = (
+            f"\n### 6. Set up {title}\n\n"
+            f"Publish put {names} on `{behind}`, so only your Edgible organization reaches "
+            f"{'it' if len(setup_apps) == 1 else 'them'}. "
+            f"Open `https://<{where['name']} hostname>`, sign in with Edgible, and finish the app's own setup there. "
             f"{note}\n\nWhen it is finished, this prints `done`:\n\n"
             f"{FENCE}bash\nset -a\n. {name}/card.env\nset +a\n"
             f"COMPOSE=\"docker compose {env} -f {name}/{composes[0]}\"\n"
-            f"{a['setup']['done']} && echo done\n{FENCE}\n"
-            + (f"\nIt stays on `{behind}`: there is nothing to open.\n" if final == behind else
-               f"\nThen open it to `{final}`. Until then it stays on `{behind}`, and nothing changes for you:"
-               f" a signed-in session stays signed in.\n\n"
-               f"{FENCE}bash\nedgible app update {a['name']} --auth-modes {final}\n{FENCE}\n"))
+            + "".join(f"{d} && echo done\n" for d in dones) + f"{FENCE}\n")
+        if not opening:
+            setup_steps += f"\nIt stays on `{behind}`: there is nothing to open.\n"
+        else:
+            if len(setup_apps) == 1:
+                setup_steps += (f"\nThen open it to `{','.join(opening[0]['authModes'])}`. Until then it stays on `{behind}`, "
+                                f"and nothing changes for you: a signed-in session stays signed in.\n\n")
+            else:
+                setup_steps += ("\nThen open " + " and ".join(f"`{a['name']}` to `{','.join(a['authModes'])}`" for a in opening)
+                                + (f"; {' and '.join(f'`{a}`' for a in [x['name'] for x in staying])} stays on `{behind}`" if staying else "")
+                                + ". Until then they stay on `" + behind + "`, and nothing changes for you: a signed-in session stays signed in.\n\n")
+            setup_steps += (f"{FENCE}bash\n"
+                            + "".join(f"edgible app update {a['name']} --auth-modes {','.join(a['authModes'])}\n" for a in opening)
+                            + f"{FENCE}\n")
     helper_steps = setup_steps
     for i, pl in enumerate(helper_places):
         where = f"On the machine for place `{pl}`. " if multi else ""
         note = ((spec.get("helpers") or {}).get(pl) or "").strip()
-        helper_steps += (f"\n### {6 + len(setup_apps) + i}. Start the {pl}\n\n{where}Its services connect out to what Publish "
+        helper_steps += (f"\n### {6 + bool(setup_apps) + i}. Start the {pl}\n\n{where}Its services connect out to what Publish "
                          f"published, so they start now.\n\n{FENCE}bash\n{run_files(files_of[pl], 'pull')}\n{run_files(files_of[pl], 'up -d --wait')}\n"
                          f"{run_files(files_of[pl], 'ps')}\n{FENCE}\n\n{note}\n")
     fetch_note = ("\n\nOn each machine that runs a place, fetch the card and set up `card.env` the same way: "
@@ -429,7 +448,7 @@ The Compose file is [{composes[0]}]({composes[0]}), the settings [card.env](card
 
 ## How
 
-{words[5 + len(setup_apps) + len(helper_places)]} steps. Edit [card.env](card.env) before you start.
+{words[5 + bool(setup_apps) + len(helper_places)]} steps. Edit [card.env](card.env) before you start.
 
 ### 1. Fetch
 
