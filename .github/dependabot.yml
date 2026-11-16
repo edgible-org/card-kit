@@ -1,0 +1,11 @@
+# Keeps the GitHub Actions our workflows use up to date. Outside actions are pinned to an exact
+# commit (a tag can be moved to other code); Dependabot raises a PR when a new version comes out.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
