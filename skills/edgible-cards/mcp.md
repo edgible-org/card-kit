@@ -38,9 +38,12 @@ Show the person the exact command first and run it only after their yes. `<addre
 | Claude Code | `claude mcp add --scope user --transport http edgible-remote <address>` | `claude mcp add --scope user edgible-local -- "$(command -v node)" ~/.card-kit/edgible-mcp/edgible-mcp.mjs --allow-write` |
 | GitHub Copilot: the CLI, and the agent in VS Code (seen in 1.146) | `copilot mcp add --transport http edgible-remote <address>`, then `/mcp auth edgible-remote` for the browser sign-in | an entry under `mcpServers` in `~/.copilot/mcp-config.json`: `"edgible-local": {"type": "local", "command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "env": {"PATH": "<folder of edgible>:/usr/local/bin:/usr/bin:/bin"}, "tools": ["*"]}`. In VS Code, add `"EDGIBLE_MCP_VIEWS": "off"` to `env` too (below) |
 | Antigravity (seen 2026-11-14) | not tried yet: its documentation | an entry under `mcpServers` in `~/.gemini/config/mcp_config.json`: `"edgible-local": {"command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "env": {"PATH": "<folder of edgible>:/usr/local/bin:/usr/bin:/bin"}}`. It does not read the shell's `PATH` either |
+| Cursor (seen 2026-11-16, macOS) | not tried yet: an entry with `"url": "<address>"` in the same file (its documentation) | an entry under `mcpServers` in `~/.cursor/mcp.json`: `"edgible-local": {"command": "<full path of node>", "args": ["<full path of edgible-mcp.mjs>", "--allow-write"], "env": {"PATH": "<folder of edgible>:/usr/local/bin:/usr/bin:/bin"}}`. Settings, MCP shows whether it connected |
 | Another tool | its documentation | its documentation |
 
 The tools appear only in a new session. `/mcp` (Copilot CLI) or `claude mcp list` shows whether the server connected.
+
+**Already there under another name.** Before adding a server, look at the app's existing MCP entries. One whose arguments run `edgible-mcp.mjs` is this server, set up earlier under another name (often plain `edgible`). Don't add a second copy: offer to rename it to `edgible-local`, since plain `edgible` is kept for Edgible's own hosted server, then restart.
 
 **GitHub Copilot in VS Code** reads the same `~/.copilot/mcp-config.json` as Copilot CLI, on the side its shell runs: in a window attached to WSL, that is the Linux home in that distro. Keep its shape, `mcpServers` at the top: VS Code's own `mcp.json` uses `servers`, and a file with `servers` fails to load ("mcpServers: Required"). Two things differ from Copilot CLI:
 
