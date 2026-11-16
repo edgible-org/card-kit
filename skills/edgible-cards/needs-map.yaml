@@ -427,7 +427,7 @@
     default: "org: tools such as ComfyUI have no login of their own, so never none; an API for other apps on api-key"
     sensitive: org only, or not published
   machine: a GPU with plenty of memory, or Apple Silicon; lots of disk for models
-  cards: [speaches]
+  cards: [speaches, kokoro-fastapi]
   candidates:
     - {name: Speaches, repo: speaches-ai/speaches, why: "an OpenAI-compatible API for transcription (faster-whisper) and speech (Kokoro, Piper) in one container; runs on CPU"}
     - {name: Kokoro-FastAPI, repo: remsky/Kokoro-FastAPI, why: "text to speech with an OpenAI-compatible API; a CPU image, good voices for its size"}
@@ -446,7 +446,7 @@
     sensitive: "org only, on a machine with nothing else on it"
   permissions: "an agent that runs code or a shell acts on its machine as whoever runs it: give it a spare machine and only the keys it needs, as with OpenClaw"
   machine: "varies; Edge0 needs an Apple Silicon Mac (M3 or later); agents want a machine they can have to themselves"
-  cards: [localai]
+  cards: [localai, agent-zero]
   candidates:
     - {name: Edge0, repo: Edge0-AI/Edge0, why: "runs large mixture-of-experts models (35B) on a laptop by streaming experts from SSD, behind a local OpenAI-compatible server on port 8000; macOS 14+ on Apple Silicon, so a native card like ollama-osx, not Docker"}
     - {name: Agent Zero, repo: agent0ai/agent-zero, why: "an autonomous agent with its own Linux desktop inside one Docker image; a v3 preview is out, so expect change"}
