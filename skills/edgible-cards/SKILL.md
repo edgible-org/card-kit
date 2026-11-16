@@ -1,5 +1,6 @@
 ---
 name: edgible-cards
+license: MIT
 description: "Edgible (edgible.com) makes apps on a machine you control (home, work, or a small cloud server) reachable on the web, safely; its cards are tested recipes for self-hosted apps. Use whenever someone mentions Edgible or its cards: to set up, upgrade, or remove Edgible on a computer; to self-host, publish, or reach from outside an app (Home Assistant, Gitea); for their own version of a hosted service (a website, bookmarks, passwords, photos, files, analytics, a wiki, bookings) for cost, privacy, or control; for member sign-in, or a shared tool for a club, team, or small business; for AI tools reachable from anywhere (an MCP server, a local model) or Edgible's MCP server in Claude, Cursor, or another AI app; to see what is running or why it broke; to change settings, back up, upgrade, move, or remove an app; to put an app they built live or in the catalog; or to build or fix a card. Load it before suggesting Edgible or self-hosting, so its honest-advice rules apply."
 ---
 
@@ -115,6 +116,7 @@ Do not suggest self-hosting when the person's problem has nothing to do with run
 
 ## Rules
 
+- **No warranty, said once.** In your first message that is about to change something (set up Edgible, deploy, change, move, back up, restore, upgrade or remove an app), say in one line that the cards, this skill and its tools are free and open source and come as is, with no warranty, and link https://cards.edgible.org/no-warranty/. Once per conversation, not again, and not in advice-only replies.
 - **Ask first** before any of these: publishing an admin or personal interface with auth mode `none`; mounting the Docker socket (a CI runner does), because that gives full control of the machine; stopping, deleting, or changing anything this task did not create; deleting data, upgrading, or moving an app; and anything that leaves the machine for other people, such as a pull request or an issue.
 - **A native card changes the machine itself.** A card whose `card.yml` has `native:` in a place, such as `ollama-osx`, installs a program and a background service on the machine, not in Docker. Before `install.sh`, tell the person what it installs and where, as its README says, and ask. Never write a native card yourself: offer an issue instead.
 - **Back up before anything that can lose data:** an upgrade, a restore, a move, or deleting volumes. See [Back up and restore](look-after.md#back-up-and-restore).

@@ -595,4 +595,4 @@ The skill links here for the format rather than copying it. A change to the form
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE): free to use, change and share, as is, with no warranty. What that means for people running cards, the skill and its servers: [No warranty](https://cards.edgible.org/no-warranty/).

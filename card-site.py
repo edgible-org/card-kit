@@ -105,8 +105,8 @@ DRIVER_WORDS = {
     "shut-down": "a service that shut down or got worse", "compliance": "compliance",
     "local": "it has to run at home",
 }
-SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible", "ADD-YOUR-APP.md": "add-your-app"}
-RESERVED = {"upstream", "ops", "about", "ai", "run-without-edgible", "add-your-app", "playbooks", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "stats.json", "404.html", "index.html"}
+SITE_PAGES = {"ABOUT.md": "about", "AI.md": "ai", "RUN-WITHOUT-EDGIBLE.md": "run-without-edgible", "ADD-YOUR-APP.md": "add-your-app", "NO-WARRANTY.md": "no-warranty"}
+RESERVED = {"upstream", "ops", "about", "no-warranty", "ai", "run-without-edgible", "add-your-app", "playbooks", "sources", "needs", "style.css", "llms.txt", "sitemap.xml", "robots.txt", "stats.json", "404.html", "index.html"}
 
 
 def _load(tool: str):
@@ -483,7 +483,7 @@ class Site:
 <script>{MENU_JS}</script>
 <footer>
 <div class="wrap foot">
-<div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors.</div>
+<div class="foot-legal"><span class="foot-lic">Free to run and share, under the <a href="{REPO_URL}/blob/main/LICENSE">MIT License</a>, as is, with <a href="{up}no-warranty/">no warranty</a>.<br></span>&copy; {self.built[:4]} Edgible and contributors<span class="foot-lic-short"> &middot; <a href="{REPO_URL}/blob/main/LICENSE">MIT</a> &middot; <a href="{up}no-warranty/">No warranty</a></span>.</div>
 <div class="foot-right">
 <div class="foot-links"><span><a href="{up}about/">About</a> &middot; <a href="{up}ai/">Using AI</a> &middot; <a href="{up}playbooks/">AI Playbooks</a> &middot; <a href="{up}sources/">Sources</a></span><span><a href="{up}add-your-app/">Add your app</a> &middot; <a href="https://www.edgible.ai">Edgible</a> &middot; <a href="https://www.edgible.ai/contact/">Contact</a></span></div>
 <a class="foot-logo" href="https://www.edgible.ai"><img src="{up}assets/images/edgible-symbol-white.png" alt="Edgible" height="32"></a>
@@ -737,6 +737,13 @@ class Site:
                       head=f'<link rel="alternate" type="text/markdown" title="This page as Markdown" href="{md}">\n')
             (out / f"{stem}.md").write_text(text)
 
+    def no_warranty_page(self) -> None:
+        """/no-warranty/, from NO-WARRANTY.md: what the MIT License's as-is terms mean in practice."""
+        self.md_page("NO-WARRANTY.md", "no-warranty", "No warranty",
+                     "No warranty: Edgible cards come as is",
+                     "Cards, card-kit, the edgible-cards skill and its MCP servers are free and open source, "
+                     "and come as is, with no warranty: what that means for you.")
+
     def run_without_edgible_page(self) -> None:
         """/run-without-edgible/, from RUN-WITHOUT-EDGIBLE.md: running a card on your own server."""
         self.md_page("RUN-WITHOUT-EDGIBLE.md", "run-without-edgible", "Run a card without Edgible",
@@ -967,7 +974,7 @@ class Site:
 {fit_section(c["fit"])}
 {upstream_section(UPSTREAM.for_card(self.upstream, name))}
 {needs_html}
-<p class="by-hand">Setting it up by hand? Install Edgible from <a href="https://edgible.com/">edgible.com</a>, then follow the steps below, or <a href="../run-without-edgible/">run it without Edgible</a>.</p>
+<p class="by-hand">Setting it up by hand? Install Edgible from <a href="https://edgible.com/">edgible.com</a>, then follow the steps below, or <a href="../run-without-edgible/">run it without Edgible</a>. Like every card, it comes as is, with <a href="../no-warranty/">no warranty</a>.</p>
 <article class="readme">
 {self.readme_html(c)}
 </article>
@@ -1186,6 +1193,7 @@ Each card page has how to start, publish, check, and remove the card. Each need 
         self.ai_page()
         self.ops_page()
         self.run_without_edgible_page()
+        self.no_warranty_page()
         self.add_your_app_page()
         self.playbooks()
         self.sources_page()
@@ -1325,7 +1333,8 @@ footer .foot-right{display:flex;align-items:center;gap:20px;margin-left:auto}
 footer .foot-links{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
 footer .foot-logo img{display:block;height:32px;width:auto;opacity:.9}
 /* On a phone the footer is one short line and the symbol: the menu has the links. */
-@media (max-width:640px){footer .foot{flex-wrap:nowrap}footer .foot-lic,footer .foot-links{display:none}}
+footer .foot-lic-short{display:none}footer .foot-lic-short a{white-space:nowrap}
+@media (max-width:640px){footer .foot{flex-wrap:nowrap}footer .foot-lic,footer .foot-links{display:none}footer .foot-lic-short{display:inline}}
 /* The AI Playbooks: a chapter reads at a narrower width; a quote is something to say to your AI, or a box such as
 What you need; Previous and Next end each chapter. Icons are drawn light on a navy tile. */
 :root{--yellow:#ffd21f;--prompt:#fff8d6}

@@ -13,7 +13,7 @@ Check this skill is current first ([Keep this skill current](SKILL.md#keep-this-
 
 What was tested is a fresh Ubuntu 26.04 distro set up for Edgible. A distro the person already uses, or Ubuntu 24.04 in WSL, has not been tried: say so, and offer a new Ubuntu 26.04 distro beside it (`wsl.exe --install -d <name>`, with the name from `wsl.exe --list --online`; it needs their yes, and the first WSL install can need a restart), or a VM as in [Make a machine](#make-a-machine). Use their existing distro only if they choose it. The same holds the other way round: a PowerShell or Command Prompt shell on Windows means following [WSL2 on Windows](#wsl2-on-windows) from Windows, not installing Edgible there.
 
-The person's version of these steps is the [Get Edgible running](https://cards.edgible.org/playbooks/get-edgible-running/) playbook chapter. Ask before each step that uses `sudo`, and say what it installs.
+The person's version of these steps is the [Get Edgible running](https://cards.edgible.org/playbooks/get-edgible-running/) playbook chapter. Ask before each step that uses `sudo`, and say what it installs. Say the no-warranty line first, as [Rules](SKILL.md#rules) says.
 
 **Show the journey** as [SKILL.md](SKILL.md#where-you-are-running) says: setup covers its first three steps.
 

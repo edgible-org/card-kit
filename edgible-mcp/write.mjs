@@ -1171,7 +1171,7 @@ async function activity({ limit = 20 }) {
   }).join('\n');
 }
 
-export const WRITE_INSTRUCTIONS = 'Deploy, move and remove Edgible app cards on any device in the organisation, without a shell on that device: Edgible runs each card as a managed app. When a result says "needs confirmation", put each reason to the person in their own words, and call again with confirm only after they agree. Never confirm on their behalf. activity shows what these tools did. Use find and describe to choose a card.';
+export const WRITE_INSTRUCTIONS = 'Deploy, move and remove Edgible app cards on any device in the organisation, without a shell on that device: Edgible runs each card as a managed app. When a result says "needs confirmation", put each reason to the person in their own words, and call again with confirm only after they agree. Never confirm on their behalf. Before the first change in a conversation, say once, in a line, that these tools and the cards are free and open source and come as is, with no warranty: https://cards.edgible.org/no-warranty/. activity shows what these tools did. Use find and describe to choose a card.';
 
 // The tools that change things, on any MCP server; the combined edgible server adds them with --allow-write.
 export function registerWriteTools(server) {
