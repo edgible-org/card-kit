@@ -586,6 +586,17 @@ python3 ../card-kit/verify-card.py ~/linkding-copy --against ~/linkding-backups/
 
 **Running:** every service of each Compose file on the machine is running, and healthy when it has a healthcheck. **Answering:** every TCP port it publishes accepts a connection. **Fingerprint:** it runs `data.fingerprint`. With `--against`, the line must equal the one in `backup.json`, the proof that the data came back whole; when they differ it prints both. It exits 1 when a check fails.
 
+### set-address
+
+Changes the address a card's app gives out, for the person's own domain or a move, and checks it took. Many apps keep their address: in a setting, and some also in their data, such as the links in WordPress's posts. A new hostname at the edge alone leaves them sending people to the old one.
+
+```bash
+python3 ../card-kit/set-address.py ~/wordpress https://www.ourclub.org --dry-run
+python3 ../card-kit/set-address.py ~/wordpress https://www.ourclub.org --local http://127.0.0.1:8085
+```
+
+It reads the app's `address:` in `card.yml`: `url`, the address as the Compose file builds it (`https://wordpress.${ORG_LABEL}.${EDGIBLE_DOMAIN:-edgible.app}`); `setting`, the `card.env` line that overrides it (`WORDPRESS_URL`); and, for an app that also keeps its address in its data, `change`, a command run with `$COMPOSE`, `$OLD_URL` and `$NEW_URL` (WordPress's `wp search-replace`). It sets the line (after a copy to `card.env.bak-<time>`), runs `up -d --wait`, runs `change`, then **checks**: the new address (or `--local`, sent the new host name) answers, does not redirect to the old one, and its first page does not link to it. It exits 1 when a step or the check fails. Publishing the new address is Edgible's part (`add_address`, or `--hostnames`); run it again after that to check through Edgible. A card leaves `address:` out when its app does not keep its address.
+
 ## Agent skill
 
 [skills/edgible-cards](skills/edgible-cards/SKILL.md) teaches an AI agent to self-host with Edgible the way this README says. It finds a card that fits. When the person describes a need that none meets, it shortlists apps from awesome-selfhosted for them to choose from. It puts the open choices to the person. Then it deploys and verifies by the card's README. After that, it answers what is running and whether it works, troubleshoots, and handles sign-in and API keys, settings, pausing, backup and restore, upgrades, moves, and removal. It also sets Edgible itself up on a machine that has none, the CLI, the sign-in and the device, and upgrades it. When nothing fits, it builds an app card and tests it with `test-card`, and with the person's yes it offers the card, or a fix, as a pull request. It is in the open Agent Skills format, with shell commands only, so agents that read that format can use it. `SKILL.md` holds what applies to every task and a map of the other files in its folder (`setup.md`, `deploy.md`, `choose-an-app.md`, `look-after.md`, `mcp.md`, `build.md`), which an agent reads only when a task needs one. Keep `SKILL.md` under about 200 lines and its description under 1,024 characters (the format's limit): a new section goes in the file for its task, and a new file gets a row in the map.

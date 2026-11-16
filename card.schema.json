@@ -242,6 +242,32 @@
             }
           },
           "description": "The app sets itself up on its first visit. It is published behind org, a person runs its own setup on its real hostname, and it is switched to authModes once done exits 0. The card's test does the setup with test/setup.sh."
+        },
+        "address": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "setting"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "pattern": "^https?://",
+              "description": "The address the app gives out, as its Compose file builds it, with ${VAR}, ${VAR:-default} and ${VAR:?message} filled in from card.env, such as https://wordpress.${ORG_LABEL}.${EDGIBLE_DOMAIN:-edgible.app}."
+            },
+            "setting": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "description": "The card.env line that overrides url, such as WORDPRESS_URL: set it to give the app another address (your own domain)."
+            },
+            "change": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A shell command for an app that also keeps its address in its data, run on the device after the restart with card.env exported, $COMPOSE set, and $OLD_URL and $NEW_URL, such as $COMPOSE --profile cli run --rm -T wordpress-cli wp search-replace \"$OLD_URL\" \"$NEW_URL\" --all-tables --skip-columns=guid."
+            }
+          },
+          "description": "The app keeps its own address, so a new one (your own domain, a move) needs more than a new hostname at the edge. set-address changes it this way and checks the app answers at the new address without sending people to the old one. Leave it out when the app does not keep its address."
         }
       },
       "allOf": [
