@@ -34,6 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./run check-map
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   skill-frontmatter:
     # SKILL.md's front matter must be valid YAML for a strict parser (GitHub Copilot CLI

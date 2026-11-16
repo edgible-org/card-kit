@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import tarfile
 import urllib.request
@@ -38,7 +39,12 @@ FITS = {"good", "conditional", "poor", "refused"}
 
 
 def get(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "edgible-card-kit"})
+    headers = {"User-Agent": "edgible-card-kit"}
+    # Without a token GitHub's API allows 60 calls an hour per address, shared on CI runners.
+    token = os.environ.get("GITHUB_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.read()
 
