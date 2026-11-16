@@ -146,6 +146,16 @@ Then run [Is it working](#is-it-working).
 
 The published apps stay as they are, unless the card's ports or apps changed.
 
+### Fix an image scan's findings
+
+When the person asks to fix what the image scan found, or to move to an image newer than the card pins, the fix comes from the card, not from this machine.
+
+1. **Is it upstream yet?** Compare the card's pin on `main` with what runs here (`$C config --images`), and look for an open update: `gh pr list -R edgible-org/cards --search "<card> in:title"` (without `gh`, the cards repo's pull requests page). An image update is a Renovate pull request, tested on a real device before it can merge.
+2. **Merged:** the newer pin is on `main`, so [Upgrade](#upgrade), which backs up first.
+3. **Not yet:** say so plainly: the tested card still pins the older image, and an update is waiting or will follow once Renovate sees the new image. Offer to wait, or to [ask for a retest](deploy.md#2-decide-with-the-person) that names the findings. Only if they want it now, and after their yes, run the newer image through the card's `<APP>_IMAGE` line in `card.env`. Say first that it leaves the tested card, that it stops the app briefly, and that a new version can change the app's data so the old image may not open it again: [back up](#back-up-and-restore) first, and going back means restoring that backup with the old image. Then `$C pull` and `$C up -d --wait`, and [Is it working](#is-it-working). Remove the line once the card catches up.
+
+Never edit the card's Compose file or other files to bump the pin here: that is a fix to the card, made as a pull request ([Fix a card or card-kit](build.md#fix-a-card-or-card-kit)). For an app deployed with `deploy_card`, the image is Edgible's to change: say the update comes with the card, and offer the retest.
+
 ### Customise the source
 
 Some cards run an app whose source a person may want to change (teamdesk is one). A card says so with `source:` on the app in `card.yml`: `repo`, and when they are set `ref`, `path`, `dockerfile`, `dev`. The README's **Customising** section is the same method in words. Read `source` from the card the person runs, from upstream `main`, not from memory. A card with no `source:` has no code to change: say so, and if the person still wants a change, offer the app's own settings, or a fork of the app's project that they build as in [Add your own app](build.md#add-your-own-app).
