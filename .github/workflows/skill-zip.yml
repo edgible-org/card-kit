@@ -28,7 +28,7 @@ jobs:
   zip:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the zip
         run: |
@@ -42,7 +42,7 @@ jobs:
       # GitHub signs a statement that this zip was built here, from this commit, by this workflow.
       # Check a download with: gh attestation verify edgible-cards.zip --repo edgible-org/card-kit
       - name: Sign the zip
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: edgible-cards.zip
 

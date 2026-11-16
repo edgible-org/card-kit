@@ -13,10 +13,10 @@ jobs:
     # A change to the kit must still pass every card in edgible-org/cards.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: card-kit
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: edgible-org/cards
           path: cards
@@ -32,7 +32,7 @@ jobs:
     # starters and cards that exist.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: ./run check-map
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -43,7 +43,7 @@ jobs:
     # description under 1024 characters. An unquoted ": " in the description breaks it.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           python3 -m pip install --quiet pyyaml
           python3 - <<'PY'

@@ -35,7 +35,7 @@ jobs:
     env:
       IMAGE: ghcr.io/edgible-org/${{ matrix.name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version
         id: v
@@ -54,10 +54,10 @@ jobs:
         if: github.event_name == 'pull_request' && steps.v.outputs.published == 'true'
         run: echo "::warning::$IMAGE:${{ steps.v.outputs.version }} is already published. Raise the version in package.json and server.mjs, or main will not publish this change."
 
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         if: github.event_name != 'pull_request' && steps.v.outputs.published == 'false'
         with:
           registry: ghcr.io
@@ -68,7 +68,7 @@ jobs:
       # listed by name, and crashed on start. Build one platform, run it, and ask its health endpoint.
       - name: The image starts
         if: matrix.name == 'edgible-mcp'
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.name }}
           platforms: linux/amd64
@@ -85,7 +85,7 @@ jobs:
           done
           echo "::error::the image does not answer /healthz"; docker logs smoke | tail -20; exit 1
 
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: push
         with:
           context: ${{ matrix.name }}
@@ -97,7 +97,7 @@ jobs:
       # beside the image. Check with: gh attestation verify oci://<image>:<version> --repo edgible-org/card-kit
       - name: Sign the image
         if: github.event_name != 'pull_request' && steps.v.outputs.published == 'false'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
