@@ -16,7 +16,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # move the skill tag and replace the release's asset
+  contents: write       # move the skill tag and replace the release's asset
+  id-token: write       # sign the zip's build attestation (Sigstore)
+  attestations: write   # store the attestation, so anyone can check the zip is ours
 
 concurrency:
   group: skill-zip
@@ -34,7 +36,15 @@ jobs:
           zip -qr -X ../edgible-cards.zip edgible-cards -x '*.DS_Store'
           cd ..
           unzip -l edgible-cards.zip | grep -q ' edgible-cards/SKILL.md$'
-          ls -l edgible-cards.zip
+          sha256sum edgible-cards.zip > edgible-cards.zip.sha256
+          ls -l edgible-cards.zip; cat edgible-cards.zip.sha256
+
+      # GitHub signs a statement that this zip was built here, from this commit, by this workflow.
+      # Check a download with: gh attestation verify edgible-cards.zip --repo edgible-org/card-kit
+      - name: Sign the zip
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: edgible-cards.zip
 
       - name: Publish it as the skill release
         env:
@@ -50,4 +60,4 @@ jobs:
           else
             gh release create skill --title "edgible-cards skill ($short, $when)" --notes "$notes" --latest=false
           fi
-          gh release upload skill edgible-cards.zip --clobber
+          gh release upload skill edgible-cards.zip edgible-cards.zip.sha256 --clobber

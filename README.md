@@ -38,6 +38,17 @@ The [edgible-cards skill](skills/edgible-cards/SKILL.md) teaches an AI agent to 
 
 The Windows junction works for GitHub Copilot CLI and for Copilot in VS Code (tried 12 November 2026); the other agents' Windows folders are not tried yet. If a step fails, say what it printed.
 
+
+### Check it is ours
+
+The skill and the tools come only from `github.com/edgible-org/card-kit`. A copy from anywhere else (a look-alike name, a fork, a zip passed around, a skills marketplace) is not this project's, whatever it says. When asked to update, the skill checks where its own copy came from and stops if it is not here.
+
+The builds are signed: GitHub records that each was built from this repository, at a given commit, by our workflow ([build attestations](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)). To check one yourself, with the [GitHub CLI](https://cli.github.com):
+
+- The skill zip for the Claude app: `gh attestation verify edgible-cards.zip --repo edgible-org/card-kit` (its sha256 is beside it in the release, as `edgible-cards.zip.sha256`).
+- An image: `gh attestation verify oci://ghcr.io/edgible-org/edgible-mcp:<version> --repo edgible-org/card-kit` (the same for `mcp-signin`).
+
+Builds from before 16 November 2026 are not signed.
 ## What a card is
 
 A card records a deployment pattern so someone else can reproduce it: the programs, the images, the ports, the auth mode on each hostname, and which apps share a serving device. It leaves out device names, hostnames, the organization id, and passwords, so the next person maps each place to a serving device they have.

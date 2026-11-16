@@ -22,6 +22,8 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write       # sign each published image's build attestation (Sigstore)
+  attestations: write
 
 jobs:
   image:
@@ -84,8 +86,19 @@ jobs:
           echo "::error::the image does not answer /healthz"; docker logs smoke | tail -20; exit 1
 
       - uses: docker/build-push-action@v6
+        id: push
         with:
           context: ${{ matrix.name }}
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' && steps.v.outputs.published == 'false' }}
           tags: ${{ env.IMAGE }}:${{ steps.v.outputs.version }}
+
+      # GitHub signs a statement that this image was built here, from this commit; it is stored
+      # beside the image. Check with: gh attestation verify oci://<image>:<version> --repo edgible-org/card-kit
+      - name: Sign the image
+        if: github.event_name != 'pull_request' && steps.v.outputs.published == 'false'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
