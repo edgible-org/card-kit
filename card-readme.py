@@ -401,13 +401,13 @@ print(found[0]["id"])
             f"COMPOSE=\"docker compose {env} -f {name}/{composes[0]}\"\n"
             + "".join(f"{d} && echo done\n" for d in dones) + f"{FENCE}\n")
         if not opening:
-            setup_steps += f"\nIt stays on `{behind}`: there is nothing to open.\n"
+            setup_steps += f"\nIt stays on `{behind}`: there is nothing to switch.\n"
         else:
             if len(setup_apps) == 1:
-                setup_steps += (f"\nThen open it to `{','.join(opening[0]['authModes'])}`. Until then it stays on `{behind}`, "
+                setup_steps += (f"\nThen switch it to `{','.join(opening[0]['authModes'])}`. Until then it stays on `{behind}`, "
                                 f"and nothing changes for you: a signed-in session stays signed in.\n\n")
             else:
-                setup_steps += ("\nThen open " + " and ".join(f"`{a['name']}` to `{','.join(a['authModes'])}`" for a in opening)
+                setup_steps += ("\nThen switch " + " and ".join(f"`{a['name']}` to `{','.join(a['authModes'])}`" for a in opening)
                                 + (f"; {' and '.join(f'`{a}`' for a in [x['name'] for x in staying])} stays on `{behind}`" if staying else "")
                                 + ". Until then they stay on `" + behind + "`, and nothing changes for you: a signed-in session stays signed in.\n\n")
             setup_steps += (f"{FENCE}bash\n"
