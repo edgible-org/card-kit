@@ -1,0 +1,39 @@
+name: A problem with the edgible-cards skill
+description: The skill did the wrong thing, missed a step, or gave wrong advice.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Leave out anything private: passwords, keys, tokens, personal addresses.
+        For a security problem, don't use this form: use **Report a vulnerability** on the Security tab.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked, what the AI tool did, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: AI tool and model
+      placeholder: Cursor 3.30 with GPT-6 Luna, on a Mac
+    validations:
+      required: true
+  - type: textarea
+    id: skill
+    attributes:
+      label: Skill
+      description: |
+        So we know it is our skill and which copy. Ask your AI tool "Which version of the Edgible skill do I have?", or run these where the skill is installed (usually `~/.card-kit`) and paste the output:
+
+        ```
+        git -C ~/.card-kit log -1 --format='%h %cs'
+        git -C ~/.card-kit remote get-url origin
+        git -C ~/.card-kit status --short
+        ```
+
+        The last one prints nothing when the copy is unchanged. For the Claude app's uploaded zip, give the date you downloaded it, or its sha256.
+      render: text
+    validations:
+      required: true
