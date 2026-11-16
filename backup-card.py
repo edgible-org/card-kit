@@ -288,7 +288,7 @@ def main(argv: list[str]) -> int:
                     print(f"copy {v}: {test_card.human((partial / f'{v}.tgz').stat().st_size)}")
             finally:
                 for c, stop in to_stop:
-                    r = sh(f"{c.cmd} start --wait --wait-timeout 300 {' '.join(stop)}", check=False, timeout=600)
+                    r = sh(f"{c.cmd} up -d --no-recreate --wait --wait-timeout 300 {' '.join(stop)}", check=False, timeout=600)
                     state = "healthy again" if r.returncode == 0 else "started, but not healthy: check it now"
                     print(f"{', '.join(stop)}: {state}")
                 if to_stop:
