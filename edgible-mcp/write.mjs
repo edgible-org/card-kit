@@ -448,8 +448,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], ...(download ? { download: { size: download.size, time: download.time } } : {}), next: startNext(download) };
     if (setup) {
       result.setup = { behind: auth, ...(after ? { after } : {}) };
-      result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). Wait for them; never do it in their place.` + (after
-        ? ` When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. The switch takes effect in seconds and keeps them signed in.`
+      result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). End with what to reply, such as "I'm waiting here: tell me when it's done": nothing watches the app, so their reply is how you know. Wait for them; never do it in their place.` + (after
+        ? ` When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. Ask in terms of who can reach it, never "open it", which reads as opening the link: for none, whether to take Edgible's sign-in away so anyone on the internet reaches the app's own login. The switch takes effect in seconds and keeps them signed in.`
         : ` It stays on ${auth} afterwards, so there is nothing to switch.`);
     }
     if (api) {
