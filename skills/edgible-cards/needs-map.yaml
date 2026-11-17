@@ -52,7 +52,7 @@
     default: web interface on org; browser extensions and phone apps cannot pass an Edgible sign-in, so their hostname is none with the app's own login, or api-key if the app's clients can send a header
     sensitive: org only, and save from the browser at home
   machine: little; page archiving needs disk
-  cards: [linkding, linkwarden]
+  cards: [linkding, linkwarden, karakeep]
   ask: ["read later with saved page copies, or just links?", "do you save from a phone?"]
 
 - category: Photo Galleries
@@ -67,7 +67,7 @@
   permissions: "albums and partner sharing decide which family members see which photos; check sharing defaults before inviting people"
   builders: "a photo store with face and place search, for a product prototype that works with people's photos"
   machine: lots of disk (library plus about 20% for thumbnails); 6 GB memory for Immich; a GPU helps face search but is optional
-  cards: [immich, photoprism]
+  cards: [immich, photoprism, librephotos]
   ask: ["how sensitive are they, and do you need them away from home?", "how much space does your library take?"]
 
 - category: File Transfer & Synchronization
