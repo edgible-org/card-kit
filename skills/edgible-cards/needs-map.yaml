@@ -501,7 +501,7 @@
     default: none with the app's own login, for the sync clients
     sensitive: the same, or sync on the home network only
   machine: little
-  cards: [keeper-sh]
+  cards: [keeper-sh, dayglance]
   ask: ["which phones and computers must sync?"]
 
 - category: Games
