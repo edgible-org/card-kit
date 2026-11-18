@@ -191,10 +191,13 @@ Ask first. With the tools, `move_card` moves an app they deployed to another dev
 
 Some steps need a terminal on the device the app runs on, such as deleting its data when it is not this machine. Never hand over the commands alone: say how to get there, and offer to run them yourself where you can.
 
-1. **Look for a way in from here.** `grep -i -A4 '<device>' ~/.ssh/config` (and a near match, such as the name without its suffix): a `Host` entry means `ssh <host>` probably works. Check with `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true`, then offer to run the commands over it: show them and wait for a yes, as for any change.
+1. **Look for a way in from here, in this order,** and offer to run the commands that way: show them and wait for a yes, as for any change.
+   - **A VM on this computer, from Multipass** (the way [Make a machine](setup.md#make-a-machine) makes one on macOS, Linux and Windows): `multipass list` shows it, usually under the device's name or close to it. Run each command with `multipass exec <vm> -- bash -lc '<commands>'`.
+   - **WSL2 on this Windows computer:** `wsl.exe -l -v` lists the distros; run with `wsl.exe -d <distro> -- bash -lc '<commands>'`.
+   - **ssh:** `grep -i -A4 '<device>' ~/.ssh/config` (and a near match, such as the name without its suffix): a `Host` entry means `ssh <host>` probably works. Check with `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true`.
 2. **Otherwise, ask how they usually reach it,** with the likely ways for what it is (`list_devices` may say its system, and its name often says where it lives):
    - **a computer they can sit at:** open Terminal there (on Windows, the WSL2 Ubuntu window);
-   - **a virtual machine on this computer** (VirtualBox, UTM, Parallels): its window, or `ssh` if they set that up;
+   - **a VM they made by hand** (VirtualBox, UTM, Parallels): its window, or `ssh` if they set that up;
    - **a cloud server:** `ssh` with the key they made it with, or the provider's browser console (on AWS, EC2 Instance Connect).
 3. **Hand over the commands as one block to paste, unchanged,** and ask them to say when it is done, or to paste the output if anything failed.
 
