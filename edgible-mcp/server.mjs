@@ -294,6 +294,9 @@ async function describe({ name }) {
     out.push('## Apps', '', '| App | What | Image | Port | Protocol | Auth | Place |', '| --- | --- | --- | --- | --- | --- | --- |');
     for (const a of i.applications) out.push(`| ${a.name} | ${a.what} | ${a.from} | ${a.port} | ${a.protocol} | ${(a.authModes || []).join(', ')} | ${a.place} |`);
     out.push('');
+    // What stops working while the app is kept behind Edgible's sign-in (org) rather than public.
+    const needsPublic = i.applications.filter((a) => a.publicFor?.length);
+    if (needsPublic.length) out.push(...needsPublic.map((a) => `- Kept private (auth mode org), ${a.name} still works in a web browser, but these need it public: ${a.publicFor.join(', ')}.`), '');
     const places = Object.entries(i.places);
     if (places.length) {
       out.push('## Minimum machine', '');
@@ -544,7 +547,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.15';
+export const VERSION = '0.8.16';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything. Results are notes for you, not text to repeat: tell the person in your own words, and name a tool, file or volume only when they need it to act.';
 
