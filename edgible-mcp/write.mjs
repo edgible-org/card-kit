@@ -120,6 +120,18 @@ function notAllowed(...names) {
 }
 const appDevices = (a) => (a.devices || []).map((d) => d.name);
 
+// The devices a person can choose from: online, allowed here, each with the managed apps it
+// already runs, so the choice is theirs and made knowingly.
+async function deviceChoices() {
+  const [list, running] = await Promise.all([devices(), apps()]);
+  return list.filter((d) => d.status === 'online' && !notAllowed(d.name)).map((d) => ({
+    name: d.name,
+    ...(d.isThisMachine ? { thisMachine: true } : {}),
+    ...(d.description ? { description: d.description } : {}),
+    apps: running.filter((a) => appDevices(a).includes(d.name)).map((a) => a.name),
+  }));
+}
+
 async function findDevice(nameOrId) {
   const d = (await devices()).find((x) => x.name === nameOrId || x.id === nameOrId);
   if (!d) throw new Error(`no device named ${nameOrId} in this organisation`);
@@ -328,6 +340,11 @@ export async function prepareStep(dir, card) {
 async function deployCard({ card, app, device, choices = {}, keys = {}, hostnames = [], confirm = [] }) {
   app = app || card;
   if (!NAME.test(card) || !NAME.test(app)) return refused('card and app names are lowercase letters, digits and dashes');
+  // Never chosen for the person: with no device, the choices go back to them.
+  if (!device) {
+    return { status: 'choose a device', card, devices: await deviceChoices(),
+      how: 'Ask the person which device runs it, in their words: name each with what it already runs, and mark this computer. Never choose for them. Then call again with device.' };
+  }
   const target = await findDevice(device);
   if (notAllowed(target.name)) return refused(notAllowed(target.name));
   if (target.status !== 'online') return refused(`device ${target.name} is ${offlineWords(target)}`);
@@ -368,6 +385,11 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const human = declared.filter(([, s]) => s.kind === 'human');
     const { auth, after, setup, staged } = deployAuth(published[0]);
     const reasons = [];
+    // Which device, always said and always confirmable: the person can still pick another.
+    const onOffer = await deviceChoices();
+    const here = onOffer.find((d) => d.name === target.name);
+    const others = onOffer.filter((d) => d.name !== target.name).map((d) => d.name + (d.thisMachine ? ' (this computer)' : ''));
+    reasons.push({ token: 'device', reason: `${app} will run on ${target.name}${target.isThisMachine ? ', this computer' : ''}${here?.apps.length ? `, which already runs ${here.apps.join(', ')}` : ', which runs no other managed app'}. ${others.length ? `Other online devices: ${others.join(', ')}.` : 'No other device is online.'} Say which device it goes on and ask whether that is the right one; for another, call again with that device.` });
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
     // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
     // call needs a key it issued, as the card's Share it step does, and this server keeps its
@@ -1276,12 +1298,12 @@ export function registerWriteTools(server) {
     description: 'Deploy an Edgible app card (from edgible-org/cards) on any online device in the organisation. The card becomes one self-contained Compose file, and Edgible runs it on that device as a managed app and publishes it with the card\'s auth mode. It handles app cards, and pattern cards that publish one app from one machine (such as edgible-agent). A card that declares its secrets makes them on the device; a password a person needs comes back once as firstUse, to give them now. A card whose app has setup: is published behind the organisation\'s sign-in while the person finishes the app\'s own setup, and is switched to its auth mode afterwards, with their yes. A card with a prepare step (prepare.sh: make the admin, close sign-up, finish an install) asks for confirmation first, because that step does not run here: the person does it by hand in the app straight after, and on a public card someone else could do it first. A key the person brings, such as a model\'s API key, is an Edgible organisation secret they stored once with the CLI, passed in keys by reference; never ask for the key itself. Cards with secrets in card.env are refused with the reason. Returns "needs confirmation" before publishing anything open to anyone. The first start downloads the app\'s images on the device, once; the result says about how much and how long, so tell the person before they wait, and say it is the download, not Edgible.',
     inputSchema: {
       card: z.string().describe('The card, such as static-site'),
-      device: z.string().describe('The Edgible device to run it on, by name'),
+      device: z.string().optional().describe('The Edgible device to run it on, by name, as the person chose it. Leave it out to get the online devices to ask them about; never pick one for them.'),
       app: z.string().optional().describe('The app name, which sets its address; defaults to the card name'),
       choices: z.record(z.string(), z.string()).optional().describe('card.env settings, such as {"STATIC_SITE_SOURCE": "https://…/main.tar.gz"}'),
       keys: z.record(z.string(), z.string()).optional().describe('Keys the person brings, each an organisation secret by reference: {"GEMINI_API_KEY": "gemini:key"} (secret name, then key name). list_keys shows what is stored.'),
       hostnames: z.array(z.string()).optional().describe('The person\'s own domain names to attach, such as ["www.example.com"]'),
-      confirm: z.array(z.string()).optional().describe('Tokens from an earlier "needs confirmation" result, only after the person agreed'),
+      confirm: z.array(z.string()).optional().describe('Tokens from an earlier "needs confirmation" result, only after the person agreed, such as "device" once they agreed which device it runs on'),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, wrap(deployCard));
