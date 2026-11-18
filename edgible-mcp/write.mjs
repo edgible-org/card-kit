@@ -65,7 +65,7 @@ const needs = (reasons) => ({
   how: `Ask the person, in their words. Only if they agree, call again with the same arguments and confirm: [${reasons.map((r) => JSON.stringify(r.token)).join(', ')}].`,
 });
 
-const refused = (reason) => ({ status: 'refused', reason });
+const refused = (reason) => ({ status: 'refused', reason, how: 'Tell the person why in your own words, and what they can do instead. Commands in the reason that they run themselves are given to them exactly.' });
 
 // The error an edgible command reports, without its banners and warnings.
 function cliError(r) {
