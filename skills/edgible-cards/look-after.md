@@ -150,7 +150,7 @@ The published apps stay as they are, unless the card's ports or apps changed.
 
 When the person asks to fix what the image scan found, or to move to an image newer than the card pins, the fix comes from the card, not from this machine.
 
-1. **Is it upstream yet?** Compare the card's pin on `main` with what runs here (`$C config --images`), and look for an open update: `gh pr list -R edgible-org/cards --search "<card> in:title"` (without `gh`, the cards repo's pull requests page). An image update is a Renovate pull request, tested on a real device before it can merge.
+1. **Is it upstream yet?** Compare the card's pin on `main` with what runs here (`$C config --images`). An image update reaches `main` only after it passed on a real device, so a newer pin there is a tested one; there is no public list of updates still waiting.
 2. **Merged:** the newer pin is on `main`, so [Upgrade](#upgrade), which backs up first.
 3. **Not yet:** say so plainly: the tested card still pins the older image, and an update is waiting or will follow once Renovate sees the new image. Offer to wait, or to [ask for a retest](deploy.md#2-decide-with-the-person) that names the findings. Only if they want it now, and after their yes, run the newer image through the card's `<APP>_IMAGE` line in `card.env`. Say first that it leaves the tested card, that it stops the app briefly, and that a new version can change the app's data so the old image may not open it again: [back up](#back-up-and-restore) first, and going back means restoring that backup with the old image. Then `$C pull` and `$C up -d --wait`, and [Is it working](#is-it-working). Remove the line once the card catches up.
 

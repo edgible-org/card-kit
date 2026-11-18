@@ -302,7 +302,7 @@ async function describe({ name }) {
     }
     out.push('## Tested', '', `- status: ${statusOf(cat, i)}`);
     const scan = scanOf(cat, i);
-    if (scan) out.push(`- image scan: ${scan}${cat.scan[i.name].fixable ? '. A fixable finding means a newer image of the same app has the fix and the card\'s pin is behind; it is not proof the app is exposed. The person can recheck on their own machine with scan-card, or ask for a retest at https://github.com/edgible-org/cards/issues/new?template=retest.yml' : ''}`);
+    if (scan) out.push(`- image scan: ${scan}${cat.scan[i.name].fixable ? '. A fixable finding means a newer image of the same app has the fix and the card\'s pin is behind; it is not proof the app is exposed. The person can recheck on their own machine with scan-card, or ask for a retest at https://github.com/edgible-org/cards-submissions/issues/new?template=retest.yml' : ''}`);
     if (i.test) {
       out.push(`- last test.yml: ${i.test.result} on ${i.test.tested}, Edgible CLI ${i.test['edgible-cli']}, ${i.test.machine}`);
       if (i.test.images?.length) out.push(`- images: ${i.test.images.map((x) => x.split('@')[0]).join(', ')}`);
