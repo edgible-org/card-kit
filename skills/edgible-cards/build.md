@@ -47,15 +47,15 @@ Test the card on a machine of theirs, signed in to their own Edgible account, ne
 
 Offer this, and do it only with the person's yes.
 
-[CONTRIBUTING.md](https://github.com/edgible-org/cards/blob/main/CONTRIBUTING.md) in edgible-org/cards is the process. Read it and follow it. Where it differs from what is written here, it wins. In short:
+[CONTRIBUTING.md](https://github.com/edgible-org/cards-submissions/blob/main/CONTRIBUTING.md) in edgible-org/cards-submissions is the process: cards are submitted there, not to edgible-org/cards, which holds only the official cards. Read it and follow it. Where it differs from what is written here, it wins. In short:
 
 - **Scrub before anything leaves the machine.** Remove device names, hostnames, the organization id, secrets, and the person's own domain from every file. `check-cards` catches some of them, and you check the rest.
 - **Check the name is free:** a 404 from `gh api repos/edgible-org/cards/contents/<name>` means it is.
-- **Use a fork** unless the person can push to the Edgible repo: `gh repo fork edgible-org/cards --clone`. Work on a branch, and never push to `main`.
-- **Fill in the repo's pull request template.** Read `.github/PULL_REQUEST_TEMPLATE.md`, write its sections into the body with the `result:` lines of the passing `test-card` run, tick only the checklist items you actually checked, and tick the box that says an AI agent made it. Pass that as `gh pr create --body-file`.
-- **If you could not make it pass,** do not open a pull request. Offer an issue from the repo's request template instead: read `.github/ISSUE_TEMPLATE/app-request.md` (or `pattern-request.md` for a pattern), fill in its sections with what you tried and where it failed, and run `gh issue create --repo edgible-org/cards --title "App request: <app>" --label app-request --body-file <file>`.
+- **Use a fork** of the submissions repo: `gh repo fork edgible-org/cards-submissions --clone`. Work on a branch, and never push to `main`. A submission changes one card folder and nothing else; to build on or fix an official card, copy its folder in from edgible-org/cards.
+- **Fill in the repo's pull request template.** Read the submissions repo's `.github/PULL_REQUEST_TEMPLATE.md`, write its sections into the body with the `result:` lines of the passing `test-card` run, tick only the checklist items you actually checked, and tick the box that says an AI agent made it. Pass that as `gh pr create --body-file`.
+- **If you could not make it pass,** do not open a pull request. Offer an issue from the submissions repo's request template instead: read `.github/ISSUE_TEMPLATE/app-request.md` (or `pattern-request.md` for a pattern), fill in its sections with what you tried and where it failed, and run `gh issue create --repo edgible-org/cards-submissions --title "App request: <app>" --label app-request --body-file <file>`.
 
-A maintainer tests a new card on their own device before merging. Once merged, the nightly regression keeps testing it.
+A maintainer reads the card, then tests it on Edgible's devices; if it passes, it joins the catalog and the submission closes with a link to its page. After that, the nightly regression keeps testing it.
 
 ## Fix a card or card-kit
 
