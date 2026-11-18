@@ -261,6 +261,7 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
   if (Object.keys(configs).length) resolved.configs = { ...(resolved.configs || {}), ...configs };
   // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
   let out = resolved;
+  let secretsVolume = '';
   for (const name of keys) out = JSON.parse(JSON.stringify(out).replaceAll(keyMark(name), `\${${name}}`));
   if (seeds.length) {
     // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
@@ -270,6 +271,10 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
     if (!maker) return refused(`${card.metadata.name} declares secrets but has no card-secrets service to make them`);
     maker.image = CARD_SECRETS_IMAGE;
     for (const name of seeds) maker.environment[name] = `\${${name}:?the first-use value from Edgible}`;
+    const vol = (maker.volumes || []).find((v) => (typeof v === 'string' ? v.split(':')[1] : v.target) === '/run/card-secrets');
+    const source = vol && (typeof vol === 'string' ? vol.split(':')[0] : vol.source);
+    // Compose names a project's volumes <project>_<volume>, and the project is the app.
+    if (source) secretsVolume = `${app}_${source}`;
   }
   // The host port Edgible forwards to: the one the card's app port is published on.
   // card.yml's port is the host port, the <APP>_PORT line in card.env, which the choices may move.
@@ -280,7 +285,7 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
     .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
   const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
   if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]) };
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume };
 }
 
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
@@ -373,6 +378,14 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
         ? `WARNING: ${app} is public (auth mode none), so until someone does that step by hand in the app, whoever opens it first may take its setup or its admin account. Do it in the app straight after the deploy, or deploy the card from a shell on the device with its README instead, which runs the step.`
         : `${app} is behind the organisation's sign-in (auth mode org), so only its members can reach it meanwhile. The person does that step by hand in the app straight after the deploy, such as registering the first account.`) });
     }
+    // Data left by an earlier install of the same app on this machine, by hand or by these tools:
+    // the app starts with it, so its old admin and passwords still apply, and the first-use password
+    // made below may open nothing (an app makes its first admin only when it has none).
+    if (target.isThisMachine) {
+      const v = await run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${app}`], { timeout: 30000 });
+      const old = v.code ? [] : v.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+      if (old.length) reasons.push({ token: 'old-data', reason: `${app} already has data on ${target.name} from an earlier install (${old.join(', ')}). It will start with that data: the accounts and passwords in it still apply, so a first-use password may not work. Ask the person which they want. Keep it: deploy with this reason confirmed, and they sign in as before, or set a new admin password with the app's own command if the card's README names one. Start fresh: they remove those volumes first (\`docker volume rm ${old.join(' ')}\`, which deletes that data for good), then deploy.` });
+    }
     const missing = reasons.filter((r) => !confirm.includes(r.token));
     if (missing.length) return needs(missing);
 
@@ -458,10 +471,14 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     }
     const shown = firstUse.filter((f) => !(gateway && f.name === GATEWAY_MASTER));
     if (shown.length) {
-      result.firstUse = shown;
+      // A chat can scroll the password out of view, or fold the reply away: the command shows it again
+      // on the device, any time, from the secrets volume (it reads the value and changes nothing).
+      result.firstUse = shown.map((f) => (built.secretsVolume
+        ? { ...f, showAgain: `docker run --rm -v ${built.secretsVolume}:/run/card-secrets:ro ${CARD_SECRETS_IMAGE} show ${f.name}` }
+        : f));
       result.next += prepare
         ? ` ${card}'s prepare step did not run, so these first-use passwords are on the device but may belong to no account yet: don't tell the person to sign in with them. Tell them to do the step by hand now (${prepare}), in the app, such as registering the first account with their own password, and say why: until then someone else could.`
-        : ' Give the person each first-use password once, now: it is not shown again. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
+        : ' Give the person each first-use password now, in the skill\'s Your turn block (deploy.md, step 5): set apart at the very end of your reply, under the bold line Your turn: get your admin password, with the username, the password, and its showAgain command in a code block of its own: a chat can scroll a password out of view, and that command, run on the device in their own terminal, shows it again any time. Never ask them to paste it back. If they will be at a terminal anyway and the card\'s README names a command that sets the admin password, offer that instead: they choose their own. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
       // remove_card leaves an app's volumes on its device, and a card never replaces a secret that
       // exists, so an app deployed again under its old name keeps its old passwords.
       const before = (await readRecord()).some((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed');
