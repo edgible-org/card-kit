@@ -1,5 +1,5 @@
 """Read the upstream/ folder of a cards repo: requests the cards' testing suggests the authors of
-an app could act on. Not a tool of its own: check-cards checks the files and card-site shows each
+an app could act on. Not a tool of its own: check-cards checks the files and the catalog site shows each
 card the ones that name it.
 
 A file starts with a header between two --- lines:
