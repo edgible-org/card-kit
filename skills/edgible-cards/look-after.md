@@ -187,6 +187,17 @@ Ask first. With the tools, `move_card` moves an app they deployed to another dev
 4. **Switch the hostnames:** `edgible app delete <app> --yes`, then publish again as in the README, with the new device's id. The generated hostname stays the same.
 5. Run [Is it working](#is-it-working) through the hostname. Then, on the old machine, `$C down`, and keep its volumes and the backup until the person is satisfied.
 
+### A step on another device
+
+Some steps need a terminal on the device the app runs on, such as deleting its data when it is not this machine. Never hand over the commands alone: say how to get there, and offer to run them yourself where you can.
+
+1. **Look for a way in from here.** `grep -i -A4 '<device>' ~/.ssh/config` (and a near match, such as the name without its suffix): a `Host` entry means `ssh <host>` probably works. Check with `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true`, then offer to run the commands over it: show them and wait for a yes, as for any change.
+2. **Otherwise, ask how they usually reach it,** with the likely ways for what it is (`list_devices` may say its system, and its name often says where it lives):
+   - **a computer they can sit at:** open Terminal there (on Windows, the WSL2 Ubuntu window);
+   - **a virtual machine on this computer** (VirtualBox, UTM, Parallels): its window, or `ssh` if they set that up;
+   - **a cloud server:** `ssh` with the key they made it with, or the provider's browser console (on AWS, EC2 Instance Connect).
+3. **Hand over the commands as one block to paste, unchanged,** and ask them to say when it is done, or to paste the output if anything failed.
+
 ### Remove
 
 With the tools, `remove_card` removes an app they deployed, asking first. Its data stays on the device unless the person wants it gone: then pass `data: true`, which also deletes its Docker volumes (its data and its passwords), after saving each as a `.tgz` in `~/edgible-removed`, as the README's Tear down does. It asks for that separately (`delete-data`): ask the person in those words, and never pass `data` on your own. It can delete data only on the machine the tools run on; for another device it says what to run there. `data: true` on an app it already removed deletes only the data left behind. For an app run from a folder, the steps here.
