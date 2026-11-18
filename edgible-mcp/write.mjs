@@ -16,6 +16,7 @@
 // names the stored ones, never their values. Cards with secrets still in card.env are refused.
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
+import { VERSION } from './server.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -765,6 +766,7 @@ async function whoami() {
   return {
     you: person ? { email: person, how: 'signed in to this server with Edgible' } : { email: null, how: 'not known: this server is not behind mcp-signin' },
     tools_act_as: { email: me.account || null, organisation: me.organization?.name || null },
+    server: { name: 'edgible-mcp', version: VERSION, from: 'https://github.com/edgible-org/card-kit' },
     use: 'A card setting that takes Edgible accounts, such as OPENCLAW_USERS, takes you.email: the address the person signs in to Edgible with, which may differ from their other email addresses.',
   };
 }
@@ -1314,7 +1316,7 @@ export function registerWriteTools(server) {
   }, wrap(cardStatus));
   server.registerTool('whoami', {
     title: 'Who is asking',
-    description: 'The person using this server, by the email they sign in to Edgible with (from mcp-signin), and the Edgible account and organisation these tools act as. Use it to fill a card setting that names Edgible accounts, such as OPENCLAW_USERS, rather than guessing an email.',
+    description: 'The person using this server, by the email they sign in to Edgible with (from mcp-signin), and the Edgible account and organisation these tools act as. Use it to fill a card setting that names Edgible accounts, such as OPENCLAW_USERS, rather than guessing an email. It also gives the version of these tools (edgible-mcp): use it when asked which version is running.',
     inputSchema: {},
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, wrap(whoami));
