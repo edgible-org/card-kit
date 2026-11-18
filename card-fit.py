@@ -18,7 +18,7 @@ From the app's image, as test-card measured it (test.yml image_facts:):
   arm-and-x86        its image has builds for arm64 and amd64
 
 Facts only an image can tell wait until test-card records them (test-card --image-facts adds
-them without a full test). card-site.py shows the fit on each card's tile and page.
+them without a full test). The catalog site shows the fit on each card's tile and page.
 """
 from __future__ import annotations
 

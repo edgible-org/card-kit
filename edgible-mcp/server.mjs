@@ -21,7 +21,7 @@ const CATALOG_TTL = Number(process.env.EDGIBLE_MCP_CATALOG_TTL || 900) * 1000;
 const CACHE_DIR = process.env.EDGIBLE_MCP_CACHE_DIR || path.join(process.env.XDG_CACHE_HOME || path.join(homedir(), '.cache'), 'edgible-mcp');
 const RUNNING_TTL = 30 * 1000;
 const REPO = 'edgible-org/cards';
-// The cards site: a page per card, with its icon beside it (card-kit's card-site.py).
+// The cards site: a page per card, with its icon beside it (built from the cards by Edgible).
 const SITE = 'https://cards.edgible.org';
 // The catalog cache's shape: a cache in another shape is fetched afresh.
 const CACHE_SHAPE = 2;
