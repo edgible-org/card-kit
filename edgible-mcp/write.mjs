@@ -35,7 +35,7 @@ const RECORD = path.join(STATE, 'activity.jsonl');
 export const actor = new AsyncLocalStorage();
 const REPO = 'edgible-org/cards';
 // The card-secrets image that takes a seed, used when deploy_card hands it a first-use password.
-const CARD_SECRETS_IMAGE = 'ghcr.io/edgible-org/card-secrets:0.1.2';
+const CARD_SECRETS_IMAGE = 'ghcr.io/edgible-org/card-secrets:0.1.3';
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const PATH_ENV = [...new Set([
   '/opt/homebrew/bin', '/usr/local/bin', path.join(homedir(), '.local/bin'),
@@ -387,8 +387,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // the app starts with it, so its old admin and passwords still apply, and the first-use password
     // made below may open nothing (an app makes its first admin only when it has none).
     if (target.isThisMachine) {
-      const v = await run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${app}`], { timeout: 30000 });
-      const old = v.code ? [] : v.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+      const old = await appVolumes(app);
       if (old.length) reasons.push({ token: 'old-data', reason: `${app} already has data on ${target.name} from an earlier install (${old.join(', ')}). It will start with that data: the accounts and passwords in it still apply, so a first-use password may not work. Ask the person which they want. Keep it: deploy with this reason confirmed, and they sign in as before, or set a new admin password with the app's own command if the card's README names one. Start fresh: they remove those volumes first (\`docker volume rm ${old.join(' ')}\`, which deletes that data for good), then deploy.` });
     }
     const missing = reasons.filter((r) => !confirm.includes(r.token));
@@ -490,7 +489,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
         : ' Give the person each first-use password now, in the skill\'s Your turn block (deploy.md, step 5): set apart at the very end of your reply, under the bold line Your turn: get your admin password, with the username, the password, and its showAgain command in a code block of its own: a chat can scroll a password out of view, and that command, run on the device in their own terminal, shows it again any time. Never ask them to paste it back. If they will be at a terminal anyway and the card\'s README names a command that sets the admin password, offer that instead: they choose their own. They sign in with it. If the app has a setting to change it, they should change it at once; if not, it stays their password, so they keep it somewhere safe. The card made every other secret on the device, and nobody knows those.';
       // remove_card leaves an app's volumes on its device, and a card never replaces a secret that
       // exists, so an app deployed again under its old name keeps its old passwords.
-      const before = (await readRecord()).some((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed');
+      const last = (await readRecord()).filter((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed').at(-1);
+      const before = last && last.data !== 'deleted';
       if (before) result.next += ` ${app} was deployed and removed before, and its data stays on the device: if it is the same device, the old passwords still apply and these first-use ones may not work. Say so to the person.`;
     }
     return result;
@@ -529,24 +529,88 @@ async function moveCard({ app, to, confirm = [] }) {
     : { status: 'failed', reason: cliError(r) };
 }
 
-async function removeCard({ app, confirm = [] }) {
-  const mine = await ours();
-  if (!mine[app]) return refused(`${app} was not deployed by these tools, so they will not remove it`);
-  const live = (await apps()).find((a) => a.name === app);
-  const where = live ? appDevices(live) : [mine[app].device];
-  if (notAllowed(...where)) return refused(notAllowed(...where));
-  if (!confirm.includes('remove')) {
-    return needs([{ token: 'remove', reason: `Removing ${app}: it stops answering at ${(mine[app].hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${mine[app].device}. If it has a key on the AI gateway (from gateway_key), that key is revoked so nothing can spend on its behalf, and its stored copy is deleted. Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name.` }]);
+// An app's Docker volumes on this machine: its data and its secrets (Compose labels them with the
+// project, which is the app's name).
+async function appVolumes(app) {
+  const v = await run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${app}`], { timeout: 30000 });
+  return v.code ? [] : v.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+// Each volume is saved as <name>.tgz first, as the card's README Tear down does, so a deletion the
+// person regrets can be undone (restore-card, or untar into a new volume). The device stops the
+// app's containers a moment after the delete returns, so wait (about 90 s) until none uses the
+// volumes: a copy of a database still running could be torn. A volume still in use, or that could
+// not be saved, is not deleted.
+export async function deleteVolumes(app, names) {
+  const inUse = async () => {
+    const out = [];
+    for (const n of names) {
+      const ps = await run('docker', ['ps', '-aq', '--filter', `volume=${n}`], { timeout: 30000 });
+      if (ps.code || ps.stdout.trim()) out.push(n);
+    }
+    return out;
+  };
+  let busy = await inUse();
+  for (let i = 0; i < 18 && busy.length; i++) {
+    await new Promise((ok) => setTimeout(ok, 5000));
+    busy = await inUse();
   }
-  let r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
-  // A delete can time out waiting for a device that already let the app go; it is gone if Edgible no longer lists it.
-  if (r.code && !(await apps()).some((a) => a.name === app)) r = { code: 0, stdout: '', stderr: '' };
-  if (!r.code && mine[app].firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
-  if (!r.code && mine[app].gateway) await forgetGateway(app);
-  const revoked = r.code ? undefined : await revokeGatewayKey(app);
-  await record({ tool: 'remove_card', app, confirmed: confirm, result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
-  return r.code ? { status: 'failed', reason: cliError(r) } : { status: 'removed', app, ...(revoked ? { gateway_key: revoked } : {}),
-    next: 'Its data stays on the device. Keys the person stored for it (list_keys) stay too: offer delete_key for any they will not use again.' };
+  const dir = path.join(homedir(), 'edgible-removed', `${app}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`);
+  const left = [...busy];
+  const unsaved = [];
+  for (const n of names.filter((x) => !busy.includes(x))) {
+    await mkdir(dir, { recursive: true });
+    const t = await run('docker', ['run', '--rm', '-v', `${n}:/v:ro`, '-v', `${dir}:/b`, 'alpine:3.24', 'tar', 'czf', `/b/${n}.tgz`, '-C', '/v', '.'], { timeout: 600000 });
+    if (t.code) { unsaved.push(n); left.push(n); continue; }
+    if ((await run('docker', ['volume', 'rm', n], { timeout: 30000 })).code) left.push(n);
+  }
+  return { deleted: names.filter((n) => !left.includes(n)), left, ...(unsaved.length ? { unsaved } : {}), saved: dir };
+}
+
+async function removeCard({ app, confirm = [], data = false }) {
+  const mine = await ours();
+  const rec = await readRecord();
+  const lastRemoval = rec.filter((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed').at(-1);
+  // Its data alone, for an app these tools removed earlier and left the data of.
+  const dataOnly = !mine[app] && data && lastRemoval;
+  if (!mine[app] && !dataOnly) return refused(`${app} was not deployed by these tools, so they will not remove it`);
+  const deployed = mine[app] || rec.filter((e) => e.tool === 'deploy_card' && e.app === app && e.result === 'created').at(-1);
+  const live = dataOnly ? null : (await apps()).find((a) => a.name === app);
+  const where = live ? appDevices(live) : [deployed.device];
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+  const host = await findDevice(deployed.device).catch(() => null);
+  if (data && !host?.isThisMachine) {
+    return refused(`${app}'s data is on ${deployed.device}, and these tools can delete data only on the machine they run on. ${dataOnly ? '' : 'Remove the app without data, then '}on ${deployed.device}, in a terminal: \`docker volume ls -q --filter label=com.docker.compose.project=${app}\` lists its volumes, and \`docker volume rm\` with those names deletes them for good (the card's README Tear down does the same).`);
+  }
+  const volumes = data ? await appVolumes(app) : [];
+  const reasons = [];
+  if (!dataOnly) reasons.push({ token: 'remove', reason: `Removing ${app}: it stops answering at ${(deployed.hostnames || []).join(', ') || 'its address'}, and Edgible removes it from ${deployed.device}. If it has a key on the AI gateway (from gateway_key), that key is revoked so nothing can spend on its behalf, and its stored copy is deleted. ` + (data
+    ? 'Its data is deleted too (see delete-data).'
+    : 'Its data volumes stay on that device (Edgible does not delete them), so they are there if it is deployed again under the same name. To remove its data as well, as the card\'s README Tear down does, call again with data: true.') });
+  if (volumes.length) reasons.push({ token: 'delete-data', reason: `Deleting ${app}'s data on ${deployed.device} for good: ${volumes.join(', ')}. Everything people put in it, its accounts and its passwords go with it. A copy of each volume is saved first, as a .tgz in ~/edgible-removed on this machine, so it can be restored. Ask them plainly whether they want that.` });
+  const missing = reasons.filter((r) => !confirm.includes(r.token));
+  if (missing.length) return needs(missing);
+  if (dataOnly && !volumes.length) return { status: 'removed', app, data: 'none left', next: `${app} has no data on ${deployed.device}: nothing to delete.` };
+
+  let r = { code: 0, stdout: '', stderr: '' };
+  if (!dataOnly) {
+    r = await run('edgible', ['app', 'delete', app, '--yes'], { timeout: 300000 });
+    // A delete can time out waiting for a device that already let the app go; it is gone if Edgible no longer lists it.
+    if (r.code && !(await apps()).some((a) => a.name === app)) r = { code: 0, stdout: '', stderr: '' };
+    if (!r.code && deployed.firstUse?.length) await run('edgible', ['secret', 'delete', `${app}-first-use`, '--yes'], { timeout: 120000 });
+    if (!r.code && deployed.gateway) await forgetGateway(app);
+  }
+  const revoked = r.code || dataOnly ? undefined : await revokeGatewayKey(app);
+  const gone = !r.code && volumes.length ? await deleteVolumes(app, volumes) : null;
+  await record({ tool: 'remove_card', app, confirmed: confirm, ...(gone ? { data: gone.left.length ? 'partly deleted' : 'deleted' } : {}), result: r.code ? 'failed' : 'removed', detail: r.code ? cliError(r) : undefined });
+  if (r.code) return { status: 'failed', reason: cliError(r) };
+  const keys = ' Keys the person stored for it (list_keys) stay: offer delete_key for any they will not use again.';
+  return { status: 'removed', app, ...(revoked ? { gateway_key: revoked } : {}), ...(gone ? { data: gone } : {}),
+    next: gone
+      ? (gone.left.length
+        ? (gone.unsaved ? `${gone.unsaved.join(', ')} could not be saved, so it was not deleted. ` : '') + `Its data is partly deleted: ${gone.left.join(', ')} is still on ${deployed.device}. Give the person \`docker volume rm ${gone.left.join(' ')}\` to run there once they are sure.`
+        : `Its data is deleted from ${deployed.device}: a new deploy under the same name starts fresh, with new passwords.`) + (gone.deleted.length ? ` A copy of each deleted volume is in ${gone.saved} (one .tgz per volume, holding its passwords too, so keep it private): tell the person, and that they can delete that folder when they are sure.` : '') + keys
+      : 'Its data stays on the device: a new deploy under the same name starts with it, and its old passwords still apply. If the person wants it gone too, call remove_card again with data: true.' + keys };
 }
 
 // An app made with gateway_key has a key on the AI gateway (its alias is the app's name) and a
@@ -1230,10 +1294,11 @@ export function registerWriteTools(server) {
   }, wrap(moveCard));
   server.registerTool('remove_card', {
     title: 'Remove an app these tools deployed',
-    description: 'Remove an app that deploy_card deployed: Edgible stops it and removes it from its device, and if the app had a key on the AI gateway (gateway_key) it is revoked and its stored copy deleted. The app\'s data stays on the device, which these tools cannot delete. Refuses anything else. Always returns "needs confirmation" first.',
+    description: 'Remove an app that deploy_card deployed: Edgible stops it and removes it from its device, and if the app had a key on the AI gateway (gateway_key) it is revoked and its stored copy deleted. Its data stays on the device unless data is true: then its Docker volumes (its data and its secrets) are deleted too, for good, as the card\'s README Tear down does. Only on the machine these tools run on; for another device it says what to run there. With data true for an app these tools already removed, it deletes only the data left behind. Refuses anything else. Always returns "needs confirmation" first, with a separate delete-data reason when there is data to delete.',
     inputSchema: {
       app: z.string().describe('The app to remove'),
-      confirm: z.array(z.string()).optional().describe('["remove"], only after the person agreed'),
+      data: z.boolean().optional().describe('Also delete its data for good (its Docker volumes). Only when the person asked for that, never by default.'),
+      confirm: z.array(z.string()).optional().describe('["remove"], and "delete-data" when deleting data, only after the person agreed to each'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   }, wrap(removeCard));

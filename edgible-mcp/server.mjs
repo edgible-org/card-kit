@@ -196,8 +196,8 @@ function statusOf(cat, item) {
   return 'not tested';
 }
 
-// The nightly image scan for a card, in a line. A finding means a newer image of the same app
-// has a fix and the card's pin is behind; it is not proof the app is exposed.
+// The nightly image scan for a card, in a line. A finding means a patched version exists of a
+// package inside one of its images; it is not proof the app is exposed.
 function scanOf(cat, item) {
   const s = cat.scan?.[item.name];
   if (!s) return null;
@@ -302,7 +302,7 @@ async function describe({ name }) {
     }
     out.push('## Tested', '', `- status: ${statusOf(cat, i)}`);
     const scan = scanOf(cat, i);
-    if (scan) out.push(`- image scan: ${scan}${cat.scan[i.name].fixable ? '. A fixable finding means a newer image of the same app has the fix and the card\'s pin is behind; it is not proof the app is exposed. The person can recheck on their own machine with scan-card, or ask for a retest at https://github.com/edgible-org/cards-submissions/issues/new?template=retest.yml' : ''}`);
+    if (scan) out.push(`- image scan: ${scan}${cat.scan[i.name].fixable ? '. A fixable finding means a patched version exists of a package inside one of the card\'s images; it is not proof the app is exposed. Most are in the image\'s system packages, so a newer release of the app fixes them only if its makers rebuilt it: when the card already pins the app\'s latest release, only they can, and a retest will not change it. The person can recheck on their own machine with scan-card, or ask for a retest at https://github.com/edgible-org/cards-submissions/issues/new?template=retest.yml' : ''}`);
     if (i.test) {
       out.push(`- last test.yml: ${i.test.result} on ${i.test.tested}, Edgible CLI ${i.test['edgible-cli']}, ${i.test.machine}`);
       if (i.test.images?.length) out.push(`- images: ${i.test.images.map((x) => x.split('@')[0]).join(', ')}`);
@@ -544,7 +544,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.11';
+export const VERSION = '0.8.12';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything.';
 
