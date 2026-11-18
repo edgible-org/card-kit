@@ -189,14 +189,7 @@ Ask first. With the tools, `move_card` moves an app they deployed to another dev
 
 ### A step on another device
 
-Some steps need a terminal on the device the app runs on, such as deleting its data when it is not this machine. Never hand over the commands alone: say how to get there, and offer to run them yourself where you can.
-
-1. **Look for a way in from here.** `grep -i -A4 '<device>' ~/.ssh/config` (and a near match, such as the name without its suffix): a `Host` entry means `ssh <host>` probably works. Check with `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true`, then offer to run the commands over it: show them and wait for a yes, as for any change.
-2. **Otherwise, ask how they usually reach it,** with the likely ways for what it is (`list_devices` may say its system, and its name often says where it lives):
-   - **a computer they can sit at:** open Terminal there (on Windows, the WSL2 Ubuntu window);
-   - **a virtual machine on this computer** (VirtualBox, UTM, Parallels): its window, or `ssh` if they set that up;
-   - **a cloud server:** `ssh` with the key they made it with, or the provider's browser console (on AWS, EC2 Instance Connect).
-3. **Hand over the commands as one block to paste, unchanged,** and ask them to say when it is done, or to paste the output if anything failed.
+Some steps need a terminal on the device the app runs on, such as deleting its data when that is not this machine. Don't hand over the commands alone: say how to get there, and if you can reach it from here, offer to run them yourself (show them and wait for a yes). A VM made as in [Make a machine](setup.md#make-a-machine) is a Multipass VM (`multipass exec <vm> -- bash -lc '…'`), and on Windows the device is usually a WSL2 distro (`wsl.exe -d <distro> -- bash -lc '…'`); otherwise `ssh`, or ask how they usually reach it. Hand over the commands as one block to paste, unchanged, and ask them to say when it is done.
 
 ### Remove
 
