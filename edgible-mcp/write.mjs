@@ -580,7 +580,8 @@ async function removeCard({ app, confirm = [], data = false }) {
   if (notAllowed(...where)) return refused(notAllowed(...where));
   const host = await findDevice(deployed.device).catch(() => null);
   if (data && !host?.isThisMachine) {
-    return refused(`${app}'s data is on ${deployed.device}, and these tools can delete data only on the machine they run on. ${dataOnly ? '' : 'Remove the app without data, then '}on ${deployed.device}, in a terminal: \`docker volume ls -q --filter label=com.docker.compose.project=${app}\` lists its volumes, and \`docker volume rm\` with those names deletes them for good (the card's README Tear down does the same).`);
+    const loop = `mkdir -p ~/edgible-removed && cd ~/edgible-removed\nfor volume in $(docker volume ls -q --filter label=com.docker.compose.project=${app}); do\n  docker run --rm -v "$volume:/data:ro" -v "$PWD:/backup" alpine tar -czf "/backup/$volume.tgz" -C /data . \\\n    && docker volume rm "$volume"\ndone`;
+    return refused(`${app}'s data is on ${deployed.device}, and these tools can delete data only on the machine they run on. ${dataOnly ? '' : 'Remove the app without data, then '}give the person these commands to run in a terminal on ${deployed.device}, as one block, unchanged. They copy each of its volumes to a .tgz in ~/edgible-removed first, as the card's README Tear down does, and delete a volume only once its copy is made:\n\n${loop}\n\nSay the copies hold its passwords too, so they keep that folder private and delete it when they are sure.`);
   }
   const volumes = data ? await appVolumes(app) : [];
   const reasons = [];
