@@ -223,6 +223,16 @@
         "source": {
           "$ref": "#/$defs/source"
         },
+        "publicFor": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "What needs the app on auth mode none, in everyday words, such as \"its browser extension\" or \"its phone apps\": clients that are not a web browser cannot pass Edgible's sign-in, so they stop working while the app is kept on org. Absent when nothing is known to need it."
+        },
         "setup": {
           "type": "object",
           "additionalProperties": false,
