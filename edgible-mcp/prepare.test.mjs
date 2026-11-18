@@ -40,6 +40,7 @@ test('an app with setup: is published behind org, and goes to its authModes afte
   const { deployAuth } = await import('./write.mjs');
   assert.deepEqual(deployAuth({ authModes: ['none'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: 'none', setup: true });
   assert.deepEqual(deployAuth({ authModes: ['org'], setup: { behind: 'org', done: 'true' } }), { auth: 'org', after: null, setup: true });
-  assert.deepEqual(deployAuth({ authModes: ['none'] }), { auth: 'none', after: null, setup: false });
+  assert.deepEqual(deployAuth({ authModes: ['none'] }), { auth: 'org', after: 'none', setup: false, staged: true });
+  assert.deepEqual(deployAuth({ authModes: ['org', 'none'] }), { auth: 'org', after: 'org,none', setup: false, staged: true });
   assert.deepEqual(deployAuth({}), { auth: 'org', after: null, setup: false });
 });

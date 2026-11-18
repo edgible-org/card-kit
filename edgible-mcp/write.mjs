@@ -290,10 +290,15 @@ async function selfContained({ dir, card }, { app, device, choices, seeds = [], 
 
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
 // card.yml waits behind setup.behind (org) while the person finishes its own setup, such as an
-// install wizard, then is switched to its authModes with their yes.
+// install wizard, then is switched to its authModes with their yes. A public app (none) without
+// setup: starts behind org too (staged): the person signs in to it first, so nobody else can take
+// its admin, and it goes public only when they say so.
 export function deployAuth(application) {
   const modes = (application.authModes || ['org']).join(',');
-  if (!application.setup) return { auth: modes, after: null, setup: false };
+  if (!application.setup) {
+    if (modes.split(',').includes('none')) return { auth: 'org', after: modes, setup: false, staged: true };
+    return { auth: modes, after: null, setup: false };
+  }
   // An app whose authModes is [setup.behind] stays there: nothing to switch after setup.
   return { auth: application.setup.behind, after: modes === application.setup.behind ? null : modes, setup: true };
 }
@@ -360,7 +365,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       refs[n] = { secret, key: key || n };
     }
     const human = declared.filter(([, s]) => s.kind === 'human');
-    const { auth, after, setup } = deployAuth(published[0]);
+    const { auth, after, setup, staged } = deployAuth(published[0]);
     const reasons = [];
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
     // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
@@ -464,6 +469,10 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). End with what to reply, such as "I'm waiting here: tell me when it's done": nothing watches the app, so their reply is how you know. Wait for them; never do it in their place.` + (after
         ? ` When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. Ask in terms of who can reach it, never "open it", which reads as opening the link: for none, whether to take Edgible's sign-in away so anyone on the internet reaches the app's own login. The switch takes effect in seconds and keeps them signed in.`
         : ` It stays on ${auth} afterwards, so there is nothing to switch.`);
+    }
+    if (staged) {
+      result.setup = { behind: auth, after, staged: true };
+      result.next += ` ${app} is on ${auth} for now: only the organisation reaches it, so nobody else can take its first sign-in. Its card makes it public (${after}) once the person is in. In the same Your turn block, give them its hostname: sign in with Edgible, then sign in to ${app} as its admin (with the first-use password, or the account they make there) and change the password if ${app} lets them. End the block with what to reply, such as "Tell me when you're signed in": nothing watches the app, so their reply is how you know. When they say so, ask before switching it to ${after} with apply_application_change. Ask in terms of who can reach it, never "open it", which reads as opening the link: whether to take Edgible's sign-in away so anyone on the internet reaches ${app}'s own login. If describe showed image-scan findings, say so in the same question. If they would rather keep it to the organisation, it stays on ${auth}: nothing else to do. The switch takes effect in seconds and keeps them signed in.`;
     }
     if (api) {
       result.gateway = `${api.url}/v1`;
