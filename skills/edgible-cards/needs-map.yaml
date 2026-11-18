@@ -224,7 +224,7 @@
     regulated: "documents with client, patient, or financial data: org, with the app's per-user or per-group permissions, encrypted backups, and the person's professional rules on retention"
   permissions: "owners, groups, and per-document permissions decide who sees which documents"
   machine: disk for the documents; OCR uses memory
-  cards: [stirling-pdf, paperless-ngx]
+  cards: [stirling-pdf, paperless-ngx, papra]
   ask: ["archive documents, or work on PDFs?"]
 
 - category: Feed Readers
