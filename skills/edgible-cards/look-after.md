@@ -175,6 +175,8 @@ If the change would help others, offer a pull request to the app's repository, a
 
 ### Upgrade Edgible
 
+**"Which version is running?"** can mean three things: unless the person named one, answer all three in a short list. The CLI and each device's software: `edgible version`. Edgible's MCP tools: `whoami` gives `server.version` (edgible-mcp). This skill: its folder's latest commit, as in [Keep this skill current](SKILL.md#keep-this-skill-current). Some AI tools run their shell in a sandbox that cannot read the CLI's settings, so `edgible` fails there while the MCP tools work: say so, and answer from the tools.
+
 - **The CLI:** `edgible upgrade --check` says whether a newer release is out, and `edgible upgrade --yes` installs it, keeping the previous version. `edgible upgrade --version <version>` installs a given one, such as the previous version to go back. A CLI installed from npm (`@edgible-team/cli`, which stopped at 1.2.25) does not upgrade this way: `npm uninstall -g @edgible-team/cli`, then install it as in [Set up Edgible](setup.md#set-up-edgible).
 - **The device software upgrades itself.** Edgible sends each device its updates, and the agent checks each one, switches to it, and goes back by itself if the new version fails its health check. There is nothing to run. `edgible version` shows the CLI, the latest release, and each device's agent version. A device far behind the others, or stuck, is a question for Edgible support (support@edgible.com) before anything else.
 
