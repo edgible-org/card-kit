@@ -596,7 +596,17 @@ async function removeCard({ app, confirm = [], data = false }) {
   const lastRemoval = rec.filter((e) => e.tool === 'remove_card' && e.app === app && e.result === 'removed').at(-1);
   // Its data alone, for an app these tools removed earlier and left the data of.
   const dataOnly = !mine[app] && data && lastRemoval;
-  if (!mine[app] && !dataOnly) return refused(`${app} was not deployed by these tools, so they will not remove it`);
+  // Say what is really there before refusing: nothing at all, an app made another way, or data left behind.
+  if (!mine[app] && !dataOnly) {
+    const other = (await apps()).find((a) => a.name === app);
+    if (other) return refused(`${app} runs on ${appDevices(other).join(', ') || 'a device'}, but these tools did not deploy it (it was published by hand or by another tool), so they will not remove it. The card's README Tear down removes it, from a shell on that device.`);
+    if (lastRemoval) {
+      const was = rec.filter((e) => e.tool === 'deploy_card' && e.app === app && e.result === 'created').at(-1);
+      const where = was?.device || 'its device';
+      return refused(`There is no app called ${app} in this organisation: nothing is running, so there is nothing to remove. These tools removed it on ${lastRemoval.at.slice(0, 10)} from ${where}` + (lastRemoval.data === 'deleted' ? ', with its data.' : `, and its data stayed on ${where}. To delete that data too, call again with data: true.`));
+    }
+    return refused(`There is no app called ${app} in this organisation, so nothing is running to remove. A hand install may have left a folder (such as ~/${app}) or Docker volumes on a device: \`docker volume ls --filter label=com.docker.compose.project=${app}\` on that device shows them.`);
+  }
   const deployed = mine[app] || rec.filter((e) => e.tool === 'deploy_card' && e.app === app && e.result === 'created').at(-1);
   const live = dataOnly ? null : (await apps()).find((a) => a.name === app);
   const where = live ? appDevices(live) : [deployed.device];
