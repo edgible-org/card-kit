@@ -34,7 +34,7 @@ The gentler step, with --deprecate: keep the card listed and say plainly not to 
 
     python3 retire-card.py canary --deprecate --replaced-by canary2 --reason "its test is no longer maintained"
 
-On a new branch, in one commit: `status: deprecated` (and `replaced-by:` when given) in card.yml, and a
+On a new branch, in one commit: `status: deprecated` (and `replaced-by:` and `reason:` when given) in card.yml, and a
 note under the README's title. Neither changes the card's test fingerprint, so nothing is retested. The
 site shows a Deprecated pill and a note at the top of the card's page. Nothing is pushed.
 """
@@ -221,8 +221,11 @@ def deprecate(root: Path, name: str, replaced_by: str, reason: str) -> int:
     if re.search(r"(?m)^  status:\s*deprecated\s*$", text):
         print(f"{name} is already deprecated.", file=sys.stderr)
         return 2
-    extra = "  status: deprecated\n" + (f"  replaced-by: {replaced_by}\n" if replaced_by else "")
-    text = re.sub(r"(?m)^  (?:status|replaced-by):[^\n]*\n", "", text)
+    # reason is read by the tools (find leaves the card out, describe and deploy_card say why).
+    said = reason.rstrip(". ").replace('"', "'")
+    extra = ("  status: deprecated\n" + (f"  replaced-by: {replaced_by}\n" if replaced_by else "")
+             + (f'  reason: "{said}."\n' if said else ""))
+    text = re.sub(r"(?m)^  (?:status|replaced-by|reason):[^\n]*\n", "", text)
     m = None
     for key in ("steward", "license", "homepage", "added", "description"):
         found = list(re.finditer(rf"(?m)^  {key}:[^\n]*\n", text))
