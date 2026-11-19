@@ -17,6 +17,7 @@
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
 import { VERSION } from './server.mjs';
+import { CARD_SECRETS_IMAGE, declarationFor, deployAuth, selfContained } from './generate.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -35,8 +36,6 @@ const RECORD = path.join(STATE, 'activity.jsonl');
 // Who is calling, for the record: over HTTP, each request runs inside actor.run(name, ...).
 export const actor = new AsyncLocalStorage();
 const REPO = 'edgible-org/cards';
-// The card-secrets image that takes a seed, used when deploy_card hands it a first-use password.
-const CARD_SECRETS_IMAGE = 'ghcr.io/edgible-org/card-secrets:0.1.3';
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const PATH_ENV = [...new Set([
   '/opt/homebrew/bin', '/usr/local/bin', path.join(homedir(), '.local/bin'),
@@ -154,168 +153,6 @@ async function fetchCard(card) {
   return { dir, card: YAML.parse(yml) };
 }
 
-function parseEnv(textIn) {
-  const values = {};
-  const generated = new Set();
-  let comment = '';
-  for (const line of textIn.split('\n')) {
-    if (/^\s*#/.test(line)) { comment += line; continue; }
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m) {
-      values[m[1]] = m[2].replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
-      if (/Generate with:/i.test(comment)) generated.add(m[1]);
-    }
-    comment = '';
-  }
-  return { values, generated };
-}
-
-function setEnvLines(textIn, changes) {
-  const done = new Set();
-  const out = textIn.split('\n').map((line) => {
-    const m = line.match(/^([A-Z0-9_]+)=/);
-    if (m && m[1] in changes) { done.add(m[1]); return `${m[1]}=${changes[m[1]]}`; }
-    return line;
-  });
-  const missing = Object.keys(changes).filter((k) => !done.has(k));
-  if (missing.length) throw new Error(`card.env has no setting called ${missing.join(', ')}`);
-  return out.join('\n');
-}
-
-const isSecretKey = (key, generated) => generated.has(key) || /(PASSWORD|SECRET|TOKEN|KEY|SALT)/.test(key);
-
-// A card.env value that stands for a key Edgible fills on the device, replaced by ${NAME} once
-// the Compose file is resolved, wherever the card used it.
-// A file's text inside the Compose file: Compose would substitute each $ in it, so it is written $$.
-const literal = (text) => text.replaceAll('$', '$$$$');
-
-// card.yml's auth modes as an Application declaration names them.
-const DECLARED_AUTH = { org: 'edgible-login' };
-
-const keyMark = (name) => `__edgible_key_${name}__`;
-
-async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [], user = '', published = '' }) {
-  const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
-  if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
-  const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
-  const { values, generated } = parseEnv(envText);
-  const external = new Set(Object.entries(card.secrets || {}).filter(([, s]) => s?.kind === 'external').map(([n]) => n));
-  const secretKeys = Object.keys(values).filter((k) => isSecretKey(k, generated) && !external.has(k));
-  if (secretKeys.length) return refused(`${card.metadata.name} has secrets (${secretKeys.join(', ')}). This first version only deploys cards without secrets, so no password ever sits in a Compose file; secrets need Edgible's organisation secrets, which come next.`);
-  const changes = { ...choices };
-  for (const name of keys) changes[name] = keyMark(name);
-  if ('DEVICE' in values) changes.DEVICE = device;
-  // Who may sign in: a card that names Edgible accounts, such as openclaw's OPENCLAW_USERS, is
-  // locked to the person deploying it unless the choices say otherwise, never left open to its
-  // own password.
-  if ('OPENCLAW_USERS' in values && !values.OPENCLAW_USERS && !choices.OPENCLAW_USERS && user) changes.OPENCLAW_USERS = user;
-  // A card that works out its own address from its app's usual name, such as
-  // OPENCLAW_URL=https://openclaw.<org>…, gets the address it will really have when the app is
-  // named otherwise (agent-vm), or its own page is refused as a foreign origin.
-  const compose = await readFile(path.join(dir, composeFiles[0]), 'utf8');
-  const label = choices.ORG_LABEL || values.ORG_LABEL;
-  const domain = choices.EDGIBLE_DOMAIN || values.EDGIBLE_DOMAIN || 'edgible.app';
-  if (published && app !== published && label) {
-    for (const m of compose.matchAll(/([A-Z][A-Z0-9_]*_URL): \$\{\1:-https:\/\/([a-z0-9-]+)\.\$\{ORG_LABEL/g)) {
-      if (m[2] === published && !values[m[1]] && !choices[m[1]]) changes[m[1]] = `https://${app}.${label}.${domain}`;
-    }
-  }
-  await writeFile(path.join(dir, 'card.env'), setEnvLines(envText, changes));
-  const r = await run('docker', ['compose', '--env-file', 'card.env', '-f', composeFiles[0], 'config', '--format', 'json'], { cwd: dir });
-  if (r.code) {
-    const missing = [...r.stderr.matchAll(/set ([A-Z0-9_]+) in card\.env/g)].map((m) => m[1]);
-    return refused(missing.length ? `the card needs these settings in choices: ${[...new Set(missing)].join(', ')}` : `the card's Compose file did not resolve: ${r.stderr.trim().slice(0, 300)}`);
-  }
-  const resolved = JSON.parse(r.stdout);
-  const configs = {};
-  const real = await realpath(dir);   // macOS reports /var/folders as /private/var/folders
-  for (const [svcName, svc] of Object.entries(resolved.services || {})) {
-    const keep = [];
-    for (const v of svc.volumes || []) {
-      if (v.type !== 'bind') { keep.push(v); continue; }
-      const src = v.source;
-      const inside = src.startsWith(real + path.sep) || src.startsWith(dir + path.sep);
-      const isFile = inside && existsSync(src) && (await stat(src)).isFile();
-      if (!isFile) return refused(`service ${svcName} mounts ${inside ? path.relative(real, src) : src} from the machine, which a remote deploy cannot carry`);
-      const key = `${svcName}-${path.basename(src)}`.replace(/[^a-zA-Z0-9_.-]/g, '-');
-      configs[key] = { content: literal(await readFile(src, 'utf8')) };
-      svc.configs = [...(svc.configs || []), { source: key, target: v.target }];
-    }
-    svc.volumes = keep;
-    if (!svc.volumes.length) delete svc.volumes;
-    // `docker compose config` writes ports in the long form; Edgible's CLI reads the short one.
-    if (svc.ports) {
-      svc.ports = svc.ports.map((p) => (typeof p !== 'object' ? String(p)
-        : `${p.host_ip ? `${p.host_ip}:` : ''}${p.published ? `${p.published}:` : ''}${p.target}${p.protocol && p.protocol !== 'tcp' ? `/${p.protocol}` : ''}`));
-    }
-  }
-  // A service a profile left out (such as a pattern's bundled gateway when it uses a shared one) is
-  // not in the resolved file; drop depends_on entries naming it, which the device rejects even
-  // when they are required: false.
-  for (const svc of Object.values(resolved.services || {})) {
-    if (svc?.depends_on && typeof svc.depends_on === 'object' && !Array.isArray(svc.depends_on)) {
-      for (const dep of Object.keys(svc.depends_on)) if (!(dep in resolved.services)) delete svc.depends_on[dep];
-      if (!Object.keys(svc.depends_on).length) delete svc.depends_on;
-    }
-  }
-  // Names follow the new project, so nothing collides with the card's own project on the device.
-  for (const group of ['volumes', 'networks']) {
-    for (const v of Object.values(resolved[group] || {})) { if (v && typeof v === 'object') delete v.name; }
-  }
-  // A config the card's Compose file reads from a file of its own travels inside too.
-  for (const [key, cfg] of Object.entries(resolved.configs || {})) {
-    if (!cfg?.file) continue;
-    const src = cfg.file;
-    const inside = src.startsWith(real + path.sep) || src.startsWith(dir + path.sep);
-    if (!inside || !existsSync(src)) return refused(`config ${key} reads ${src}, which a remote deploy cannot carry`);
-    resolved.configs[key] = { content: literal(await readFile(src, 'utf8')) };
-  }
-  resolved.name = app;
-  if (Object.keys(configs).length) resolved.configs = { ...(resolved.configs || {}), ...configs };
-  // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
-  let out = resolved;
-  let secretsVolume = '';
-  for (const name of keys) out = JSON.parse(JSON.stringify(out).replaceAll(keyMark(name), `\${${name}}`));
-  if (seeds.length) {
-    // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
-    // agent can start an app once before it has the secret's value; :? makes that start fail, so
-    // the service never makes its own value in place of the seed.
-    const maker = Object.values(out.services || {}).find((s) => s.environment?.CARD_SECRETS);
-    if (!maker) return refused(`${card.metadata.name} declares secrets but has no card-secrets service to make them`);
-    maker.image = CARD_SECRETS_IMAGE;
-    for (const name of seeds) maker.environment[name] = `\${${name}:?the first-use value from Edgible}`;
-    const vol = (maker.volumes || []).find((v) => (typeof v === 'string' ? v.split(':')[1] : v.target) === '/run/card-secrets');
-    const source = vol && (typeof vol === 'string' ? vol.split(':')[0] : vol.source);
-    // Compose names a project's volumes <project>_<volume>, and the project is the app.
-    if (source) secretsVolume = `${app}_${source}`;
-  }
-  // The host port Edgible forwards to: the one the card's app port is published on.
-  // card.yml's port is the host port, the <APP>_PORT line in card.env, which the choices may move.
-  // Some cards map it to another port inside (otter-wiki: 8080 to 80), so match the host side.
-  const portKey = Object.keys(values).find((k) => /_PORT$/.test(k) && Number(values[k]) === Number(port));
-  const wantHost = Number(portKey && changes[portKey] ? changes[portKey] : port);
-  const mapped = Object.values(out.services || {}).flatMap((s) => s.ports || [])
-    .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
-  const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
-  if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume };
-}
-
-// The auth mode an app is published on, and the one it goes to after. An app with setup: in
-// card.yml waits behind setup.behind (org) while the person finishes its own setup, such as an
-// install wizard, then is switched to its authModes with their yes. A public app (none) without
-// setup: starts behind org too (staged): the person signs in to it first, so nobody else can take
-// its admin, and it goes public only when they say so.
-export function deployAuth(application) {
-  const modes = (application.authModes || ['org']).join(',');
-  if (!application.setup) {
-    if (modes.split(',').includes('none')) return { auth: 'org', after: modes, setup: false, staged: true };
-    return { auth: modes, after: null, setup: false };
-  }
-  // An app whose authModes is [setup.behind] stays there: nothing to switch after setup.
-  return { auth: application.setup.behind, after: modes === application.setup.behind ? null : modes, setup: true };
-}
-
 // What a card's prepare.sh does, from its header ("# Prepare for the memos card: make the admin
 // and close sign-up before Memos is public."), or null when the card has none.
 export async function prepareStep(dir, card) {
@@ -418,7 +255,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
 
     const signedIn = await edgibleJson(['whoami', '--json']).catch(() => ({}));
     const built = await selfContained(fetched, { app, device: target.name, choices, seeds: human.map(([n]) => n), port: published[0].port, keys: Object.keys(refs), user: signedIn.account || '', published: published[0].name });
-    if (built.status !== 'ok') return built;
+    if (built.status !== 'ok') return built.status === 'refused' ? refused(built.reason) : built;
     // Each human secret's first-use value, made here and kept by Edgible only until the app's
     // first start makes it on the device; the person changes it at first sign-in.
     const firstUse = human.map(([name, s]) => ({ name, for: s.for || 'a person', value: randomBytes(18).toString('base64url') }));
@@ -456,20 +293,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // create command first runs `docker compose up` on the machine the CLI runs on, whichever
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
-    const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
-      type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
-      policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
-    }));
-    const declaration = {
-      apiVersion: 'v3', kind: 'Application',
-      metadata: { name: app, organization: organization.id, description: `The ${card} card, deployed by edgible-mcp`, labels: { card, by: 'edgible-mcp' } },
-      spec: {
-        placement: { strategy: 'serving-device', deviceSelector: { deviceId: target.id }, migrationPolicy: 'manual' },
-        workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: built.port, protocol: 'tcp' }],
-          composeFile: `base64:${Buffer.from(await readFile(file)).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}) }],
-        access,
-      },
-    };
+    const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
@@ -1481,4 +1306,4 @@ export function registerWriteTools(server) {
   return server;
 }
 
-export { ALLOWED, RECORD, STATE, appDevices, apps, needs, notAllowed, record, refused, text };
+export { ALLOWED, RECORD, STATE, appDevices, apps, deployAuth, needs, notAllowed, record, refused, text };
