@@ -75,6 +75,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CHECK_ENV = HERE / "check-env.py"
+# The one generator (J-45): a card plus this test's values become an Edgible stack file.
+GENERATE = HERE / "edgible-mcp" / "generate.mjs"
 ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "arm", "arm": "arm"}
 MEM_UNIT = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "kB": 1e3, "MB": 1e6, "GB": 1e9}
 
@@ -602,6 +604,10 @@ def main(argv: list[str]) -> int:
                     help="set a card.env value in the test's copy, for one only a person may fill, such as "
                          "accepting a licence; repeat for more")
     ap.add_argument("--by", choices=["agent", "person", "ci"], default="person")
+    ap.add_argument("--via", choices=["readme", "stack"], default="readme",
+                    help="readme: docker compose up, then edgible app create existing, as the README does today. "
+                         "stack: the card through generate.mjs and edgible stack deploy, as deploy_card does (J-45); "
+                         "for now, cards with one Compose file and one published app")
     ap.add_argument("--gpu", choices=["none", "optional", "required"], default="none",
                     help="the gpu value in the suggested places:")
     ap.add_argument("--write-places", action="store_true", help="write the suggested places: into card.yml")
@@ -649,6 +655,11 @@ def main(argv: list[str]) -> int:
     composes = sorted(card.glob("*compose*.yml"))
     places = read_places(card / "card.yml")
     native = next((s["native"] for s in places.values() if s.get("native")), "")
+    stack = args.via == "stack"
+    if stack and (native or len(composes) != 1 or len(apps) != 1):
+        print("--via stack handles cards with one Compose file and one published app, not native, for now (J-45)",
+              file=sys.stderr)
+        return 2
     if native:
         # The test's own service, beside any copy of the card this machine already runs.
         set_env(env_file, "SERVICE", f"org.edgible.cardtest-{src.name}")
@@ -739,11 +750,32 @@ def main(argv: list[str]) -> int:
             steps["start"], installed = "fail", True
             out = sh(f"{run_env} && sh {card / 'install.sh'}", timeout=1800).stdout.strip()
             print(f"start: install.sh ({int(time.time() - t)}s) {hide(out.splitlines()[-1] if out else '')}")
+        elif stack:
+            # Edgible runs the app on the device under a Compose project named after the app, so the
+            # test's Compose commands (secrets, exec, logs, teardown) use that project.
+            app0 = apps[0]
+            name = names[app0["name"]]
+            for f in composes:
+                projects[f] = name
+            sampler.peak = {name: 0.0}
+            if not (GENERATE.parent / "node_modules").is_dir():
+                sh(f"npm ci --omit=dev --no-audit --no-fund --prefix {GENERATE.parent}", timeout=900)
+            steps["start"], steps["publish"], started_compose = "fail", "fail", True
+            # card.env already holds this test's values (device, ports, inputs); ORG_LABEL only where the card has it.
+            org_set = f"--set ORG_LABEL={label} " if "ORG_LABEL" in env_values(env_file) else ""
+            sh(f"cd {work} && node {GENERATE} {card} --device {shlex.quote(args.device)} --app {name} "
+               f"{org_set}--out {work}", timeout=600)
+            published.append((app0, name))
+            sh(f"edgible stack deploy -f {work / 'edgible.yml'} --wait-timeout 1200", timeout=1800)
+            steps["publish"] = "pass"
+            print(f"start: generate.mjs and stack deploy ({int(time.time() - t)}s)")
+            print("publish: pass", [name])
         else:
             steps["start"], started_compose = "fail", True
             for f in first:
                 sh(dc(f, "up -d --wait --wait-timeout 1200"), timeout=2400)
             print(f"start: {', '.join(f.name for f in first)} up ({int(time.time() - t)}s)")
+        if started_compose:
             made = made_secrets(dc, first)
             # The checks get them as card.env's values, such as a password to sign in with.
             secrets_env = work / "secrets.env"
@@ -767,7 +799,7 @@ def main(argv: list[str]) -> int:
         devices = [d for d in json.loads(sh("edgible device list --json").stdout) if d["name"] == args.device]
         if len(devices) != 1:
             raise RuntimeError(f"need exactly one device named {args.device}")
-        for app in apps:
+        for app in ([] if stack else apps):
             name = names[app["name"]]
             steps["publish"] = "fail"
             try:
@@ -783,8 +815,9 @@ def main(argv: list[str]) -> int:
                     published.append((app, name))
                 raise
             published.append((app, name))
-        steps["publish"] = "pass"
-        print("publish: pass", [n for _, n in published])
+        if not stack:
+            steps["publish"] = "pass"
+            print("publish: pass", [n for _, n in published])
 
         listing = {a["name"]: a for a in json.loads(sh("edgible app list --json").stdout)}
 
@@ -803,6 +836,20 @@ def main(argv: list[str]) -> int:
         # setup: what a person does after Publish. The app is behind setup.behind (org), so only
         # the organization reaches its own setup; test/setup.sh does that setup in the person's
         # place; setup.done says it is finished; then the app is switched to its authModes.
+        # A public app without setup: starts behind org on the stack path (deployAuth's "staged"), as
+        # it does for a person; the test checks that, then switches it, as the person would.
+        if stack:
+            for app, name in published:
+                if app["setup_behind"] or "none" not in app["auth"]:
+                    continue
+                result, detail = wait_verify(dict(app, auth=["org"]), listing[name]["hostnames"][0])
+                print(f"staged {app['name']}: behind org: {result} ({hide(detail)})")
+                if result != "pass":
+                    raise RuntimeError(f"{app['name']} was not behind org before it was switched")
+                sh(f"edgible app update {name} --auth-modes {','.join(app['auth'])} --non-interactive --confirm",
+                   timeout=600)
+                print(f"staged {app['name']}: switched to {','.join(app['auth'])}")
+
         setup_apps = [(a, n) for a, n in published if a["setup_behind"]]
         if setup_apps:
             steps["setup"] = {a["name"]: "fail" for a, _ in setup_apps}
