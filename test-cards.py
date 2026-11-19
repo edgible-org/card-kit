@@ -118,6 +118,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--all", action="store_true", help="test every card, whether it needs it or not")
     ap.add_argument("--only", nargs="+", default=[], metavar="CARD", help="test only these cards")
     ap.add_argument("--by", choices=["agent", "person", "ci"], default="ci")
+    ap.add_argument("--via", choices=["readme", "stack"], default="readme",
+                    help="how test-card deploys each card (see test-card --via). A stack run is for trying the "
+                         "stack path (J-45): point --status at a directory of its own, not the public status")
     ap.add_argument("--spread", type=int, default=0, metavar="DAYS",
                     help="spread the work over this many days: a card whose files changed is tested at "
                          "once, as is a new card, and a card that failed is tested again the next day; any other test "
@@ -199,8 +202,13 @@ def main(argv: list[str]) -> int:
             due.append(name)
             continue
         run = subprocess.run([sys.executable, str(HERE / "test-card.py"), name, "--device", args.device,
-                              "--by", args.by], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                              "--by", args.by, "--via", args.via], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         print(run.stdout, end="", flush=True)
+        # A card the stack path does not handle yet (several apps or Compose files, or native) is
+        # out of scope for that run, not a failure: nothing is recorded for it.
+        if args.via == "stack" and run.returncode == 2 and "--via stack handles" in run.stdout:
+            print(f"== {name}: skip, not on the stack path yet", flush=True)
+            continue
         match = re.search(r"^result: (pass|fail)", run.stdout, re.M)
         result = match.group(1) if match and run.returncode == 0 else "fail"
         if result == "fail":

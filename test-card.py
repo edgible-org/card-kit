@@ -582,8 +582,9 @@ def material(text: str) -> tuple:
     images = sorted(re.findall(r"^  - (\S+)", (re.search(r"^images:\n((?:  - .*\n?)+)", text, re.M)
                                                or [None, ""])[1], re.M))
     files = (re.search(r"^files:\s*(\S+)", text, re.M) or [None, ""])[1]
+    via = (re.search(r"^via:\s*(\S+)", text, re.M) or [None, "readme"])[1]
     facts = (re.search(r"^image_facts:\n((?:  .*\n?)+)", text, re.M) or [None, ""])[1]
-    return result, steps.strip(), tuple(images), files, facts.strip()
+    return result, steps.strip(), tuple(images), files, facts.strip(), via
 
 
 def main(argv: list[str]) -> int:
@@ -1057,6 +1058,8 @@ def main(argv: list[str]) -> int:
             lines += [f"  {place}:", f"    memory: {human(m['memory'])}", f"    images: {human(m['images'])}",
                       f"    data: {human(m['data'], small=True)}"]
     lines += [f"duration: {max(1, round((time.time() - started) / 60))}m", f"by: {args.by}"]
+    if stack:
+        lines.append("via: stack")
     if notes:
         lines.append("notes: " + " ".join(notes))
     new = "\n".join(lines) + "\n"
