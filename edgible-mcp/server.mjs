@@ -24,7 +24,7 @@ const REPO = 'edgible-org/cards';
 // The cards site: a page per card, with its icon beside it (built from the cards by Edgible).
 const SITE = 'https://cards.edgible.org';
 // The catalog cache's shape: a cache in another shape is fetched afresh.
-const CACHE_SHAPE = 2;
+const CACHE_SHAPE = 3; // 3: items carry status, reason, replacedBy
 const KIT = 'edgible-org/card-kit';
 const STATUS_URL = `https://raw.githubusercontent.com/${REPO}/test-status/status.json`;
 const SCAN_URL = `https://raw.githubusercontent.com/${REPO}/scan-status/scan.json`;
@@ -73,6 +73,9 @@ async function loadItems(dir) {
       type: yml?.metadata?.type || 'app', name: entry.name,
       url: `https://github.com/${REPO}/tree/main/${entry.name}`,
       description: yml?.metadata?.description || '',
+      // deprecated: listed, never offered for a new setup; reason says why.
+      status: yml?.metadata?.status || 'stable', reason: yml?.metadata?.reason || null,
+      replacedBy: yml?.metadata?.['replaced-by'] || null,
       applications: yml?.applications || [],
       places: yml?.places || {},
       sections: sections(readme),
@@ -238,14 +241,15 @@ async function find({ need }) {
     .map((n) => ({ n, s: score(need, [[n.category, 2], [n.jobs, 3], [n.replaces, 4]]) }))
     .filter((x) => x.s > 0).sort((a, b) => b.s - a.s).filter((x, _, all) => x.s >= all[0].s * 0.5).slice(0, 3).map((x) => x.n);
   const named = new Set(needs.flatMap((n) => n.cards || []));
-  const items = cat.items
+  // A deprecated card is not offered for a new setup; describe still shows it, with its reason.
+  const items = cat.items.filter((i) => i.status !== 'deprecated')
     .map((item) => ({ item, s: score(need, itemFields(item)) + (named.has(item.name) ? 5 : 0) }))
     .filter((x) => x.s > 0).sort((a, b) => b.s - a.s).filter((x, _, all) => x.s >= all[0].s * 0.4).slice(0, 6).map((x) => x.item);
 
   const out = [`# Cards for: ${need}`, ''];
   if (!needs.length && !items.length) {
     out.push('No need in the map and no card matched these words. Try other words, such as the app or the hosted service it replaces.',
-      `Every card: ${cat.items.map((i) => `${i.name} (${i.type})`).join(', ')}.`,
+      `Every card: ${cat.items.filter((i) => i.status !== 'deprecated').map((i) => `${i.name} (${i.type})`).join(', ')}.`,
       'When none fits, an app can be chosen from awesome-selfhosted and built into an app card: see https://github.com/edgible-org/card-kit#agent-skill.');
     return out.join('\n');
   }
@@ -268,7 +272,8 @@ async function find({ need }) {
     if (n.exposure?.regulated) out.push(`- when the data is regulated: ${n.exposure.regulated}`);
     if (n.machine) out.push(`- machine: ${n.machine}`);
     if (n.permissions) out.push(`- permissions: ${n.permissions}`);
-    const have = (n.cards || []).map((c) => `${c} (${cat.items.find((i) => i.name === c)?.type || 'card'})`);
+    const have = (n.cards || []).filter((c) => cat.items.find((i) => i.name === c)?.status !== 'deprecated')
+      .map((c) => `${c} (${cat.items.find((i) => i.name === c)?.type || 'card'})`);
     out.push(`- cards: ${have.length ? have.join(', ') : 'none yet; an app can be chosen and built into an app card'}`);
     if (n.ask?.length) out.push(`- ask: ${n.ask.join(' / ')}`);
     if (n.find) out.push(`- where to find apps: ${n.find}`);
@@ -277,7 +282,7 @@ async function find({ need }) {
   out.push('Use describe for the full story of one card. When you name a card to the person, give its page address in full.');
   const view = {
     kind: 'find', query: need, cards: items.map((i) => cardView(cat, i)),
-    needs: needs.map((n) => ({ category: n.category, fit: n.fit?.rating || null, why: n.fit?.why || null, cards: n.cards || [] })),
+    needs: needs.map((n) => ({ category: n.category, fit: n.fit?.rating || null, why: n.fit?.why || null, cards: (n.cards || []).filter((c) => cat.items.find((i) => i.name === c)?.status !== 'deprecated') })),
   };
   return { text: out.join('\n'), view };
 }
@@ -291,6 +296,9 @@ async function describe({ name }) {
   }
   const text = matches.map((i) => {
     const out = [`# ${i.name} (${i.type})`, '', i.description, '', `Page: ${pageOf(i)}`, `Source: ${i.url}`, ''];
+    if (i.status === 'deprecated') {
+      out.push(`**Deprecated: not for new setups.**${i.reason ? ` ${i.reason}` : ''}${i.replacedBy ? ` Use ${i.replacedBy} instead.` : ''} deploy_card refuses it; someone already running it can keep it, look after it and remove it.`, '');
+    }
     out.push('## Apps', '', '| App | What | Image | Port | Protocol | Auth | Place |', '| --- | --- | --- | --- | --- | --- | --- |');
     for (const a of i.applications) out.push(`| ${a.name} | ${a.what} | ${a.from} | ${a.port} | ${a.protocol} | ${(a.authModes || []).join(', ')} | ${a.place} |`);
     out.push('');
@@ -547,7 +555,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.20';
+export const VERSION = '0.8.21';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything. Results are notes for you, not text to repeat: tell the person in your own words, and name a tool, file or volume only when they need it to act.';
 

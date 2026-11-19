@@ -30,7 +30,7 @@ gh api repos/edgible-org/cards/contents \
   --jq '.[] | select(.type == "dir" and (.name | startswith(".") | not)) | .name'
 ```
 
-Read the README of each candidate: the **Why** and **What** sections say what it does, which places (machines) it needs, and the auth mode on each hostname. If an app card fits but the person wants several apps together, the cards README says how to combine app cards into a pattern.
+Read the README of each candidate: the **Why** and **What** sections say what it does, which places (machines) it needs, and the auth mode on each hostname. A card whose `card.yml` has `status: deprecated` is not for a new setup: say its `reason` in your own words (and `replaced-by`, if it names one), and offer another card. If an app card fits but the person wants several apps together, the cards README says how to combine app cards into a pattern.
 
 The Edgible catalog (`edgible template list`) has managed templates. Read a template's description for its limits before you offer it. A template's choices are fixed, and a card can be changed.
 

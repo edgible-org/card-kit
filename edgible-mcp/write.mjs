@@ -190,6 +190,10 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
   if (!fetched) return refused(`no card called ${card} in ${REPO}`);
   try {
     const { card: meta } = fetched;
+    // A deprecated card is listed but never set up anew (card.yml metadata.status, reason).
+    if (meta.metadata?.status === 'deprecated') {
+      return refused(`${card} is deprecated, so it is not set up anew${meta.metadata.reason ? `: ${meta.metadata.reason}` : ''}${meta.metadata['replaced-by'] ? ` Use ${meta.metadata['replaced-by']} instead.` : ''}`);
+    }
     // What the first start downloads, from the images test-card measured, to tell the person before they wait.
     const download = imageDownload(await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => ''));
     // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.

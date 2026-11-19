@@ -63,7 +63,7 @@
             "stable",
             "deprecated"
           ],
-          "description": "experimental: newly made, less proven. stable: the default when this is left out. deprecated: still here but do not start new setups on it; the README says what replaces it."
+          "description": "experimental: newly made, less proven. stable: the default when this is left out. deprecated: still here but do not start new setups on it; the README says what replaces it, and reason says why. The tools do not offer it, and deploy_card refuses it."
         },
         "steward": {
           "type": "string",
@@ -79,6 +79,11 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "For a deprecated card: the card that replaces it. Shown on the card's page."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For a deprecated card: why, in a sentence for the person, such as what Edgible cannot do for it yet. Shown on the card's page and by the tools, which do not offer the card for new setups."
         },
         "contact": {
           "type": "string",
