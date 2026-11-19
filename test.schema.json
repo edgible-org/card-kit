@@ -163,6 +163,13 @@
         "person"
       ]
     },
+    "via": {
+      "enum": [
+        "readme",
+        "stack"
+      ],
+      "description": "How the card was deployed for this test. readme: docker compose up, then edgible app create existing, as the README does. stack: the card through generate.mjs and edgible stack deploy, as deploy_card does (J-45). Absent means readme."
+    },
     "notes": {
       "type": "string",
       "description": "What a reader should know about this run, such as a step that needed a retry."
