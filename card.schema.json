@@ -254,6 +254,17 @@
               "type": "string",
               "minLength": 1,
               "description": "A shell command, run on the device with card.env exported and $COMPOSE set, that exits 0 once the app's own setup is finished, such as $COMPOSE --profile cli run --rm -T wordpress-cli wp core is-installed."
+            },
+            "during": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[A-Z][A-Z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "card.env values the app starts with until done exits 0, such as {NEXTAUTH_DISABLE_SIGNUP: \"false\"} so the person can make the first account, which becomes the admin. Then the app restarts with card.env as written (sign-up off) before it is switched to authModes. Each key is set in card.env."
             }
           },
           "description": "The app sets itself up on its first visit. It is published behind org, a person runs its own setup on its real hostname, and it is switched to authModes once done exits 0. The card's test does the setup with test/setup.sh."
