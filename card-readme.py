@@ -24,7 +24,8 @@ app's own setup on its hostname, check setup.done, and switch it to its authMode
 card.yml and the Compose files, the same way on every card:
 How (Fetch, Edit card.env, Check, Start, Publish), each app's Verify check by its auth
 mode, Customising (when an app has source: in card.yml), Tear down, and the sizing sentence in What, from places:. Fetch reads from
-edgible-org/cards.
+edgible-org/cards. An app with appPaths: in card.yml is published on org, and Publish then runs
+card-kit's app-paths.py, which leaves those paths to the app's own login.
 
 A native card (native: in places:) runs install.sh instead of a Compose file, so its How is
 Fetch, Edit card.env, Check, Install, Publish, and its Tear down is Unpublish, Uninstall,
@@ -336,6 +337,12 @@ def main(argv: list[str]) -> int:
             f"  --auth-modes {a['setup']['behind'] if a.get('setup') else ','.join(a['authModes'])} \\\n"
             f"  --device-id \"${id_of(a['place'])}\"")
 
+    # appPaths: Publish puts the app on org, then app-paths.py leaves those paths to its own login.
+    pathed = [a for a in apps if a.get("appPaths") and "org" in a["authModes"]]
+    if pathed:
+        creates.append("curl -fsSLo app-paths.py https://raw.githubusercontent.com/edgible-org/card-kit/main/app-paths.py\n"
+                       + "\n".join(f"python3 app-paths.py {name} {a['name']}" for a in pathed))
+
     verify = []
     for a in apps:
         mode, host, note = a["authModes"][0], f"<{a['name']} hostname>", spec["verify"].get(a["name"], "")
@@ -348,6 +355,14 @@ def main(argv: list[str]) -> int:
             note = ("That prints `302` and an `edgible.com/application-access/` address, "
                     "so the org sign-in is in front. " + note)
             check = f"curl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}\""
+            if a in pathed:
+                first = a["appPaths"][0]["paths"][0]
+                probe = first[:-1] + "card-kit-probe" if first.endswith("*") else first
+                check += f"\ncurl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}{probe}\""
+                note = ("The first prints `302` and an `edgible.com/application-access/` address, so the org sign-in is in front "
+                        f"of the web pages. The second prints `{a['name']}`'s own answer, with no sign-in address: Publish left "
+                        f"the paths in `appPaths` ([card.yml](card.yml)) to its own login, so clients that cannot pass Edgible's "
+                        "sign-in still connect. " + spec["verify"].get(a["name"], ""))
         elif mode == "api-key":
             head = f"`{a['name']}` uses `api-key`. Without a key, it answers `401`."
             check = f"curl -sS -o /dev/null -w '%{{http_code}}\\n' \"https://{host}\""

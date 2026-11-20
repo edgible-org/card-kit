@@ -254,10 +254,20 @@ export function deployAuth(application) {
 // The Application declaration for one published app of a card on one device. hostnames are the
 // person's own domains; the generated hostname is always there. envFrom names organisation
 // secrets by reference, never their values.
-export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, startPeriod = 0, cardFiles = '', by = 'edgible-mcp' }) {
+// card.yml's appPaths as Edgible's path policies: each set of paths left to the app's own login
+// (app-native), with its for as the reason Edgible records. Only behind Edgible's sign-in: on
+// none the whole app is already the app's own, and api-key has no browser sign-in to step past.
+export function pathPoliciesFor(appPaths = [], modes = []) {
+  if (!appPaths?.length || !modes.includes('edgible-login')) return [];
+  return appPaths.map((p) => ({ paths: p.paths, modes: ['app-native'], justification: p.for }));
+}
+
+export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, startPeriod = 0, cardFiles = '', appPaths = [], by = 'edgible-mcp' }) {
+  const modes = auth.split(',').map((m) => DECLARED_AUTH[m] || m);
+  const pathPolicies = pathPoliciesFor(appPaths, modes);
   const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
     type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
-    policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
+    policies: { auth: { modes, ...(pathPolicies.length ? { pathPolicies } : {}) } }, hostname: custom ? { generated: true, custom } : { generated: true },
   }));
   return {
     apiVersion: 'v3', kind: 'Application',
@@ -329,7 +339,7 @@ async function main(argv) {
     const envFrom = Object.entries(o.keys).map(([n, secretRef]) => ({ name: n, secretRef }));
     const compose = `# ${name} card as one self-contained file, made by generate.mjs. Do not edit by hand: change card.env and generate again.\n${built.compose}`;
     const declaration = declarationFor({ app, card: name, organizationId: me.organization.id, deviceId: found[0].id, port: built.port, auth,
-      hostnames: o.hostnames, compose, envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(await readFile(path.join(dir, 'test.yml'), 'utf8').catch(() => '')), by: 'generate.mjs' });
+      hostnames: o.hostnames, compose, envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(await readFile(path.join(dir, 'test.yml'), 'utf8').catch(() => '')), appPaths: published[0].appPaths, by: 'generate.mjs' });
     const out = path.resolve(o.out || dir);
     await writeFile(path.join(out, 'docker-compose.generated.yml'), compose);
     await writeFile(path.join(out, 'edgible.yml'), `# ${app}: the ${name} card on ${found[0].name}, made by generate.mjs. Regenerate rather than edit.\n${YAML.stringify(declaration, { lineWidth: 0 })}`);

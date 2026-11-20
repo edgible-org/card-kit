@@ -233,6 +233,10 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     const others = onOffer.filter((d) => d.name !== target.name).map((d) => d.name + (d.thisMachine ? ' (this computer)' : ''));
     reasons.push({ token: 'device', reason: `${app} will run on ${target.name}${target.isThisMachine ? ', this computer' : ''}${here?.apps.length ? `, which already runs ${here.apps.join(', ')}` : ', which runs no other managed app'}. ${others.length ? `Other online devices: ${others.join(', ')}.` : 'No other device is online.'} Say which device it goes on and ask whether that is the right one; for another, call again with that device.` });
     if (auth.split(',').includes('none')) reasons.push({ token: 'public', reason: `${app} will be open to anyone on the internet (auth mode none), as the card intends${hostnames.length ? `, at ${hostnames.join(', ')}` : ''}.` });
+    // appPaths: the app stays behind Edgible's sign-in, and only these paths reach the app's own
+    // login from anywhere, for clients that cannot pass Edgible's sign-in (phone apps, extensions).
+    const appPaths = auth.split(',').includes('org') ? published[0].appPaths || [] : [];
+    if (appPaths.length) reasons.push({ token: 'app-paths', reason: `${app}'s web pages will be behind Edgible's sign-in, so only the organisation reaches them, including its sign-up and admin pages. These paths will reach ${app}'s own login from anywhere, with no Edgible sign-in: ${appPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}. Say so in everyday words: the apps work as normal, and anyone who uses the web pages, such as someone invited, must be a member of the Edgible organisation.` });
     // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
     // call needs a key it issued, as the card's Share it step does, and this server keeps its
     // master key, so gateway_key and gateway_spend work with nothing copied by hand.
@@ -299,7 +303,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
     const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
-      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(testYml), by: 'edgible-mcp' });
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(testYml), appPaths: published[0].appPaths, by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
@@ -323,6 +327,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
         ? ` When they say it is done, ask before calling finish_setup, which ${during.length ? 'closes sign-up again and ' : ''}${after ? `switches it to ${after}` : 'keeps it where it is'} in one Edgible release. Ask in terms of who can reach it, never "open it", which reads as opening the link: for none, whether to take Edgible's sign-in away so anyone on the internet reaches the app's own login. The switch takes effect in seconds and keeps them signed in.`
         : ` It stays on ${auth} afterwards, so there is nothing to switch.`);
     }
+    if (appPaths.length) result.next += ` ${app} is behind Edgible's sign-in for its web pages, with ${appPaths.flatMap((p) => p.paths).join(', ')} left to its own login, so its apps connect: give the person its hostname to enter in those apps as the server.`;
     if (staged) {
       result.setup = { behind: auth, after, staged: true };
       result.next += ` ${app} is on ${auth} for now: only the organisation reaches it, so nobody else can take its first sign-in. Its card makes it public (${after}) once the person is in. In the same Your turn block, give them its hostname: sign in with Edgible, then sign in to ${app} as its admin (with the first-use password, or the account they make there) and change the password if ${app} lets them. End the block with what to reply, such as "Tell me when you're signed in": nothing watches the app, so their reply is how you know. When they say so, ask before switching it to ${after} with apply_application_change. Ask in terms of who can reach it, never "open it", which reads as opening the link: whether to take Edgible's sign-in away so anyone on the internet reaches ${app}'s own login. If describe showed image-scan findings, say so in the same question.${published[0].publicFor?.length ? ` Say too what needs it public: ${published[0].publicFor.join(', ')}; kept on ${auth}, those won't connect, while the app works as normal in a web browser.` : ''} If they would rather keep it to the organisation, it stays on ${auth}: nothing else to do. The switch takes effect in seconds and keeps them signed in.`;
