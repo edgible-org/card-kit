@@ -113,6 +113,18 @@ def flow_map(value: str) -> dict[str, str]:
     return {k: unquote(v.strip()) for k, v in re.findall(r"([A-Z][A-Z0-9_]*)\s*:\s*(\"[^\"]*\"|'[^']*'|[^,}]+)", value)}
 
 
+def release_applied(name: str) -> bool:
+    """Whether every device runs the app's current release, after an `edgible app update`."""
+    r = subprocess.run(["edgible", "-o", "json", "app", "get", name], capture_output=True, text=True)
+    try:
+        app = json.loads(r.stdout)
+    except ValueError:
+        return False
+    current = app.get("currentReleaseVersion")
+    applied = re.findall(r'"appliedReleaseVersion":\s*(\d+)', r.stdout)
+    return bool(current) and bool(applied) and all(int(v) == current for v in applied)
+
+
 def read_apps(card_yml: Path) -> list[dict]:
     """The applications in card.yml. It is flat enough to read without pyyaml."""
     text = re.split(r"\n(?:data|places):\s*\n", card_yml.read_text())[0]
@@ -674,9 +686,6 @@ def main(argv: list[str]) -> int:
         print("--via stack handles cards with one Compose file and one published app, not native, for now (J-45)",
               file=sys.stderr)
         return 2
-    if stack and any(app["setup_during"] for app in apps):
-        print("--via stack handles setup.during once deploy_card does (J-41)", file=sys.stderr)
-        return 2
     if native:
         # The test's own service, beside any copy of the card this machine already runs.
         set_env(env_file, "SERVICE", f"org.edgible.cardtest-{src.name}")
@@ -900,8 +909,27 @@ def main(argv: list[str]) -> int:
                         time.sleep(10)
                 if not ok:
                     raise RuntimeError(f"{app['name']}'s setup.done did not exit 0 after test/setup.sh")
-                # setup.during: start again with card.env's own values, such as sign-up off, before
-                # anyone else can reach it. setup.done must still pass (the setup is kept).
+                # setup.during on the stack path: Edgible does the switch, in one release, as
+                # deploy_card's finish_setup does: card.env's values back (the Compose file falls
+                # back to them) and the app on its authModes together.
+                if stack and app["setup_during"]:
+                    unset = " ".join(f"--unset-env {k}" for k in app["setup_during"])
+                    auth = f" --auth-modes {','.join(app['auth'])}" if app["auth"] != [app["setup_behind"]] else ""
+                    sh(f"edgible app update {name} {unset}{auth} --non-interactive --confirm", timeout=600)
+                    deadline, ok = time.time() + args.verify_wait, False
+                    while time.time() < deadline and not ok:
+                        ok = release_applied(name) and sh(f"{run_env} && export {hosts} && {compose}{app['setup_done']}",
+                                                          check=False, timeout=300).returncode == 0
+                        if not ok:
+                            time.sleep(10)
+                    if not ok:
+                        raise RuntimeError(f"{app['name']} did not come back after Edgible switched it")
+                    print(f"setup {app['name']}: Edgible put card.env's {', '.join(app['setup_during'])} back"
+                          + (f" and switched it to {','.join(app['auth'])}, in one release" if auth else ""))
+                    steps["setup"][app["name"]] = "pass"
+                    continue
+                # setup.during on the README path: start again with card.env's own values, such as
+                # sign-up off, before anyone else can reach it. setup.done must still pass.
                 if app["setup_during"]:
                     for f in first:
                         sh(dc(f, "up -d --wait --wait-timeout 1200"), timeout=2400)

@@ -13,6 +13,9 @@
 // `edgible stack deploy -f <out>/edgible.yml`. The file holds no secret values: passwords are made
 // on the device by card-secrets, and keys are references to Edgible organisation secrets.
 // This version handles cards that publish one app, on one machine.
+// A card's data stays in Compose named volumes. Edgible's platform storage (spec.storage, which
+// snapshot, restore and `app move --storage` use) takes over once the platform gives it what a
+// named volume has and carries an app's entries in one move: platform findings 70, 71 and 75.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
@@ -79,6 +82,7 @@ const literal = (text) => text.replaceAll('$', '$$$$');
 export const DECLARED_AUTH = { org: 'edgible-login' };
 
 const keyMark = (name) => `__edgible_key_${name}__`;
+const duringMark = (name) => `__edgible_during_${name}__`;
 
 export async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [], user = '', published = '' }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
@@ -90,6 +94,16 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
   if (secretKeys.length) return refused(`${card.metadata.name} has secrets (${secretKeys.join(', ')}). This first version only deploys cards without secrets, so no password ever sits in a Compose file; secrets need Edgible's organisation secrets, which come next.`);
   const changes = { ...choices };
   for (const name of keys) changes[name] = keyMark(name);
+  // setup.during: values the app runs with until its own setup is done, such as sign-up on. They
+  // become the app's Edgible environment, and the Compose file reads them as ${NAME:-<card.env's
+  // value>}, so \`edgible app update --unset-env NAME\` puts card.env's value back in one release.
+  const during = Object.assign({}, ...(card.applications || []).filter((a) => a.published !== false).map((a) => a.setup?.during || {}));
+  const finals = {};
+  for (const name of Object.keys(during)) {
+    if (!(name in values)) return refused(`setup.during sets ${name}, which card.env does not have`);
+    finals[name] = name in choices ? choices[name] : values[name];
+    changes[name] = duringMark(name);
+  }
   if ('DEVICE' in values) changes.DEVICE = device;
   // Who may sign in: a card that names Edgible accounts, such as openclaw's OPENCLAW_USERS, is
   // locked to the person deploying it unless the choices say otherwise, never left open to its
@@ -162,6 +176,9 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
   let out = resolved;
   let secretsVolume = '';
   for (const name of keys) out = JSON.parse(JSON.stringify(out).replaceAll(keyMark(name), `\${${name}}`));
+  for (const [name, value] of Object.entries(finals)) {
+    out = JSON.parse(JSON.stringify(out).replaceAll(duringMark(name), `\${${name}:-${String(value).replaceAll('$', '$$$$')}}`));
+  }
   if (seeds.length) {
     // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
     // agent can start an app once before it has the secret's value; :? makes that start fail, so
@@ -184,7 +201,7 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
     .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
   const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
   if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume };
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume, during };
 }
 
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
@@ -206,7 +223,7 @@ export function deployAuth(application) {
 // The Application declaration for one published app of a card on one device. hostnames are the
 // person's own domains; the generated hostname is always there. envFrom names organisation
 // secrets by reference, never their values.
-export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], by = 'edgible-mcp' }) {
+export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, by = 'edgible-mcp' }) {
   const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
     type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
     policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
@@ -217,7 +234,8 @@ export function declarationFor({ app, card, organizationId, deviceId, port, auth
     spec: {
       placement: { strategy: 'serving-device', deviceSelector: { deviceId }, migrationPolicy: 'manual' },
       workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: port, protocol: 'tcp' }],
-        composeFile: `base64:${Buffer.from(compose).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}) }],
+        composeFile: `base64:${Buffer.from(compose).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}),
+        ...(Object.keys(env).length ? { env } : {}) }],
       access,
     },
   };
@@ -279,11 +297,12 @@ async function main(argv) {
     const envFrom = Object.entries(o.keys).map(([n, secretRef]) => ({ name: n, secretRef }));
     const compose = `# ${name} card as one self-contained file, made by generate.mjs. Do not edit by hand: change card.env and generate again.\n${built.compose}`;
     const declaration = declarationFor({ app, card: name, organizationId: me.organization.id, deviceId: found[0].id, port: built.port, auth,
-      hostnames: o.hostnames, compose, envFrom, by: 'generate.mjs' });
+      hostnames: o.hostnames, compose, envFrom, env: built.during, by: 'generate.mjs' });
     const out = path.resolve(o.out || dir);
     await writeFile(path.join(out, 'docker-compose.generated.yml'), compose);
     await writeFile(path.join(out, 'edgible.yml'), `# ${app}: the ${name} card on ${found[0].name}, made by generate.mjs. Regenerate rather than edit.\n${YAML.stringify(declaration, { lineWidth: 0 })}`);
-    console.log(`wrote ${path.join(out, 'edgible.yml')}: ${app} on ${found[0].name}, auth ${auth}. Deploy with: edgible stack deploy -f ${path.join(out, 'edgible.yml')}`);
+    const duringKeys = Object.keys(built.during);
+    console.log(`wrote ${path.join(out, 'edgible.yml')}: ${app} on ${found[0].name}, auth ${auth}${duringKeys.length ? `, until setup is done ${duringKeys.map((k) => `${k}=${built.during[k]}`).join(' ')}` : ''}. Deploy with: edgible stack deploy -f ${path.join(out, 'edgible.yml')}`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }

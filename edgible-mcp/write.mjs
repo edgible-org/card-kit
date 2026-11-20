@@ -194,11 +194,6 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     if (meta.metadata?.status === 'deprecated') {
       return refused(`${card} is deprecated, so it is not set up anew${meta.metadata.reason ? `: ${meta.metadata.reason}` : ''}${meta.metadata['replaced-by'] ? ` Use ${meta.metadata['replaced-by']} instead.` : ''}`);
     }
-    // setup.during: the app starts with other values until its setup is done (such as sign-up on),
-    // then restarts with card.env's own. Not here yet: its README does both steps.
-    if ((meta.applications || []).some((a) => a.setup?.during)) {
-      return refused(`${card} starts with sign-up on until its first account is made, then restarts with it off, which these tools cannot do yet. Set it up from a shell on the device with its README, which does both steps.`);
-    }
     // What the first start downloads, from the images test-card measured, to tell the person before they wait.
     const download = imageDownload(await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => ''));
     // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.
@@ -303,7 +298,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
     const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
-      hostnames, compose: await readFile(file, 'utf8'), envFrom, by: 'edgible-mcp' });
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
@@ -318,12 +313,13 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       if (api.status !== 'ok') return api;
     }
     const created = (await apps()).find((a) => a.name === app);
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
+    const during = Object.keys(built.during || {});
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, ...(setup ? { setup: { after, during } } : {}), hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], ...(download ? { download: { size: download.size, time: download.time } } : {}), next: startNext(download) };
     if (setup) {
-      result.setup = { behind: auth, ...(after ? { after } : {}) };
-      result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (its language, its name, their own admin and password). End with what to reply, such as "I'm waiting here: tell me when it's done": nothing watches the app, so their reply is how you know. Wait for them; never do it in their place.` + (after
-        ? ` When they say it is done, check the card's README Set up step, then ask before switching it to ${after} with apply_application_change. Ask in terms of who can reach it, never "open it", which reads as opening the link: for none, whether to take Edgible's sign-in away so anyone on the internet reaches the app's own login. The switch takes effect in seconds and keeps them signed in.`
+      result.setup = { behind: auth, ...(after ? { after } : {}), ...(during.length ? { during } : {}) };
+      result.next += ` ${app} sets itself up on its first visit, and it is on ${auth}${after ? ' for now' : ''}: only the organisation reaches it. Give the person its hostname, as their turn: sign in with Edgible and finish the app's own setup (${during.length ? 'sign-up is open for now: they make their own account, which becomes the admin, with their own password' : "its language, its name, their own admin and password"}). End with what to reply, such as "I'm waiting here: tell me when it's done": nothing watches the app, so their reply is how you know. Wait for them; never do it in their place.` + (after || during.length
+        ? ` When they say it is done, ask before calling finish_setup, which ${during.length ? 'closes sign-up again and ' : ''}${after ? `switches it to ${after}` : 'keeps it where it is'} in one Edgible release. Ask in terms of who can reach it, never "open it", which reads as opening the link: for none, whether to take Edgible's sign-in away so anyone on the internet reaches the app's own login. The switch takes effect in seconds and keeps them signed in.`
         : ` It stays on ${auth} afterwards, so there is nothing to switch.`);
     }
     if (staged) {
@@ -907,6 +903,28 @@ async function appKey({ app, name, secret, expires, confirm = [] }) {
     next: `Give it to what uses ${app} by reference, such as gateway_provider with provider ollama and secret "${secretName}:key". Whatever used an earlier key of this name stops working until it is given this one; gateway_provider restarts the gateway with it.` };
 }
 
+// finish_setup: once the person has finished an app's own setup (card.yml setup:), Edgible does
+// the rest in one release with `edgible app update`: setup.during's values go (the Compose file
+// falls back to card.env's, such as sign-up off) and the app moves to its authModes. Asked first.
+async function finishSetup({ app, confirm = [] }) {
+  const live = (await apps()).find((a) => a.name === app);
+  if (!live) return refused(`no app called ${app}`);
+  const where = appDevices(live);
+  if (notAllowed(...where)) return refused(notAllowed(...where));
+  const deployed = (await readRecord()).filter((e) => e.tool === 'deploy_card' && e.app === app && e.result === 'created').at(-1);
+  if (!deployed?.setup) return refused(`${app} was not deployed by these tools with a setup step, so there is nothing to finish`);
+  const { after, during = [] } = deployed.setup;
+  if (!after && !during.length) return { status: 'done', app, next: `${app} stays on ${deployed.auth}: nothing to switch.` };
+  if (!confirm.includes('finish')) {
+    return needs([{ token: 'finish', reason: `Finishing ${app}'s setup in one Edgible change` + (during.length ? `: it starts again with its setup-time settings gone (${during.join(', ')}), such as sign-up closed` : '') + (after ? `${during.length ? ', and' : ':'} it moves to ${after}${after.split(',').includes('none') ? ', so anyone on the internet reaches its own login, without Edgible\'s sign-in' : ''}` : '') + '. It takes a minute or so, and a signed-in session stays signed in.' }]);
+  }
+  const args = ['app', 'update', app, ...during.flatMap((k) => ['--unset-env', k]), ...(after ? ['--auth-modes', after] : []), '--non-interactive', '--confirm'];
+  const r = await run('edgible', args, { timeout: 300000 });
+  await record({ tool: 'finish_setup', app, confirmed: confirm, during, ...(after ? { auth: after } : {}), result: r.code ? 'failed' : 'finished', detail: r.code ? cliError(r) : undefined });
+  return r.code ? { status: 'failed', reason: cliError(r) }
+    : { status: 'finished', app, ...(after ? { auth: after } : {}), next: `card_status shows when ${app} answers with its new settings, usually within a couple of minutes.` + (during.length ? ` Then a stranger can no longer sign up.` : '') };
+}
+
 // restart_card: re-create a wedged app from its current release on its device, asked first.
 async function restartCard({ app, confirm = [] }) {
   const live = (await apps()).find((a) => a.name === app);
@@ -1123,6 +1141,7 @@ async function activity({ limit = 20 }) {
     const what = e.tool === 'deploy_card' ? `deployed the ${e.card} card as ${e.app} on ${e.device}`
       : e.tool === 'move_card' ? `moved ${e.app} to ${e.to}${e.seconds ? ` (${e.seconds}s)` : ''}`
       : e.tool === 'remove_card' ? `removed ${e.app}`
+      : e.tool === 'finish_setup' ? `finished ${e.app}'s setup${e.during?.length ? ` (${e.during.join(', ')} back to the card's)` : ''}${e.auth ? `, now on ${e.auth}` : ''}`
       : e.tool === 'delete_key' ? `deleted the stored key ${e.secret}`
       : e.tool === 'remove_device' ? `took ${e.device} off the account` : e.tool;
     const asked = e.confirmed?.length ? `, after the person agreed (${e.confirmed.join(', ')})` : '';
@@ -1263,6 +1282,15 @@ export function registerWriteTools(server) {
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   }, wrap(removeDevice));
+  server.registerTool('finish_setup', {
+    title: 'Finish an app\'s setup',
+    description: 'After the person has finished an app\'s own first-run setup (deploy_card\'s result says when), Edgible finishes it in one change: it takes away the settings the app ran with during setup, such as open sign-up, and moves it to its card\'s auth mode. Asks first. Good for "I\'ve made my account" after deploying linkwarden or karakeep.',
+    inputSchema: {
+      app: z.string().describe('The app\'s name'),
+      confirm: z.array(z.string()).optional().describe('["finish"], only after the person agreed'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, wrap(finishSetup));
   server.registerTool('restart_card', {
     title: 'Restart an app',
     description: 'Restart an app that is stuck or not answering: Edgible re-creates it from its current release on its device, data kept. Asks first. Good for "my agent seems stuck".',
