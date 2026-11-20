@@ -211,6 +211,10 @@ def convention_errors(card_dir: Path, card: dict) -> list[str]:
         modes = app.get("authModes", [])
         if app["setup"].get("behind") in modes and modes != [app["setup"]["behind"]]:
             errors.append(f"app {app['name']}: authModes is where it goes after setup: [{app['setup']['behind']}] to stay behind, or modes without it")
+        env_text = (card_dir / "card.env").read_text() if (card_dir / "card.env").is_file() else ""
+        for key in app["setup"].get("during", {}):
+            if not re.search(rf"^{key}=", env_text, re.M):
+                errors.append(f"app {app['name']}: setup.during sets {key}, so card.env sets it too, to the value it has after setup")
         if not (card_dir / "test" / "setup.sh").is_file():
             errors.append(f"app {app['name']} has setup:, so test/setup.sh does that setup in the card's test")
     if card["metadata"].get("type") == "app":

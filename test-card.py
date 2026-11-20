@@ -108,6 +108,11 @@ def unquote(value: str) -> str:
     return value
 
 
+def flow_map(value: str) -> dict[str, str]:
+    """A one-line YAML flow mapping, such as {SIGNUP: "true", OTHER: x}, as KEY: value."""
+    return {k: unquote(v.strip()) for k, v in re.findall(r"([A-Z][A-Z0-9_]*)\s*:\s*(\"[^\"]*\"|'[^']*'|[^,}]+)", value)}
+
+
 def read_apps(card_yml: Path) -> list[dict]:
     """The applications in card.yml. It is flat enough to read without pyyaml."""
     text = re.split(r"\n(?:data|places):\s*\n", card_yml.read_text())[0]
@@ -125,6 +130,9 @@ def read_apps(card_yml: Path) -> list[dict]:
             # setup: the app is published on behind while its own setup runs, then switched.
             "setup_behind": unquote(get("behind")),
             "setup_done": unquote(get("done")),
+            # setup.during: card.env values the app starts with until its setup is done, such as
+            # sign-up on so the person can make the first account; then it restarts with card.env's own.
+            "setup_during": flow_map(get("during")),
         })
     return apps
 
@@ -666,6 +674,9 @@ def main(argv: list[str]) -> int:
         print("--via stack handles cards with one Compose file and one published app, not native, for now (J-45)",
               file=sys.stderr)
         return 2
+    if stack and any(app["setup_during"] for app in apps):
+        print("--via stack handles setup.during once deploy_card does (J-41)", file=sys.stderr)
+        return 2
     if native:
         # The test's own service, beside any copy of the card this machine already runs.
         set_env(env_file, "SERVICE", f"org.edgible.cardtest-{src.name}")
@@ -780,8 +791,11 @@ def main(argv: list[str]) -> int:
             print("publish: pass", [name])
         else:
             steps["start"], started_compose = "fail", True
+            # setup.during values go before the command, as the README's Start does: the shell's
+            # value wins over card.env's in Compose, and card.env stays as written.
+            during = " ".join(f"{k}={shlex.quote(v)}" for app in apps for k, v in app["setup_during"].items())
             for f in first:
-                sh(dc(f, "up -d --wait --wait-timeout 1200"), timeout=2400)
+                sh(f"{during} {dc(f, 'up -d --wait --wait-timeout 1200')}".strip(), timeout=2400)
             print(f"start: {', '.join(f.name for f in first)} up ({int(time.time() - t)}s)")
         if started_compose:
             made = made_secrets(dc, first)
@@ -886,6 +900,15 @@ def main(argv: list[str]) -> int:
                         time.sleep(10)
                 if not ok:
                     raise RuntimeError(f"{app['name']}'s setup.done did not exit 0 after test/setup.sh")
+                # setup.during: start again with card.env's own values, such as sign-up off, before
+                # anyone else can reach it. setup.done must still pass (the setup is kept).
+                if app["setup_during"]:
+                    for f in first:
+                        sh(dc(f, "up -d --wait --wait-timeout 1200"), timeout=2400)
+                    if sh(f"{run_env} && export {hosts} && {compose}{app['setup_done']}",
+                          check=False, timeout=300).returncode != 0:
+                        raise RuntimeError(f"{app['name']}'s setup.done failed after it restarted with card.env's values")
+                    print(f"setup {app['name']}: restarted with card.env's {', '.join(app['setup_during'])}")
                 # An app that stays behind (authModes is [setup.behind]) has nothing to switch.
                 if app["auth"] != [app["setup_behind"]]:
                     sh(f"edgible app update {name} --auth-modes {','.join(app['auth'])} --non-interactive --confirm",

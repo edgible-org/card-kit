@@ -194,6 +194,11 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     if (meta.metadata?.status === 'deprecated') {
       return refused(`${card} is deprecated, so it is not set up anew${meta.metadata.reason ? `: ${meta.metadata.reason}` : ''}${meta.metadata['replaced-by'] ? ` Use ${meta.metadata['replaced-by']} instead.` : ''}`);
     }
+    // setup.during: the app starts with other values until its setup is done (such as sign-up on),
+    // then restarts with card.env's own. Not here yet: its README does both steps.
+    if ((meta.applications || []).some((a) => a.setup?.during)) {
+      return refused(`${card} starts with sign-up on until its first account is made, then restarts with it off, which these tools cannot do yet. Set it up from a shell on the device with its README, which does both steps.`);
+    }
     // What the first start downloads, from the images test-card measured, to tell the person before they wait.
     const download = imageDownload(await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => ''));
     // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.
