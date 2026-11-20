@@ -339,7 +339,9 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       // A chat can scroll the password out of view, or fold the reply away: the command shows it again
       // on the device, any time, from the secrets volume (it reads the value and changes nothing).
       result.firstUse = shown.map((f) => (built.secretsVolume
-        ? { ...f, showAgain: `docker run --rm -v ${built.secretsVolume}:/run/card-secrets:ro ${CARD_SECRETS_IMAGE} show ${f.name}` }
+        ? { ...f, showAgain: built.secretsVolume.from
+          ? `docker run --rm --volumes-from ${built.secretsVolume.from}:ro ${CARD_SECRETS_IMAGE} show ${f.name}`
+          : `docker run --rm -v ${built.secretsVolume}:/run/card-secrets:ro ${CARD_SECRETS_IMAGE} show ${f.name}` }
         : f));
       result.next += prepare
         ? ` ${card}'s prepare step did not run, so these first-use passwords are on the device but may belong to no account yet: don't tell the person to sign in with them. Tell them to do the step by hand now (${prepare}), in the app, such as registering the first account with their own password, and say why: until then someone else could.`
