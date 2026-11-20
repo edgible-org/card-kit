@@ -298,7 +298,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
     const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
-      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, by: 'edgible-mcp' });
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });

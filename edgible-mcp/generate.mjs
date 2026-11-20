@@ -201,7 +201,31 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
     .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
   const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
   if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume, during };
+  // The app's own healthcheck start_period, so the declared check below waits as long as Docker's.
+  const appService = Object.values(out.services || {}).find((s) => (s.ports || []).some((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)?.[1] === hostPort[1]));
+  const startPeriod = seconds(appService?.healthcheck?.start_period);
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume, during, startPeriod };
+}
+
+// Seconds in a Compose duration as `docker compose config` writes it ("1m30s", "45s", "500ms").
+export function seconds(duration) {
+  if (duration == null) return 0;
+  if (typeof duration === 'number') return Math.ceil(duration / 1e9);
+  let total = 0;
+  for (const [, n, unit] of String(duration).matchAll(/([\d.]+)(h|ms|m|s|us|ns)/g)) {
+    total += Number(n) * { h: 3600, m: 60, s: 1, ms: 1e-3, us: 1e-6, ns: 1e-9 }[unit];
+  }
+  return Math.ceil(total);
+}
+
+// Edgible's health check for a card: only that its published port accepts connections. When the
+// port is closed the app is down, so this check cannot fail a working app. The card's detailed
+// check stays its Compose healthcheck, which Docker runs and Edgible reads. Edgible stores declared
+// checks on a compose app but does not run them yet (platform finding 76); this one is ready when
+// it does. Grace is the app's own start_period, at least a minute.
+export function healthCheckFor(startPeriod = 0) {
+  return { type: 'tcp', port: 'main', intervalSeconds: 30, timeoutSeconds: 5, failureThreshold: 3,
+    startupGraceSeconds: Math.max(60, startPeriod) };
 }
 
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
@@ -223,7 +247,7 @@ export function deployAuth(application) {
 // The Application declaration for one published app of a card on one device. hostnames are the
 // person's own domains; the generated hostname is always there. envFrom names organisation
 // secrets by reference, never their values.
-export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, by = 'edgible-mcp' }) {
+export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, startPeriod = 0, by = 'edgible-mcp' }) {
   const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
     type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
     policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
@@ -234,6 +258,7 @@ export function declarationFor({ app, card, organizationId, deviceId, port, auth
     spec: {
       placement: { strategy: 'serving-device', deviceSelector: { deviceId }, migrationPolicy: 'manual' },
       workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: port, protocol: 'tcp' }],
+        healthChecks: [healthCheckFor(startPeriod)],
         composeFile: `base64:${Buffer.from(compose).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}),
         ...(Object.keys(env).length ? { env } : {}) }],
       access,
@@ -297,7 +322,7 @@ async function main(argv) {
     const envFrom = Object.entries(o.keys).map(([n, secretRef]) => ({ name: n, secretRef }));
     const compose = `# ${name} card as one self-contained file, made by generate.mjs. Do not edit by hand: change card.env and generate again.\n${built.compose}`;
     const declaration = declarationFor({ app, card: name, organizationId: me.organization.id, deviceId: found[0].id, port: built.port, auth,
-      hostnames: o.hostnames, compose, envFrom, env: built.during, by: 'generate.mjs' });
+      hostnames: o.hostnames, compose, envFrom, env: built.during, startPeriod: built.startPeriod, by: 'generate.mjs' });
     const out = path.resolve(o.out || dir);
     await writeFile(path.join(out, 'docker-compose.generated.yml'), compose);
     await writeFile(path.join(out, 'edgible.yml'), `# ${app}: the ${name} card on ${found[0].name}, made by generate.mjs. Regenerate rather than edit.\n${YAML.stringify(declaration, { lineWidth: 0 })}`);
