@@ -238,6 +238,36 @@
           },
           "description": "What needs the app on auth mode none, in everyday words, such as \"its browser extension\" or \"its phone apps\": clients that are not a web browser cannot pass Edgible's sign-in, so they stop working while the app is kept on org. Absent when nothing is known to need it."
         },
+        "appPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "paths",
+              "for"
+            ],
+            "properties": {
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^/[^*\\s]*\\*?$"
+                },
+                "description": "URL paths, each exact (/identity/connect/token) or ending in * for everything below it (/api/*)."
+              },
+              "for": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What calls these paths and what protects them, in everyday words, such as \"the Bitwarden apps' vault calls, each with a Vaultwarden token\". Edgible records it as the reason for the exception."
+              }
+            }
+          },
+          "description": "Paths left to the app's own login while the rest of the app stays behind Edgible's sign-in (org): for clients that are not a web browser, such as phone apps and browser extensions, which cannot pass Edgible's sign-in. Edgible declares each as a path policy with auth mode app-native. Only with org in authModes; in place of publicFor, which publishes the whole app."
+        },
         "setup": {
           "type": "object",
           "additionalProperties": false,
@@ -322,6 +352,27 @@
                 "minimum": 20000,
                 "maximum": 29999
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "appPaths"
+            ]
+          },
+          "then": {
+            "properties": {
+              "authModes": {
+                "contains": {
+                  "const": "org"
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "publicFor"
+              ]
             }
           }
         }

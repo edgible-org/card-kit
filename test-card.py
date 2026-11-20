@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -77,6 +78,12 @@ HERE = Path(__file__).resolve().parent
 CHECK_ENV = HERE / "check-env.py"
 # The one generator (J-45): a card plus this test's values become an Edgible stack file.
 GENERATE = HERE / "edgible-mcp" / "generate.mjs"
+# appPaths: the README runs app-paths.py after Publish; the test runs the same file, and reads
+# card.yml's appPaths with its parser.
+APP_PATHS = HERE / "app-paths.py"
+_spec = importlib.util.spec_from_file_location("app_paths", APP_PATHS)
+app_paths_tool = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(app_paths_tool)
 ARCH = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64", "armv7l": "arm", "arm": "arm"}
 MEM_UNIT = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "kB": 1e3, "MB": 1e6, "GB": 1e9}
 
@@ -139,6 +146,8 @@ def read_apps(card_yml: Path) -> list[dict]:
             "place": get("place"),
             "from": get("from"),
             "verify_path": get("verifyPath") or "/",
+            # appPaths: paths left to the app's own login while the rest is behind org.
+            "app_paths": app_paths_tool.app_paths(card_yml, block.split("\n", 1)[0].strip()),
             # setup: the app is published on behind while its own setup runs, then switched.
             "setup_behind": unquote(get("behind")),
             "setup_done": unquote(get("done")),
@@ -381,6 +390,18 @@ def https_get(ip: str, host: str, path: str = "/") -> tuple[int, str]:
     return int(head[0].split()[1]), location
 
 
+def local_status(port: int, path: str) -> int | None:
+    """The status the app on this machine gives for path, without following redirects, or None
+    when nothing answers on 127.0.0.1:port."""
+    import http.client
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        c.request("GET", path)
+        return c.getresponse().status
+    except OSError:
+        return None
+
+
 def verify(app: dict, host: str) -> tuple[str, str]:
     ip = authoritative_ip(host)
     if not ip:
@@ -399,6 +420,22 @@ def verify(app: dict, host: str) -> tuple[str, str]:
     mode = app["auth"][0]
     if mode == "org":
         ok = code in (301, 302, 303, 307) and "application-access" in location
+        # Each of appPaths must reach the app itself (its answer, whatever it is), not Edgible's
+        # sign-in. A path ending in * is asked for one path below it.
+        if ok and app.get("app_paths"):
+            reached = []
+            for p in (p for item in app["app_paths"] for p in item["paths"]):
+                probe = p[:-1] + "card-kit-probe" if p.endswith("*") else p
+                c, loc = https_get(ip, host, probe)
+                if c in (301, 302, 303, 307) and "application-access" in loc:
+                    return "fail", f"{probe} went to Edgible's sign-in, not the app ({c})"
+                # The same path asked of the app on the machine must answer the same, so the answer
+                # is the app's and not Edgible's. Skipped when the app has no local port to ask.
+                own = local_status(app["port"], probe)
+                if own is not None and own != c:
+                    return "fail", f"{probe} answered {c} through Edgible but {own} from the app itself"
+                reached.append(f"{probe} {c}" + ("" if own is None else " (same as the app)"))
+            return "pass", f"{code} {location.split('?')[0][:60]}; app paths reach the app: {', '.join(reached)}"
     elif mode == "api-key":
         ok = code == 401
     else:
@@ -846,6 +883,9 @@ def main(argv: list[str]) -> int:
                     published.append((app, name))
                 raise
             published.append((app, name))
+            if app["app_paths"] and "org" in app["auth"]:
+                out = sh(f"python3 {APP_PATHS} {card} {app['name']} --name {name}", timeout=900).stdout.strip()
+                print("publish: app-paths.py", hide(out.splitlines()[-1] if out else ""))
         if not stack:
             steps["publish"] = "pass"
             print("publish: pass", [n for _, n in published])

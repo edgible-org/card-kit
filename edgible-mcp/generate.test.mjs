@@ -1,7 +1,7 @@
 // node --test generate.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { declarationFor, healthCheckFor, seconds } from './generate.mjs';
+import { declarationFor, healthCheckFor, pathPoliciesFor, seconds } from './generate.mjs';
 
 test('Compose durations become whole seconds', () => {
   assert.equal(seconds(undefined), 0);
@@ -30,4 +30,14 @@ test('the card version is the test.yml files fingerprint, without "sha256:"', as
   const d = declarationFor({ app: 'a', card: 'memos', organizationId: 'o', deviceId: 'd', port: 5230, auth: 'org', compose: 'services: {}', cardFiles: 'ac5e2364c27f7866' });
   assert.deepEqual(d.metadata.labels, { card: 'memos', by: 'edgible-mcp', 'card-files': 'ac5e2364c27f7866' });
   assert.equal(declarationFor({ app: 'a', card: 'memos', organizationId: 'o', deviceId: 'd', port: 1, auth: 'org', compose: '' }).metadata.labels['card-files'], undefined);
+});
+
+test('appPaths become app-native path policies behind Edgible sign-in only', () => {
+  const appPaths = [{ paths: ['/api/*', '/icons/*'], for: "the Bitwarden apps' vault calls" }];
+  const base = { app: 'a', card: 'vaultwarden', organizationId: 'o', deviceId: 'd', port: 8222, compose: 'services: {}', appPaths };
+  const org = declarationFor({ ...base, auth: 'org' }).spec.access[0].policies.auth;
+  assert.deepEqual(org, { modes: ['edgible-login'], pathPolicies: [{ paths: ['/api/*', '/icons/*'], modes: ['app-native'], justification: "the Bitwarden apps' vault calls" }] });
+  assert.deepEqual(declarationFor({ ...base, auth: 'none' }).spec.access[0].policies.auth, { modes: ['none'] });
+  assert.deepEqual(declarationFor({ ...base, auth: 'org', appPaths: undefined }).spec.access[0].policies.auth, { modes: ['edgible-login'] });
+  assert.deepEqual(pathPoliciesFor([], ['edgible-login']), []);
 });
