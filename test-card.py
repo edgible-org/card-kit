@@ -84,6 +84,11 @@ MEM_UNIT = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "kB": 1e3, "MB"
 # The domain of the hostnames Edgible generates for new apps (<app>.<org label>.<domain>).
 # It moved from edgible.com to edgible.app in October 2026; EDGIBLE_APP_DOMAIN overrides it.
 APP_DOMAIN = os.environ.get("EDGIBLE_APP_DOMAIN", "edgible.app")
+# App names whose hostname the gateway serves openly whatever the app's auth mode (seen on the test
+# org for immich, 2026-11-20: a new immich app on org answered 200, a new name on org 302). A test
+# publishes these as test-<name>, as it does a name already taken. Remove one once the platform
+# serves it right again.
+STALE_HOSTNAMES = {"immich"}
 
 def sh(cmd: str, check: bool = True, timeout: int = 1800) -> subprocess.CompletedProcess:
     p = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
@@ -736,11 +741,13 @@ def main(argv: list[str]) -> int:
             set_env(env_file, keys[0], str(port))
             notes.append(f"{app['name']}'s port {app['port']} is taken on the org's gateway, so it was tested on {port}.")
             app["port"] = port
-        names = {app["name"]: app["name"] if app["name"] not in existing else f"test-{app['name']}" for app in apps}
+        names = {app["name"]: app["name"] if app["name"] not in existing | STALE_HOSTNAMES else f"test-{app['name']}"
+                 for app in apps}
         for app_name, name in names.items():
             if name == app_name:
                 continue
-            notes.append(f"{app_name} is taken in the test org, so it was published as {name}.")
+            notes.append(f"{app_name} is taken in the test org, so it was published as {name}." if app_name in existing
+                         else f"the gateway serves {app_name}'s hostname openly, so it was published as {name}.")
             url_key = app_name.upper().replace("-", "_") + "_URL"
             if url_key in env_values(env_file) and not env_values(env_file)[url_key]:
                 set_env(env_file, url_key, f"https://{name}.{label}.{APP_DOMAIN}")
