@@ -36,6 +36,8 @@ jobs:
       IMAGE: ghcr.io/edgible-org/${{ matrix.name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Version
         id: v
@@ -50,9 +52,19 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # A change to what goes in the image, with a version that is already published, would never
+      # be published: card-kit #29 changed edgible-mcp's code, kept 0.8.23, and main pushed nothing.
+      # It fails the pull request (and main, so it is seen there too). Its README and tests don't count.
       - name: A changed image needs a new version
-        if: github.event_name == 'pull_request' && steps.v.outputs.published == 'true'
-        run: echo "::warning::$IMAGE:${{ steps.v.outputs.version }} is already published. Raise the version in package.json and server.mjs, or main will not publish this change."
+        if: github.event_name != 'workflow_dispatch' && steps.v.outputs.published == 'true'
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          changed=$(git diff --name-only "$BASE" HEAD -- '${{ matrix.name }}/' \
+            ':(exclude)${{ matrix.name }}/README.md' ':(exclude)${{ matrix.name }}/*.test.mjs')
+          [ -z "$changed" ] && { echo "no change to the image"; exit 0; }
+          echo "::error::$IMAGE:${{ steps.v.outputs.version }} is already published, and this changes the image (${changed//$'\n'/ }). Raise the version in package.json, package-lock.json and server.mjs, or main will not publish it."
+          exit 1
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
