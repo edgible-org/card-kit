@@ -4,7 +4,7 @@
 // and test-card, so every path deploys the same thing.
 //
 //   node generate.mjs <card directory> --device <name> [--app <name>] [--set KEY=VALUE ...]
-//                     [--key NAME=<secret>:<key> ...] [--hostname <own domain> ...] [--storage auto|platform|volumes] [--out <dir>]
+//                     [--key NAME=<secret>:<key> ...] [--hostname <own domain> ...] [--out <dir>]
 //
 // The inputs are the card (its Compose file and card.yml), card.env with --set choices, and what
 // the signed-in Edgible CLI knows: the organisation and the device's id. It writes
@@ -13,6 +13,9 @@
 // `edgible stack deploy -f <out>/edgible.yml`. The file holds no secret values: passwords are made
 // on the device by card-secrets, and keys are references to Edgible organisation secrets.
 // This version handles cards that publish one app, on one machine.
+// A card's data stays in Compose named volumes. Edgible's platform storage (spec.storage, which
+// snapshot, restore and `app move --storage` use) takes over once the platform gives it what a
+// named volume has and carries an app's entries in one move: platform findings 70, 71 and 75.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
@@ -79,68 +82,9 @@ const literal = (text) => text.replaceAll('$', '$$$$');
 export const DECLARED_AUTH = { org: 'edgible-login' };
 
 const keyMark = (name) => `__edgible_key_${name}__`;
+const duringMark = (name) => `__edgible_during_${name}__`;
 
-// ---------- Platform storage ----------
-// A card keeps its data in Compose named volumes. On a device that can, each becomes Edgible
-// storage (spec.storage, persistent and movable), so the platform can snapshot it, restore it and
-// carry it in `edgible app move --storage`. The agent gives the workload its folder as
-// ${EDGIBLE_STORAGE_<NAME>}. That folder starts empty and owned by root, where a named volume gets
-// the image's files and their owner at the mount path, so a one-shot service, run from the app's
-// own image as root, does that first (platform findings 70). On macOS even that is refused
-// (findings 71), so Mac devices keep named volumes.
-export const storageEnv = (name) => `EDGIBLE_STORAGE_${name.toUpperCase().replace(/-/g, '_')}`;
-const storageName = (vol) => vol.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/--+/g, '-').slice(0, 63);
-
-// Whether a device can hold platform storage: every OS but macOS, from `edgible device get`.
-export function platformStorageOn(os = '') {
-  return !/mac\s*os|darwin|os x/i.test(os);
-}
-
-// "10 GB" from card.yml places to a declaration size, "10Gi".
-export function declaredSize(disk) {
-  const m = String(disk || '').match(/([0-9.]+)\s*([KMGT])?B?/i);
-  return m ? `${Math.max(1, Math.ceil(Number(m[1])))}${(m[2] || 'G').toUpperCase()}i` : '1Gi';
-}
-
-// Rewrite a resolved Compose file in place: its named volumes become one platform storage entry,
-// "data", with a folder for each volume, because `edgible app move` carries one storage entry per
-// move (MOVE_WOULD_LOSE_DATA) and a card has its data and its passwords in at least two. One entry
-// also makes one snapshot hold all of it. Returns the storage list for the declaration.
-export const STORAGE_NAME = 'data';
-export function toPlatformStorage(out, size) {
-  const named = Object.keys(out.volumes || {});
-  const root = `\${${storageEnv(STORAGE_NAME)}}`;
-  let mountPath = '';
-  for (const vol of named) {
-    const folder = storageName(vol);
-    const source = `${root}/${folder}`;
-    const init = `${folder}-init`;
-    let first = null;
-    for (const [svcName, svc] of Object.entries(out.services || {})) {
-      for (const [i, v] of (svc.volumes || []).entries()) {
-        if (v.type !== 'volume' || v.source !== vol) continue;
-        svc.volumes[i] = { type: 'bind', source, target: v.target, ...(v.read_only ? { read_only: true } : {}), bind: { create_host_path: true } };
-        // The init takes the image and path of a service that writes to it, such as card-secrets.
-        if (!first || (first.readOnly && !v.read_only)) first = { svcName, svc, target: v.target, readOnly: !!v.read_only };
-        svc.depends_on = { ...(svc.depends_on || {}), [init]: { condition: 'service_completed_successfully', required: true } };
-      }
-    }
-    delete out.volumes[vol];
-    if (!first) continue;
-    const t = first.target;
-    mountPath ||= t;
-    out.services[init] = {
-      image: first.svc.image, user: '0:0', restart: 'no',
-      entrypoint: ['sh', '-c', `if [ -d '${t}' ]; then [ -n "$$(ls -A /edgible-storage)" ] || cp -a '${t}/.' /edgible-storage/; chown "$$(stat -c %u:%g '${t}')" /edgible-storage; fi`],
-      command: [],
-      volumes: [{ type: 'bind', source, target: '/edgible-storage', bind: { create_host_path: true } }],
-    };
-  }
-  if (out.volumes && !Object.keys(out.volumes).length) delete out.volumes;
-  return mountPath ? [{ name: STORAGE_NAME, mountPath, size }] : [];
-}
-
-export async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [], user = '', published = '', storage: useStorage = false }) {
+export async function selfContained({ dir, card }, { app, device, choices, seeds = [], port, keys = [], user = '', published = '' }) {
   const composeFiles = ['docker-compose.yml', 'compose.yml', 'compose.yaml', 'docker-compose.yaml'].filter((f) => existsSync(path.join(dir, f)));
   if (composeFiles.length !== 1) return refused(`this first version handles cards with one Compose file; ${card.metadata.name} has ${composeFiles.length}`);
   const envText = await readFile(path.join(dir, 'card.env'), 'utf8').catch(() => '');
@@ -150,6 +94,16 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
   if (secretKeys.length) return refused(`${card.metadata.name} has secrets (${secretKeys.join(', ')}). This first version only deploys cards without secrets, so no password ever sits in a Compose file; secrets need Edgible's organisation secrets, which come next.`);
   const changes = { ...choices };
   for (const name of keys) changes[name] = keyMark(name);
+  // setup.during: values the app runs with until its own setup is done, such as sign-up on. They
+  // become the app's Edgible environment, and the Compose file reads them as ${NAME:-<card.env's
+  // value>}, so \`edgible app update --unset-env NAME\` puts card.env's value back in one release.
+  const during = Object.assign({}, ...(card.applications || []).filter((a) => a.published !== false).map((a) => a.setup?.during || {}));
+  const finals = {};
+  for (const name of Object.keys(during)) {
+    if (!(name in values)) return refused(`setup.during sets ${name}, which card.env does not have`);
+    finals[name] = name in choices ? choices[name] : values[name];
+    changes[name] = duringMark(name);
+  }
   if ('DEVICE' in values) changes.DEVICE = device;
   // Who may sign in: a card that names Edgible accounts, such as openclaw's OPENCLAW_USERS, is
   // locked to the person deploying it unless the choices say otherwise, never left open to its
@@ -221,9 +175,10 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
   // `docker compose config` already writes every literal "$" as "$$", ready for Compose to read again.
   let out = resolved;
   let secretsVolume = '';
-  const place = Object.values(card.places || {})[0];
-  const storage = useStorage ? toPlatformStorage(out, declaredSize(place?.disk)) : [];
   for (const name of keys) out = JSON.parse(JSON.stringify(out).replaceAll(keyMark(name), `\${${name}}`));
+  for (const [name, value] of Object.entries(finals)) {
+    out = JSON.parse(JSON.stringify(out).replaceAll(duringMark(name), `\${${name}:-${String(value).replaceAll('$', '$$$$')}}`));
+  }
   if (seeds.length) {
     // The service that makes the card's secrets takes each seed from Edgible, by ${NAME}. Edgible's
     // agent can start an app once before it has the secret's value; :? makes that start fail, so
@@ -234,11 +189,8 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
     for (const name of seeds) maker.environment[name] = `\${${name}:?the first-use value from Edgible}`;
     const vol = (maker.volumes || []).find((v) => (typeof v === 'string' ? v.split(':')[1] : v.target) === '/run/card-secrets');
     const source = vol && (typeof vol === 'string' ? vol.split(':')[0] : vol.source);
-    // Compose names a project's volumes <project>_<volume>, and the project is the app. With
-    // platform storage there is no volume: the passwords are read from the maker's container.
+    // Compose names a project's volumes <project>_<volume>, and the project is the app.
     if (source) secretsVolume = `${app}_${source}`;
-    const makerName = Object.entries(out.services || {}).find(([, s]) => s === maker)?.[0];
-    if (storage.length && makerName) secretsVolume = { from: `${app}-${makerName}-1` };
   }
   // The host port Edgible forwards to: the one the card's app port is published on.
   // card.yml's port is the host port, the <APP>_PORT line in card.env, which the choices may move.
@@ -249,7 +201,7 @@ export async function selfContained({ dir, card }, { app, device, choices, seeds
     .map((p) => String(p).match(/(?:^|:)(\d+):(\d+)(?:\/tcp)?$/)).filter(Boolean);
   const hostPort = mapped.find((m) => Number(m[1]) === wantHost) || mapped.find((m) => Number(m[2]) === Number(port));
   if (!hostPort) return refused(`${card.metadata.name}'s Compose file does not publish its app port ${port}`);
-  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume, storage };
+  return { status: 'ok', compose: YAML.stringify(out, { lineWidth: 0 }), port: Number(hostPort[1]), secretsVolume, during };
 }
 
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
@@ -271,7 +223,7 @@ export function deployAuth(application) {
 // The Application declaration for one published app of a card on one device. hostnames are the
 // person's own domains; the generated hostname is always there. envFrom names organisation
 // secrets by reference, never their values.
-export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], storage = [], by = 'edgible-mcp' }) {
+export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, by = 'edgible-mcp' }) {
   const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
     type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
     policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
@@ -283,8 +235,7 @@ export function declarationFor({ app, card, organizationId, deviceId, port, auth
       placement: { strategy: 'serving-device', deviceSelector: { deviceId }, migrationPolicy: 'manual' },
       workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: port, protocol: 'tcp' }],
         composeFile: `base64:${Buffer.from(compose).toString('base64')}`, ...(envFrom.length ? { envFrom } : {}),
-        ...(storage.length ? { storage: storage.map((s) => ({ name: s.name, mountPath: s.mountPath })) } : {}) }],
-      ...(storage.length ? { storage: storage.map((s) => ({ name: s.name, type: 'persistent', size: s.size, mobility: 'movable' })) } : {}),
+        ...(Object.keys(env).length ? { env } : {}) }],
       access,
     },
   };
@@ -306,10 +257,6 @@ function parseArgs(argv) {
     else if (a === '--app') o.app = v();
     else if (a === '--out') o.out = v();
     else if (a === '--hostname') o.hostnames.push(v());
-    else if (a === '--storage') {
-      o.storage = v();
-      if (!['auto', 'platform', 'volumes'].includes(o.storage)) throw new Error('--storage takes auto, platform or volumes');
-    }
     else if (a === '--set' || a === '--key') {
       const pair = v(), at = pair.indexOf('=');
       if (at < 1) throw new Error(`${a} takes NAME=value`);
@@ -320,7 +267,7 @@ function parseArgs(argv) {
     else if (!o.dir) o.dir = a;
     else throw new Error(`one card directory, not ${a}`);
   }
-  if (!o.dir || !o.device) throw new Error('usage: node generate.mjs <card directory> --device <name> [--app <name>] [--set KEY=VALUE] [--key NAME=<secret>:<key>] [--hostname <domain>] [--storage auto|platform|volumes] [--out <dir>]');
+  if (!o.dir || !o.device) throw new Error('usage: node generate.mjs <card directory> --device <name> [--app <name>] [--set KEY=VALUE] [--key NAME=<secret>:<key>] [--hostname <domain>] [--out <dir>]');
   return o;
 }
 
@@ -340,24 +287,22 @@ async function main(argv) {
   const found = devices.filter((d) => d.name === o.device || d.id === o.device);
   if (found.length !== 1) throw new Error(`need exactly one device named ${o.device} (found ${found.length})`);
   const { auth } = deployAuth(published[0]);
-  // Platform storage where the device can hold it (auto), unless asked otherwise.
-  const os = (await edgibleJson(['-o', 'json', 'device', 'get', '--device', found[0].id]).catch(() => ({}))).hardware?.os || '';
-  const useStorage = o.storage === 'platform' || (o.storage !== 'volumes' && platformStorageOn(os));
   // The generator writes the choices into card.env, so it works on a copy and leaves the card as it is.
   const work = await mkdtemp(path.join(tmpdir(), 'edgible-generate-'));
   try {
     await cp(dir, work, { recursive: true });
     const built = await selfContained({ dir: work, card }, { app, device: found[0].name, choices: o.set, port: published[0].port,
-      keys: Object.keys(o.keys), user: me.account || '', published: published[0].name, storage: useStorage });
+      keys: Object.keys(o.keys), user: me.account || '', published: published[0].name });
     if (built.status !== 'ok') throw new Error(built.reason);
     const envFrom = Object.entries(o.keys).map(([n, secretRef]) => ({ name: n, secretRef }));
     const compose = `# ${name} card as one self-contained file, made by generate.mjs. Do not edit by hand: change card.env and generate again.\n${built.compose}`;
     const declaration = declarationFor({ app, card: name, organizationId: me.organization.id, deviceId: found[0].id, port: built.port, auth,
-      hostnames: o.hostnames, compose, envFrom, storage: built.storage, by: 'generate.mjs' });
+      hostnames: o.hostnames, compose, envFrom, env: built.during, by: 'generate.mjs' });
     const out = path.resolve(o.out || dir);
     await writeFile(path.join(out, 'docker-compose.generated.yml'), compose);
     await writeFile(path.join(out, 'edgible.yml'), `# ${app}: the ${name} card on ${found[0].name}, made by generate.mjs. Regenerate rather than edit.\n${YAML.stringify(declaration, { lineWidth: 0 })}`);
-    console.log(`wrote ${path.join(out, 'edgible.yml')}: ${app} on ${found[0].name}, auth ${auth}, ${built.storage.length ? `platform storage ${built.storage.map((s) => s.name).join(', ')}` : 'Compose volumes'}. Deploy with: edgible stack deploy -f ${path.join(out, 'edgible.yml')}`);
+    const duringKeys = Object.keys(built.during);
+    console.log(`wrote ${path.join(out, 'edgible.yml')}: ${app} on ${found[0].name}, auth ${auth}${duringKeys.length ? `, until setup is done ${duringKeys.map((k) => `${k}=${built.during[k]}`).join(' ')}` : ''}. Deploy with: edgible stack deploy -f ${path.join(out, 'edgible.yml')}`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }
