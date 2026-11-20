@@ -115,14 +115,13 @@ def flow_map(value: str) -> dict[str, str]:
 
 def release_applied(name: str) -> bool:
     """Whether every device runs the app's current release, after an `edgible app update`."""
-    r = subprocess.run(["edgible", "-o", "json", "app", "get", name], capture_output=True, text=True)
+    r = subprocess.run(["edgible", "-o", "json", "app", "rollout", "status", name], capture_output=True, text=True)
     try:
-        app = json.loads(r.stdout)
+        rollout = json.loads(r.stdout)
     except ValueError:
         return False
-    current = app.get("currentReleaseVersion")
-    applied = re.findall(r'"appliedReleaseVersion":\s*(\d+)', r.stdout)
-    return bool(current) and bool(applied) and all(int(v) == current for v in applied)
+    devices = rollout.get("devices") or []
+    return bool(devices) and all(d.get("converged") for d in devices) and not (rollout.get("summary") or {}).get("pending")
 
 
 def read_apps(card_yml: Path) -> list[dict]:
