@@ -19,16 +19,18 @@ project=$($C config --format json | python3 -c 'import json, sys; print(json.loa
 
 ### What is running
 
-With the tools, `whats_running`: every device and app, each hostname checked against its auth mode. Answer from it, naming each app's device, address and auth mode. For apps run from a folder, the commands below also find the folder.
+With the tools, `whats_running`: every device and app, each hostname checked against its auth mode, and the card each app came from. Answer from it, naming each app's device, address and auth mode. `whats_running` with `card` lists only the apps made from that card, such as every app a pattern published; by hand, `edgible app list --tag card=<card>`. When it says a newer tested version of an app's card is in the catalog, offer to [Upgrade](#upgrade). For apps run from a folder, the commands below also find the folder.
 
 ```bash
 docker compose ls --all    # each Compose project, with the path of its Compose file
 edgible app list           # each published app: name, port, device, status
 ```
 
-The path `docker compose ls` prints leads to the card's directory, and `metadata.name` in its `card.yml` names the card. An Edgible app on the same device with the port that the card's `card.env` sets (`<APP>_PORT`) is that card's app. Once apps carry tags, `--tag card=` says so directly. A project named `cardtest-*` is left over from an interrupted `test-card` run, not a deployment. Tell the person, and remove it only if they agree.
+The path `docker compose ls` prints leads to the card's directory, and `metadata.name` in its `card.yml` names the card. An app's `card` tag names its card. An app published before the tags, or without them, has none: the Edgible app on the same device with the port that the card's `card.env` sets (`<APP>_PORT`) is that card's app. Tag it then, so the next look finds it at once: `edgible app update <app> --tag card=<card>`, or `apply_application_change` with `{"metadata":{"labels":{"card":"<card>"}}}`. A project named `cardtest-*` is left over from an interrupted `test-card` run, not a deployment. Tell the person, and remove it only if they agree.
 
 Answer with a short table: each card, its directory, its apps with hostname and auth mode, and whether each is up.
+
+**The person's own groups.** When they group apps in their own words ("the club's apps", "everything at the office"), offer a tag of theirs, such as `group=tennis-club` or `place=office`: `edgible app update <app> --tag place=office` for each app (or `apply_application_change` with `metadata.labels`), then `edgible app list --tag place=office` answers "what's running at the office?" across devices. A tag only names an app: it changes nothing about how it runs. Names and values are letters, digits, `.`, `_` and `-`. Leave `card`, `card-files` and `by` to the deploy.
 
 Then show the picture, without asking: `python3 ~/.card-kit/status-page.py` (from the card-kit folder this skill is in) writes a page of every app with a green or red dot, its address, device and who can reach it, and the devices online, and opens it in the browser. It changes nothing, and needs the network (outside your tool's sandbox). End your answer with its `file://` address, from the last line it prints, as a link. In an AI app with a browser panel of its own (the Codex app, where a clicked link opens beside the chat), run it with `--no-open` and give the link only. With Edgible's MCP tools in an app that shows MCP Apps, whats_running shows the same panel in the chat, so skip this there.
 
@@ -129,7 +131,7 @@ Then run [Is it working](#is-it-working).
 
 ### Upgrade
 
-1. **See what changed.** Fetch the card from upstream `main` into a new directory, and compare it with `$dir`. Its Fetch step replaces `card.env`, so never fetch over `$dir` itself.
+1. **See what changed.** An app's `card-files` tag is the version of its card it was deployed from, the `files:` line of the card's `test.yml` then, without `sha256:`. When it matches the catalog's `test.yml`, there is no newer tested version. Fetch the card from upstream `main` into a new directory, and compare it with `$dir`. Its Fetch step replaces `card.env`, so never fetch over `$dir` itself.
 
    ```bash
    new=$(mktemp -d)

@@ -228,6 +228,13 @@ export function healthCheckFor(startPeriod = 0) {
     startupGraceSeconds: Math.max(60, startPeriod) };
 }
 
+// The version of a card an app came from: the files fingerprint test-card wrote in its test.yml
+// (files: sha256:<hex>), as the hex alone, since Edgible's label values allow no ":". Kept as the
+// app's card-files tag, so an app can be matched to a newer version of its card. "" without one.
+export function cardFilesOf(testYml = '') {
+  return (String(testYml).match(/^files:\s*sha256:([0-9a-f]{8,63})\s*$/m) || [])[1] || '';
+}
+
 // The auth mode an app is published on, and the one it goes to after. An app with setup: in
 // card.yml waits behind setup.behind (org) while the person finishes its own setup, such as an
 // install wizard, then is switched to its authModes with their yes. A public app (none) without
@@ -247,14 +254,14 @@ export function deployAuth(application) {
 // The Application declaration for one published app of a card on one device. hostnames are the
 // person's own domains; the generated hostname is always there. envFrom names organisation
 // secrets by reference, never their values.
-export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, startPeriod = 0, by = 'edgible-mcp' }) {
+export function declarationFor({ app, card, organizationId, deviceId, port, auth, hostnames = [], compose, envFrom = [], env = {}, startPeriod = 0, cardFiles = '', by = 'edgible-mcp' }) {
   const access = (hostnames.length ? hostnames : [null]).map((custom, i) => ({
     type: 'https', name: i ? `main-${i + 1}` : 'main', target: { workload: 'main', port: 'main' }, publish: true,
     policies: { auth: { modes: auth.split(',').map((m) => DECLARED_AUTH[m] || m) } }, hostname: custom ? { generated: true, custom } : { generated: true },
   }));
   return {
     apiVersion: 'v3', kind: 'Application',
-    metadata: { name: app, organization: organizationId, description: `The ${card} card, deployed by ${by}`, labels: { card, by } },
+    metadata: { name: app, organization: organizationId, description: `The ${card} card, deployed by ${by}`, labels: { card, by, ...(cardFiles ? { 'card-files': cardFiles } : {}) } },
     spec: {
       placement: { strategy: 'serving-device', deviceSelector: { deviceId }, migrationPolicy: 'manual' },
       workloads: [{ name: 'main', type: 'compose', ports: [{ name: 'main', containerPort: port, protocol: 'tcp' }],
@@ -322,7 +329,7 @@ async function main(argv) {
     const envFrom = Object.entries(o.keys).map(([n, secretRef]) => ({ name: n, secretRef }));
     const compose = `# ${name} card as one self-contained file, made by generate.mjs. Do not edit by hand: change card.env and generate again.\n${built.compose}`;
     const declaration = declarationFor({ app, card: name, organizationId: me.organization.id, deviceId: found[0].id, port: built.port, auth,
-      hostnames: o.hostnames, compose, envFrom, env: built.during, startPeriod: built.startPeriod, by: 'generate.mjs' });
+      hostnames: o.hostnames, compose, envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(await readFile(path.join(dir, 'test.yml'), 'utf8').catch(() => '')), by: 'generate.mjs' });
     const out = path.resolve(o.out || dir);
     await writeFile(path.join(out, 'docker-compose.generated.yml'), compose);
     await writeFile(path.join(out, 'edgible.yml'), `# ${app}: the ${name} card on ${found[0].name}, made by generate.mjs. Regenerate rather than edit.\n${YAML.stringify(declaration, { lineWidth: 0 })}`);

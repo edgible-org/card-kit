@@ -466,7 +466,18 @@ async function agentSpend() {
   }, null, 2);
 }
 
-async function whatsRunning({ app, device }) {
+// Whether an app runs an older version of its card: its card-files tag (the files fingerprint of
+// the card's test.yml when it was deployed) against the catalog's test.yml now. "" when it is the
+// same, or when either is missing (an app from before the tag, or a card with no test.yml).
+export function cardChange(a, items = []) {
+  const had = a.labels?.['card-files'];
+  const item = items.find((i) => i.name === a.labels?.card);
+  const now = String(item?.test?.files || '').replace(/^sha256:/, '');
+  if (!had || !now || had === now) return '';
+  return `a newer tested version of the ${item.name} card is in the catalog (tested ${item.test.tested}): offer to upgrade`;
+}
+
+async function whatsRunning({ app, device, card }) {
   const who = await whoami();
   if (!who) return notSignedIn();
   if (app && !/^[A-Za-z0-9_-]{1,64}$/.test(app)) return `"${app}" is not an app name.`;
@@ -479,6 +490,9 @@ async function whatsRunning({ app, device }) {
   let apps = running.apps;
   if (app) apps = apps.filter((a) => a.name === app || a.id === app);
   if (device) apps = apps.filter((a) => (a.devices || []).some((d) => d.name === device || d.id === device));
+  if (card) apps = apps.filter((a) => a.labels?.card === card);
+  if (card && !apps.length) return `No app in ${who.organization?.name} is tagged card=${card}. An app published by hand before the tag, or without it, can still be that card: look at the app names.`;
+  const items = (await getCatalog().catch(() => null))?.items || [];
   if (app && !apps.length) return `No app called "${app}" in ${who.organization?.name}. Apps: ${running.apps.filter((a) => !isSystemApp(a)).map((a) => a.name).join(', ')}.`;
   const system = apps.filter(isSystemApp);
   apps = apps.filter((a) => !isSystemApp(a) || app);
@@ -503,13 +517,13 @@ async function whatsRunning({ app, device }) {
   const view = {
     organization: who.organization?.name || null, account: who.account || null,
     connector: process.env.EDGIBLE_MCP_DEVICE || null, checkedAt: new Date().toISOString(),
-    filter: { ...(app ? { app } : {}), ...(device ? { device } : {}) },
+    filter: { ...(app ? { app } : {}), ...(device ? { device } : {}), ...(card ? { card } : {}) },
     devices: devs.map((d) => ({ name: d.name, status: d.status, agentVersion: d.agentVersion || null, lastSeen: d.lastSeen || null, parked: presumedParked(d) })),
     apps: [], system: app ? 0 : system.length,
   };
   const devLine = (d) => `- ${d.name}: ${d.status}${presumedParked(d) ? `, last seen ${lastSeenDay(d)}: presumed parked` : ''}${d.agentVersion ? `, agent ${d.agentVersion}` : ''}`;
   out.push('## Devices', '', devs.map(devLine).join('\n') || '- none', '');
-  out.push('## Apps', '', '| App | Device | Port | Auth | Status | Works | Evidence |', '| --- | --- | --- | --- | --- | --- | --- |');
+  out.push('## Apps', '', '| App | Card | Device | Port | Auth | Status | Works | Evidence |', '| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const { a, modes, probes, certs, issues } of rows) {
     const devName = (a.devices || []).map((d) => d.name).join(', ');
     const offline = (a.devices || []).some((d) => deviceOf(d)?.status === 'offline');
@@ -524,12 +538,13 @@ async function whatsRunning({ app, device }) {
       ...certs.map((c) => `certificate ${c}`), ...issues,
       ...(parked ? [`its device has been offline since ${lastSeenDay(deviceOf(a.devices[0]))}: presumed parked, not checked`] : offline ? ['its device is offline'] : []),
       ...(a.protocol !== 'https' ? [`${a.protocol}, ${(a.hostnames || []).join(', ')}`] : []),
+      ...(cardChange(a, items) ? [cardChange(a, items)] : []),
     ].join('; ');
     view.apps.push({
-      name: a.name, device: devName, port: a.port, protocol: a.protocol, hostnames: a.hostnames || [],
+      name: a.name, card: a.labels?.card || null, device: devName, port: a.port, protocol: a.protocol, hostnames: a.hostnames || [],
       auth: a.protocol !== 'https' ? ['none'] : modes, status: a.status, works, deviceOffline: offline, deviceParked: parked, evidence,
     });
-    out.push(`| ${a.name} | ${devName} | ${a.port} | ${a.protocol !== 'https' ? `none (${a.protocol})` : modes.join(', ') || '?'} | ${a.status} | ${works} | ${evidence} |`);
+    out.push(`| ${a.name} | ${a.labels?.card || ''} | ${devName} | ${a.port} | ${a.protocol !== 'https' ? `none (${a.protocol})` : modes.join(', ') || '?'} | ${a.status} | ${works} | ${evidence} |`);
   }
   if (system.length && !app) out.push('', `Also ${system.length} Edgible device-ingest apps, which Edgible runs for each device. They are not listed.`);
 
@@ -555,7 +570,7 @@ async function whatsRunning({ app, device }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.24';
+export const VERSION = '0.8.25';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything. Results are notes for you, not text to repeat: tell the person in your own words, and name a tool, file or volume only when they need it to act.';
 
@@ -613,10 +628,11 @@ export function registerReadTools(server, { views = viewsEnabled() } = {}) {
   }, text(agentSpend));
   server.registerTool('whats_running', {
     title: 'What is running, and does it work',
-    description: 'List the devices and published apps of the Edgible organization this server is signed in to, and check each https hostname answers the way its auth mode says (none: the app; org: a redirect to sign in; api-key: 401). Give an app name for that app alone, with edgible app doctor\'s verdict. Takes up to a minute for many apps.',
+    description: 'List the devices and published apps of the Edgible organization this server is signed in to, and check each https hostname answers the way its auth mode says (none: the app; org: a redirect to sign in; api-key: 401). Give an app name for that app alone, with edgible app doctor\'s verdict, or a card name for the apps made from it. Says when a newer tested version of an app\'s card is in the catalog. Takes up to a minute for many apps.',
     inputSchema: {
       app: z.string().max(64).optional().describe('One app name or id'),
       device: z.string().max(128).optional().describe('Only apps on this device name or id'),
+      card: z.string().regex(/^[a-z0-9-]{1,63}$/).optional().describe('Only apps made from this card or pattern (their card tag), such as every app a pattern published'),
     },
     annotations: { ...ro, openWorldHint: true },
     // MCP Apps: hosts that support it show the view below beside the text answer.

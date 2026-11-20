@@ -21,3 +21,13 @@ test('every declaration carries the check', () => {
   const d = declarationFor({ app: 'a', card: 'memos', organizationId: 'o', deviceId: 'd', port: 5230, auth: 'org', compose: 'services: {}', startPeriod: 90 });
   assert.deepEqual(d.spec.workloads[0].healthChecks, [healthCheckFor(90)]);
 });
+
+test('the card version is the test.yml files fingerprint, without "sha256:"', async () => {
+  const { cardFilesOf } = await import('./generate.mjs');
+  assert.equal(cardFilesOf('tested: 2026-11-20\nfiles: sha256:3b182ed31ee4510a\n'), '3b182ed31ee4510a');
+  assert.equal(cardFilesOf(''), '');
+  assert.equal(cardFilesOf('files: something-else\n'), '');
+  const d = declarationFor({ app: 'a', card: 'memos', organizationId: 'o', deviceId: 'd', port: 5230, auth: 'org', compose: 'services: {}', cardFiles: 'ac5e2364c27f7866' });
+  assert.deepEqual(d.metadata.labels, { card: 'memos', by: 'edgible-mcp', 'card-files': 'ac5e2364c27f7866' });
+  assert.equal(declarationFor({ app: 'a', card: 'memos', organizationId: 'o', deviceId: 'd', port: 1, auth: 'org', compose: '' }).metadata.labels['card-files'], undefined);
+});
