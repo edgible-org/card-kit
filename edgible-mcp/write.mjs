@@ -17,7 +17,7 @@
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
 import { VERSION } from './server.mjs';
-import { CARD_SECRETS_IMAGE, declarationFor, deployAuth, selfContained } from './generate.mjs';
+import { CARD_SECRETS_IMAGE, cardFilesOf, declarationFor, deployAuth, selfContained } from './generate.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -195,7 +195,8 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
       return refused(`${card} is deprecated, so it is not set up anew${meta.metadata.reason ? `: ${meta.metadata.reason}` : ''}${meta.metadata['replaced-by'] ? ` Use ${meta.metadata['replaced-by']} instead.` : ''}`);
     }
     // What the first start downloads, from the images test-card measured, to tell the person before they wait.
-    const download = imageDownload(await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => ''));
+    const testYml = await readFile(path.join(fetched.dir, 'test.yml'), 'utf8').catch(() => '');
+    const download = imageDownload(testYml);
     // An app card, or a pattern card that publishes one app from one machine, such as edgible-agent.
     const published = (meta.applications || []).filter((a) => a.published !== false);
     if (published.length !== 1) return refused(`${card} publishes ${published.length} apps; this version handles cards that publish one`);
@@ -298,7 +299,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
     const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
-      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, by: 'edgible-mcp' });
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(testYml), by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
