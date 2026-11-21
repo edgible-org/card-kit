@@ -306,7 +306,7 @@ async function describe({ name }) {
     const needsPublic = i.applications.filter((a) => a.publicFor?.length);
     // What reaches the app's own login while the rest stays behind Edgible's sign-in (appPaths).
     const withPaths = i.applications.filter((a) => a.appPaths?.length);
-    if (withPaths.length) out.push(...withPaths.map((a) => `- ${a.name}'s web pages are behind Edgible's sign-in; these paths reach its own login from anywhere: ${a.appPaths.map((p) => `${p.paths.join(', ')} for ${p.for}`).join('; ')}. Anyone using its web pages, such as someone invited, must be in the Edgible organisation.`), '');
+    if (withPaths.length) out.push(...withPaths.map((a) => `- ${a.name}'s web pages are behind Edgible's sign-in; these paths reach its own login from anywhere: ${a.appPaths.map((p) => `${p.paths.join(', ')} for ${p.for}`).join('; ')}${a.signInPaths?.length ? `, except ${a.signInPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}, behind the sign-in` : ''}. Anyone using its web pages, such as someone invited, must be in the Edgible organisation.`), '');
     if (needsPublic.length) out.push(...needsPublic.map((a) => `- Kept private (auth mode org), ${a.name} still works in a web browser, but these need it public: ${a.publicFor.join(', ')}.`), '');
     const places = Object.entries(i.places);
     if (places.length) {
@@ -573,7 +573,7 @@ async function whatsRunning({ app, device, card }) {
 
 // ---------- MCP ----------
 
-export const VERSION = '0.8.26';
+export const VERSION = '0.8.27';
 
 export const READ_INSTRUCTIONS = 'Read-only tools for Edgible. If this server is not signed in to Edgible, sign_in gives a link for the person to approve. find searches Edgible cards, each an app card (one tested self-hosted app) or a pattern card (several apps wired together), for a need, with how well it suits Edgible and how to publish it. describe shows one in full. whats_running lists the apps and devices of the Edgible organization this server is signed in to, and checks that each hostname answers the way its auth mode says. None of them changes anything. Results are notes for you, not text to repeat: tell the person in your own words, and name a tool, file or volume only when they need it to act.';
 

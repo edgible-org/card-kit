@@ -41,3 +41,17 @@ test('appPaths become app-native path policies behind Edgible sign-in only', () 
   assert.deepEqual(declarationFor({ ...base, auth: 'org', appPaths: undefined }).spec.access[0].policies.auth, { modes: ['edgible-login'] });
   assert.deepEqual(pathPoliciesFor([], ['edgible-login']), []);
 });
+
+test('finish_setup sets path policies only on accesses behind Edgible sign-in', async () => {
+  const { withPathPolicies } = await import('./write.mjs');
+  const doc = { spec: { access: [{ policies: { auth: { modes: ['edgible-login'] } } }, { policies: { auth: { modes: ['none'] } } }] } };
+  withPathPolicies(doc, [{ paths: ['/api/*'], for: 'the apps' }]);
+  assert.deepEqual(doc.spec.access[0].policies.auth.pathPolicies, [{ paths: ['/api/*'], modes: ['app-native'], justification: 'the apps' }]);
+  assert.equal(doc.spec.access[1].policies.auth.pathPolicies, undefined);
+});
+
+test('signInPaths keep paths behind sign-in inside appPaths', () => {
+  assert.deepEqual(pathPoliciesFor([{ paths: ['/*'], for: 'the apps' }], ['edgible-login'], [{ paths: ['/web/*'], for: 'the web app' }]), [
+    { paths: ['/*'], modes: ['app-native'], justification: 'the apps' },
+    { paths: ['/web/*'], modes: ['edgible-login'], justification: 'the web app' }]);
+});

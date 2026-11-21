@@ -45,16 +45,16 @@ def unquote(s: str) -> str:
     return s
 
 
-def app_paths(card_yml: Path, app: str) -> list[dict]:
-    """appPaths of one application in card.yml, read without pyyaml: each item is
-    `- paths: [/a, /b/*]` and `for: text`, in either order."""
+def app_paths(card_yml: Path, app: str, key: str = "appPaths") -> list[dict]:
+    """appPaths (or signInPaths) of one application in card.yml, read without pyyaml: each item
+    is `- paths: [/a, /b/*]` and `for: text`, in either order."""
     text = card_yml.read_text()
     block = next((b for b in re.split(r"\n\s*- name: ", text.split("\nsecrets:")[0])[1:]
                   if b.split("\n", 1)[0].strip() == app), None)
     if block is None:
         sys.exit(f"{card_yml} has no application named {app}")
     lines = block.split("\n")
-    start = next((i for i, l in enumerate(lines) if re.match(r"^\s+appPaths:\s*$", l)), None)
+    start = next((i for i, l in enumerate(lines) if re.match(rf"^\s+{key}:\s*$", l)), None)
     if start is None:
         return []
     indent = len(lines[start]) - len(lines[start].lstrip())
@@ -72,12 +72,15 @@ def app_paths(card_yml: Path, app: str) -> list[dict]:
                           if key == "paths" else unquote(value))
     for item in items:
         if not item.get("paths") or not item.get("for"):
-            sys.exit(f"{card_yml}: each appPaths item needs paths and for")
+            sys.exit(f"{card_yml}: each {key} item needs paths and for")
     return items
 
 
-def policies(items: list[dict]) -> list[dict]:
-    return [{"paths": i["paths"], "modes": ["app-native"], "justification": i["for"]} for i in items]
+def policies(items: list[dict], sign_in: list[dict] | None = None) -> list[dict]:
+    """appPaths to the app's own login; signInPaths, inside them, kept behind Edgible's sign-in
+    (the more specific path wins)."""
+    return ([{"paths": i["paths"], "modes": ["app-native"], "justification": i["for"]} for i in items]
+            + [{"paths": i["paths"], "modes": ["edgible-login"], "justification": i["for"]} for i in sign_in or []])
 
 
 def with_policies(declaration: str, pp: list[dict]) -> tuple[str, int]:
@@ -124,10 +127,11 @@ def main(argv: list[str]) -> int:
     if not items:
         print(f"{args.app} has no appPaths in card.yml: nothing to do")
         return 0
-    pp = policies(items)
+    pp = policies(items, app_paths(args.card / "card.yml", args.app, "signInPaths"))
     name = args.name or args.app
     for p in pp:
-        print(f"{name}: {', '.join(p['paths'])} reach the app's own login ({p['justification']})")
+        where = "reach the app's own login" if p["modes"] == ["app-native"] else "stay behind Edgible's sign-in"
+        print(f"{name}: {', '.join(p['paths'])} {where} ({p['justification']})")
     if args.dry_run:
         return 0
     with tempfile.TemporaryDirectory(prefix="app-paths-") as tmp:
