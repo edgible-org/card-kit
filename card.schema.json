@@ -266,7 +266,7 @@
               }
             }
           },
-          "description": "Paths left to the app's own login while the rest of the app stays behind Edgible's sign-in (org): for clients that are not a web browser, such as phone apps and browser extensions, which cannot pass Edgible's sign-in. Edgible declares each as a path policy with auth mode app-native. Only with org in authModes; in place of publicFor, which publishes the whole app."
+          "description": "Paths left to the app's own login while the rest of the app stays behind Edgible's sign-in (org): for clients that are not a web browser, such as phone apps and browser extensions, which cannot pass Edgible's sign-in. Edgible declares each as a path policy with auth mode app-native. Only with org in authModes; in place of publicFor, which publishes the whole app. An app with setup: gets them once its setup is done, so its open sign-up is never reachable through them."
         },
         "setup": {
           "type": "object",

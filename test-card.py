@@ -883,7 +883,9 @@ def main(argv: list[str]) -> int:
                     published.append((app, name))
                 raise
             published.append((app, name))
-            if app["app_paths"] and "org" in app["auth"]:
+            # An app with setup: gets them once its setup is done (below), so its open sign-up
+            # is never reachable through them.
+            if app["app_paths"] and "org" in app["auth"] and not app["setup_behind"]:
                 out = sh(f"python3 {APP_PATHS} {card} {app['name']} --name {name}", timeout=900).stdout.strip()
                 print("publish: app-paths.py", hide(out.splitlines()[-1] if out else ""))
         if not stack:
@@ -927,10 +929,19 @@ def main(argv: list[str]) -> int:
             hosts = " ".join(f"HOSTNAME_{a['name'].upper().replace('-', '_')}={listing[n]['hostnames'][0]}"
                              for a, n in published)
             for app, name in setup_apps:
-                result, detail = wait_verify(dict(app, auth=[app["setup_behind"]]), listing[name]["hostnames"][0])
+                result, detail = wait_verify(dict(app, auth=[app["setup_behind"]], app_paths=[]), listing[name]["hostnames"][0])
                 print(f"setup {app['name']}: behind {app['setup_behind']}: {result} ({hide(detail)})")
                 if result != "pass":
                     raise RuntimeError(f"{app['name']} was not behind {app['setup_behind']} during setup")
+                # Its appPaths stay behind the sign-in too until setup is done: its sign-up is open now.
+                host = listing[name]["hostnames"][0]
+                for p in (p for item in app["app_paths"] for p in item["paths"]):
+                    probe = p[:-1] + "card-kit-probe" if p.endswith("*") else p
+                    c, loc = https_get(authoritative_ip(host), host, probe)
+                    if not (c in (301, 302, 303, 307) and "application-access" in loc):
+                        raise RuntimeError(f"{probe} reached {app['name']} during setup ({c}), before its sign-up closed")
+                if app["app_paths"]:
+                    print(f"setup {app['name']}: its app paths are behind the sign-in until setup is done")
             script = card / "test" / "setup.sh"
             if not script.is_file():
                 raise RuntimeError("an app has setup:, but the card has no test/setup.sh to do it in a test")
@@ -984,6 +995,11 @@ def main(argv: list[str]) -> int:
                 steps["setup"][app["name"]] = "pass"
                 print(f"setup {app['name']}: done, " + (f"switched to {','.join(app['auth'])}"
                       if app["auth"] != [app["setup_behind"]] else f"stays on {app['setup_behind']}"))
+            # appPaths open once setup is done, on both paths, as finish_setup and the README do.
+            for app, name in setup_apps:
+                if app["app_paths"] and "org" in app["auth"]:
+                    out = sh(f"python3 {APP_PATHS} {card} {app['name']} --name {name}", timeout=900).stdout.strip()
+                    print(f"setup {app['name']}: app-paths.py", hide(out.splitlines()[-1] if out else ""))
 
         for app, name in published:
             result, detail = wait_verify(app, listing[name]["hostnames"][0])

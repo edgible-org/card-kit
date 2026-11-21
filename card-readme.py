@@ -338,10 +338,11 @@ def main(argv: list[str]) -> int:
             f"  --device-id \"${id_of(a['place'])}\"")
 
     # appPaths: Publish puts the app on org, then app-paths.py leaves those paths to its own login.
+    # An app with setup: gets them in its Set up step instead, once its sign-up is closed.
     pathed = [a for a in apps if a.get("appPaths") and "org" in a["authModes"]]
-    if pathed:
-        creates.append("curl -fsSLo app-paths.py https://raw.githubusercontent.com/edgible-org/card-kit/main/app-paths.py\n"
-                       + "\n".join(f"python3 app-paths.py {name} {a['name']}" for a in pathed))
+    fetch_helper = "curl -fsSLo app-paths.py https://raw.githubusercontent.com/edgible-org/card-kit/main/app-paths.py\n"
+    if [a for a in pathed if not a.get("setup")]:
+        creates.append(fetch_helper + "\n".join(f"python3 app-paths.py {name} {a['name']}" for a in pathed if not a.get("setup")))
 
     verify = []
     for a in apps:
@@ -357,10 +358,10 @@ def main(argv: list[str]) -> int:
             check = f"curl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}\""
             if a in pathed:
                 first = a["appPaths"][0]["paths"][0]
-                probe = first[:-1] + "card-kit-probe" if first.endswith("*") else first
+                probe = first.rstrip("*")
                 check += f"\ncurl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}{probe}\""
                 note = ("The first prints `302` and an `edgible.com/application-access/` address, so the org sign-in is in front "
-                        f"of the web pages. The second prints `{a['name']}`'s own answer, with no sign-in address: Publish left "
+                        f"of the web pages. The second prints `{a['name']}`'s own answer, with no sign-in address: {'Set up' if a.get('setup') else 'Publish'} left "
                         f"the paths in `appPaths` ([card.yml](card.yml)) to its own login, so clients that cannot pass Edgible's "
                         "sign-in still connect. " + spec["verify"].get(a["name"], ""))
         elif mode == "api-key":
@@ -415,7 +416,13 @@ print(found[0]["id"])
             f"{FENCE}bash\nset -a\n. {name}/card.env\nset +a\n"
             f"COMPOSE=\"docker compose {env} -f {name}/{composes[0]}\"\n"
             + "".join(f"{d} && echo done\n" for d in dones) + f"{FENCE}\n")
-        if not opening:
+        paths_after = [a for a in setup_apps if a in pathed]
+        if paths_after:
+            setup_steps += ("\nThen leave the paths in `appPaths` ([card.yml](card.yml)) to the app's own login, for its apps, now "
+                            f"that only the accounts you made can sign in. The web pages stay on `{behind}`.\n\n"
+                            f"{FENCE}bash\n{fetch_helper}" + "".join(f"python3 app-paths.py {name} {a['name']}\n" for a in paths_after)
+                            + f"{FENCE}\n")
+        elif not opening:
             setup_steps += f"\nIt stays on `{behind}`: there is nothing to switch.\n"
         else:
             if len(setup_apps) == 1:
