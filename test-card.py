@@ -148,6 +148,7 @@ def read_apps(card_yml: Path) -> list[dict]:
             "verify_path": get("verifyPath") or "/",
             # appPaths: paths left to the app's own login while the rest is behind org.
             "app_paths": app_paths_tool.app_paths(card_yml, block.split("\n", 1)[0].strip()),
+            "sign_in_paths": app_paths_tool.app_paths(card_yml, block.split("\n", 1)[0].strip(), "signInPaths"),
             # setup: the app is published on behind while its own setup runs, then switched.
             "setup_behind": unquote(get("behind")),
             "setup_done": unquote(get("done")),
@@ -435,6 +436,13 @@ def verify(app: dict, host: str) -> tuple[str, str]:
                 if own is not None and own != c:
                     return "fail", f"{probe} answered {c} through Edgible but {own} from the app itself"
                 reached.append(f"{probe} {c}" + ("" if own is None else " (same as the app)"))
+            # signInPaths, inside appPaths, must still go to Edgible's sign-in.
+            for p in (p for item in app.get("sign_in_paths") or [] for p in item["paths"]):
+                probe = p[:-1] + "card-kit-probe" if p.endswith("*") else p
+                c, loc = https_get(ip, host, probe)
+                if not (c in (301, 302, 303, 307) and "application-access" in loc):
+                    return "fail", f"{probe} answered {c}, not Edgible's sign-in"
+                reached.append(f"{probe} sign-in")
             return "pass", f"{code} {location.split('?')[0][:60]}; app paths reach the app: {', '.join(reached)}"
     elif mode == "api-key":
         ok = code == 401

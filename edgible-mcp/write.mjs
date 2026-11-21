@@ -17,7 +17,7 @@
 // Runs where the `edgible` CLI is logged in, and needs `docker compose` to resolve a card.
 
 import { VERSION } from './server.mjs';
-import { CARD_SECRETS_IMAGE, cardFilesOf, declarationFor, deployAuth, selfContained } from './generate.mjs';
+import { CARD_SECRETS_IMAGE, cardFilesOf, declarationFor, deployAuth, pathPoliciesFor, selfContained } from './generate.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -238,7 +238,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // An app with setup: gets them only when finish_setup runs, so its open sign-up is never
     // reachable through them while the person makes the first account.
     const appPaths = (after || auth).split(',').includes('org') ? published[0].appPaths || [] : [];
-    if (appPaths.length) reasons.push({ token: 'app-paths', reason: `${app}'s web pages will be behind Edgible's sign-in, so only the organisation reaches them, including its sign-up and admin pages. ${setup ? 'Once its setup is finished, these' : 'These'} paths will reach ${app}'s own login from anywhere, with no Edgible sign-in: ${appPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}. Say so in everyday words: the apps work as normal, and anyone who uses the web pages, such as someone invited, must be a member of the Edgible organisation.` });
+    if (appPaths.length) reasons.push({ token: 'app-paths', reason: `${app}'s web pages will be behind Edgible's sign-in, so only the organisation reaches them, including its sign-up and admin pages. ${setup ? 'Once its setup is finished, these' : 'These'} paths will reach ${app}'s own login from anywhere, with no Edgible sign-in: ${appPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}${published[0].signInPaths?.length ? `, except ${published[0].signInPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}, which stay behind Edgible's sign-in` : ''}. Say so in everyday words: the apps work as normal, and anyone who uses the web pages, such as someone invited, must be a member of the Edgible organisation.` });
     // The AI gateway (the litellm card) also publishes its API as <app>-api on none, where every
     // call needs a key it issued, as the card's Share it step does, and this server keeps its
     // master key, so gateway_key and gateway_spend work with nothing copied by hand.
@@ -305,7 +305,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     // device was chosen, and without the app's organisation secrets.
     const { organization } = await edgibleJson(['whoami', '--json']);
     const declaration = declarationFor({ app, card, organizationId: organization.id, deviceId: target.id, port: built.port, auth,
-      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(testYml), appPaths: setup ? [] : appPaths, by: 'edgible-mcp' });
+      hostnames, compose: await readFile(file, 'utf8'), envFrom, env: built.during, startPeriod: built.startPeriod, cardFiles: cardFilesOf(testYml), appPaths: setup ? [] : appPaths, signInPaths: published[0].signInPaths, by: 'edgible-mcp' });
     const stackFile = path.join(home, 'edgible.yml');
     await writeFile(stackFile, YAML.stringify(declaration, { lineWidth: 0 }));
     const r = await run('edgible', ['stack', 'deploy', '-f', stackFile, '--no-wait'], { timeout: 180000 });
@@ -321,7 +321,7 @@ async function deployCard({ card, app, device, choices = {}, keys = {}, hostname
     }
     const created = (await apps()).find((a) => a.name === app);
     const during = Object.keys(built.during || {});
-    await record({ tool: 'deploy_card', card, app, device: target.name, auth, ...(setup ? { setup: { after, during, ...(appPaths.length ? { appPaths } : {}) } } : {}), hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
+    await record({ tool: 'deploy_card', card, app, device: target.name, auth, ...(setup ? { setup: { after, during, ...(appPaths.length ? { appPaths, signInPaths: published[0].signInPaths || [] } : {}) } } : {}), hostnames: created?.hostnames || hostnames, ...(api ? { gateway: api.url } : {}), choices: Object.keys(choices), firstUse: firstUse.map((f) => f.name), keys: Object.fromEntries(Object.entries(refs).map(([n, r]) => [n, `${r.secret}:${r.key}`])), confirmed: confirm, ...(download ? { download: download.bytes } : {}), result: 'created' });
     const result = { status: 'created', app, device: target.name, auth, hostnames: created?.hostnames || [], ...(download ? { download: { size: download.size, time: download.time } } : {}), next: startNext(download) };
     if (setup) {
       result.setup = { behind: auth, ...(after ? { after } : {}), ...(during.length ? { during } : {}) };
@@ -923,7 +923,7 @@ async function finishSetup({ app, confirm = [] }) {
   if (notAllowed(...where)) return refused(notAllowed(...where));
   const deployed = (await readRecord()).filter((e) => e.tool === 'deploy_card' && e.app === app && e.result === 'created').at(-1);
   if (!deployed?.setup) return refused(`${app} was not deployed by these tools with a setup step, so there is nothing to finish`);
-  const { after, during = [], appPaths = [] } = deployed.setup;
+  const { after, during = [], appPaths = [], signInPaths = [] } = deployed.setup;
   if (!after && !during.length && !appPaths.length) return { status: 'done', app, next: `${app} stays on ${deployed.auth}: nothing to switch.` };
   if (!confirm.includes('finish')) {
     return needs([{ token: 'finish', reason: `Finishing ${app}'s setup in one Edgible change` + (during.length ? `: it starts again with its setup-time settings gone (${during.join(', ')}), such as sign-up closed` : '') + (after ? `${during.length ? ', and' : ':'} it moves to ${after}${after.split(',').includes('none') ? ', so anyone on the internet reaches its own login, without Edgible\'s sign-in' : ''}` : '') + (appPaths.length ? `${during.length || after ? ', and' : ':'} ${appPaths.flatMap((p) => p.paths).join(', ')} reach its own login from anywhere, for its apps, while its web pages stay behind Edgible's sign-in` : '') + '. It takes a minute or so, and a signed-in session stays signed in.' }]);
@@ -933,7 +933,7 @@ async function finishSetup({ app, confirm = [] }) {
     const args = ['app', 'update', app, ...during.flatMap((k) => ['--unset-env', k]), ...(after ? ['--auth-modes', after] : []), '--non-interactive', '--confirm'];
     r = await run('edgible', args, { timeout: 300000 });
   }
-  if (!r.code && appPaths.length) r = await setPathPolicies(app, appPaths);
+  if (!r.code && appPaths.length) r = await setPathPolicies(app, appPaths, signInPaths);
   await record({ tool: 'finish_setup', app, confirmed: confirm, during, ...(after ? { auth: after } : {}), result: r.code ? 'failed' : 'finished', detail: r.code ? cliError(r) : undefined });
   return r.code ? { status: 'failed', reason: cliError(r) }
     : { status: 'finished', app, ...(after ? { auth: after } : {}), ...(appPaths.length ? { appPaths: appPaths.flatMap((p) => p.paths) } : {}), next: `card_status shows when ${app} answers with its new settings, usually within a couple of minutes.` + (during.length ? ` Then a stranger can no longer sign up.` : '') };
@@ -942,8 +942,8 @@ async function finishSetup({ app, confirm = [] }) {
 // card.yml's appPaths on a live app: its declaration exported, pathPolicies set on each access
 // behind Edgible's sign-in, and deployed again (the CLI has no flag for them). The export holds the
 // app's settings in full, so it goes in a private temporary folder, removed after.
-export function withPathPolicies(declaration, appPaths) {
-  const pathPolicies = appPaths.map((p) => ({ paths: p.paths, modes: ['app-native'], justification: p.for }));
+export function withPathPolicies(declaration, appPaths, signInPaths = []) {
+  const pathPolicies = pathPoliciesFor(appPaths, ['edgible-login'], signInPaths);
   for (const doc of [declaration].flat()) {
     for (const a of doc?.spec?.access || []) {
       if (a.policies?.auth?.modes?.includes('edgible-login')) a.policies.auth.pathPolicies = pathPolicies;
@@ -952,14 +952,14 @@ export function withPathPolicies(declaration, appPaths) {
   return declaration;
 }
 
-async function setPathPolicies(app, appPaths) {
+async function setPathPolicies(app, appPaths, signInPaths = []) {
   const dir = await mkdtemp(path.join(tmpdir(), 'edgible-paths-'));
   try {
     const file = path.join(dir, 'edgible.yml');
     let r = await run('edgible', ['app', 'export', app, '--out-file', file], { timeout: 120000 });
     if (r.code) return r;
     const docs = YAML.parseAllDocuments(await readFile(file, 'utf8')).map((d) => d.toJS());
-    await writeFile(file, docs.map((d) => YAML.stringify(withPathPolicies(d, appPaths), { lineWidth: 0 })).join('---\n'), { mode: 0o600 });
+    await writeFile(file, docs.map((d) => YAML.stringify(withPathPolicies(d, appPaths, signInPaths), { lineWidth: 0 })).join('---\n'), { mode: 0o600 });
     return await run('edgible', ['stack', 'deploy', '-f', file], { timeout: 600000 });
   } finally {
     await rm(dir, { recursive: true, force: true });

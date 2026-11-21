@@ -306,7 +306,7 @@ async function describe({ name }) {
     const needsPublic = i.applications.filter((a) => a.publicFor?.length);
     // What reaches the app's own login while the rest stays behind Edgible's sign-in (appPaths).
     const withPaths = i.applications.filter((a) => a.appPaths?.length);
-    if (withPaths.length) out.push(...withPaths.map((a) => `- ${a.name}'s web pages are behind Edgible's sign-in; these paths reach its own login from anywhere: ${a.appPaths.map((p) => `${p.paths.join(', ')} for ${p.for}`).join('; ')}. Anyone using its web pages, such as someone invited, must be in the Edgible organisation.`), '');
+    if (withPaths.length) out.push(...withPaths.map((a) => `- ${a.name}'s web pages are behind Edgible's sign-in; these paths reach its own login from anywhere: ${a.appPaths.map((p) => `${p.paths.join(', ')} for ${p.for}`).join('; ')}${a.signInPaths?.length ? `, except ${a.signInPaths.map((p) => `${p.paths.join(', ')} (${p.for})`).join('; ')}, behind the sign-in` : ''}. Anyone using its web pages, such as someone invited, must be in the Edgible organisation.`), '');
     if (needsPublic.length) out.push(...needsPublic.map((a) => `- Kept private (auth mode org), ${a.name} still works in a web browser, but these need it public: ${a.publicFor.join(', ')}.`), '');
     const places = Object.entries(i.places);
     if (places.length) {

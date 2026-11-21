@@ -268,6 +268,35 @@
           },
           "description": "Paths left to the app's own login while the rest of the app stays behind Edgible's sign-in (org): for clients that are not a web browser, such as phone apps and browser extensions, which cannot pass Edgible's sign-in. Edgible declares each as a path policy with auth mode app-native. Only with org in authModes; in place of publicFor, which publishes the whole app. An app with setup: gets them once its setup is done, so its open sign-up is never reachable through them."
         },
+        "signInPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "paths",
+              "for"
+            ],
+            "properties": {
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^/[^*\\s]*\\*?$"
+                }
+              },
+              "for": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What these paths are, such as \"the web app\"."
+              }
+            }
+          },
+          "description": "Paths kept behind Edgible's sign-in inside appPaths, for an app whose API is the whole site (appPaths [/*]) and whose web pages sit at a few paths, such as Jellyfin's /web/*. The more specific path wins. Only with appPaths."
+        },
         "setup": {
           "type": "object",
           "additionalProperties": false,
@@ -374,6 +403,18 @@
                 "publicFor"
               ]
             }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "signInPaths"
+            ]
+          },
+          "then": {
+            "required": [
+              "appPaths"
+            ]
           }
         }
       ]
