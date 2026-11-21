@@ -16,6 +16,8 @@ The YAML file holds what only a person knows:
     verify:
       gitea: What the check proves, and the first sign-in.
     customise: Anything specific to changing this app, such as a rule its migrations follow.
+    probe:
+      jellyfin: For an app with appPaths, the path Verify asks to show one reaches the app, such as /System/Info/Public.
     docs: [Gitea, https://docs.gitea.com]
 
 When the card has prepare.sh, Start runs it and shows it. An app with setup: in card.yml is
@@ -347,6 +349,7 @@ def main(argv: list[str]) -> int:
     verify = []
     for a in apps:
         mode, host, note = a["authModes"][0], f"<{a['name']} hostname>", spec["verify"].get(a["name"], "")
+        page = a.get("verifyPath", "")
         if a["protocol"] in ("tcp", "udp"):
             verify.append(f"`{a['name']}` is a {a['protocol'].upper()} app on port `{a['port']}`, "
                           f"with no auth mode.\n\n{note}")
@@ -355,10 +358,10 @@ def main(argv: list[str]) -> int:
             head = f"`{a['name']}` uses `org`."
             note = ("That prints `302` and an `edgible.com/application-access/` address, "
                     "so the org sign-in is in front. " + note)
-            check = f"curl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}\""
+            check = f"curl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}{page}\""
             if a in pathed:
-                first = a["appPaths"][0]["paths"][0]
-                probe = first.rstrip("*")
+                # spec probe: names the app path Verify asks, where the first one is not telling.
+                probe = (spec.get("probe") or {}).get(a["name"]) or a["appPaths"][0]["paths"][0].rstrip("*")
                 check += f"\ncurl -sS -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' \"https://{host}{probe}\""
                 note = ("The first prints `302` and an `edgible.com/application-access/` address, so the org sign-in is in front "
                         f"of the web pages. The second prints `{a['name']}`'s own answer, with no sign-in address: {'Set up' if a.get('setup') else 'Publish'} left "
